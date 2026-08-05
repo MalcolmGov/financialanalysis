@@ -1,0 +1,656 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "dna/1"
+    },
+    "dna_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "source_pdf": {
+      "type": "object",
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "sha256",
+        "pages"
+      ],
+      "additionalProperties": false
+    },
+    "confidence": {
+      "type": "object",
+      "properties": {
+        "overall": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "confidence": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            "required": [
+              "path",
+              "reason",
+              "confidence"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "overall",
+        "flags"
+      ],
+      "additionalProperties": false
+    },
+    "palette": {
+      "type": "object",
+      "properties": {
+        "roles": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        "measured": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        "imagery": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "roles",
+        "measured",
+        "imagery"
+      ],
+      "additionalProperties": false
+    },
+    "type": {
+      "type": "object",
+      "properties": {
+        "faces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pdf_name": {
+                "type": "string"
+              },
+              "family": {
+                "type": "string"
+              },
+              "weight": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "italic": {
+                "type": "boolean"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "headings",
+                  "body",
+                  "table"
+                ]
+              },
+              "glyph_share": {
+                "type": "number"
+              },
+              "embedded": {
+                "type": "boolean"
+              },
+              "mapping": {
+                "type": "object",
+                "properties": {
+                  "web_family": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "fontsource-selfhost",
+                      "system",
+                      "client-upload"
+                    ]
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "licence": {
+                    "type": "string"
+                  },
+                  "match_quality": {
+                    "type": "string",
+                    "enum": [
+                      "exact",
+                      "metric-compatible",
+                      "panose-nearest"
+                    ]
+                  },
+                  "confidence": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                },
+                "required": [
+                  "web_family",
+                  "provider",
+                  "files",
+                  "licence",
+                  "match_quality",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "pdf_name",
+              "family",
+              "weight",
+              "italic",
+              "role",
+              "glyph_share",
+              "embedded",
+              "mapping"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "stack": {
+          "type": "object",
+          "properties": {
+            "heading": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "heading",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "scale": {
+          "type": "object",
+          "properties": {
+            "observed_pt": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "web_base_px": {
+              "type": "number"
+            },
+            "ratio": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "observed_pt",
+            "web_base_px",
+            "ratio"
+          ],
+          "additionalProperties": false
+        },
+        "heading_treatment": {
+          "type": "object",
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "case": {
+              "type": "string"
+            },
+            "weight": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "color",
+            "case",
+            "weight"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "faces",
+        "stack",
+        "scale",
+        "heading_treatment"
+      ],
+      "additionalProperties": false
+    },
+    "spacing": {
+      "type": "object",
+      "properties": {
+        "rhythm_px": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "page_margins_pt": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "columns": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "required": [
+        "rhythm_px",
+        "page_margins_pt",
+        "columns"
+      ],
+      "additionalProperties": false
+    },
+    "table_style": {
+      "type": "object",
+      "properties": {
+        "header_bg": {
+          "type": "string"
+        },
+        "header_text": {
+          "type": "string"
+        },
+        "header_case": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "pt": {
+                "type": "number"
+              },
+              "color": {
+                "type": "string"
+              },
+              "bold": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pt",
+              "color"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "zebra": {
+          "type": "boolean"
+        },
+        "period_shading": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "role",
+                "target"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "numeric_alignment": {
+          "type": "string",
+          "enum": [
+            "right",
+            "left"
+          ]
+        },
+        "negative_format": {
+          "type": "string",
+          "enum": [
+            "parentheses",
+            "minus"
+          ]
+        },
+        "thousands_separator": {
+          "type": "string",
+          "enum": [
+            "thin-space",
+            "space",
+            "comma",
+            "none"
+          ]
+        },
+        "decimal_places": {
+          "type": "string"
+        },
+        "units_header": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "header_bg",
+        "header_text",
+        "header_case",
+        "rules",
+        "zebra",
+        "period_shading",
+        "numeric_alignment",
+        "negative_format",
+        "thousands_separator",
+        "decimal_places"
+      ],
+      "additionalProperties": false
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "bbox": {
+                "$ref": "#/$defs/__schema2"
+              }
+            },
+            "required": [
+              "page",
+              "bbox"
+            ],
+            "additionalProperties": false
+          },
+          "spec": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "spec"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "motifs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "photography",
+              "logo",
+              "text",
+              "pattern"
+            ]
+          },
+          "asset_role": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tone_words": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "single-light",
+            "single-dark",
+            "dual"
+          ]
+        },
+        "rationale": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "rationale"
+      ],
+      "additionalProperties": false
+    },
+    "human_edits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "from": {},
+          "to": {},
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "from",
+          "to",
+          "by",
+          "at"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "dna_id",
+    "project_id",
+    "revision",
+    "source_pdf",
+    "confidence",
+    "palette",
+    "type",
+    "spacing",
+    "table_style",
+    "components",
+    "motifs",
+    "tone_words",
+    "theme",
+    "human_edits"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema1": {
+      "type": "object",
+      "properties": {
+        "hex": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "vector-fill",
+              "glyph",
+              "rule",
+              "image"
+            ]
+          }
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "provenance": {
+          "type": "string",
+          "enum": [
+            "probe",
+            "vision",
+            "probe+vision",
+            "human"
+          ]
+        },
+        "confidence": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "evidence": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "bbox": {
+              "$ref": "#/$defs/__schema2"
+            }
+          },
+          "required": [
+            "page",
+            "bbox"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "hex",
+        "provenance",
+        "confidence"
+      ],
+      "additionalProperties": false
+    },
+    "__schema2": {
+      "type": "object",
+      "properties": {
+        "l": {
+          "type": "number"
+        },
+        "t": {
+          "type": "number"
+        },
+        "r": {
+          "type": "number"
+        },
+        "b": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "l",
+        "t",
+        "r",
+        "b"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "siteplan/1"
+    },
+    "site_plan_id": {
+      "type": "string"
+    },
+    "doc_model_id": {
+      "type": "string"
+    },
+    "blueprint_version_id": {
+      "type": "string"
+    },
+    "blueprint_checksum": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "nav": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "pattern": "^[^0-9]*$"
+          },
+          "href": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "href"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string",
+            "pattern": "^bp:"
+          },
+          "title": {
+            "type": "string"
+          },
+          "regions": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "pattern": "^bp:"
+                  },
+                  "variant": {
+                    "type": "string"
+                  },
+                  "slots": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "bar",
+                                "groupedBar",
+                                "line",
+                                "waterfall",
+                                "donut"
+                              ]
+                            },
+                            "series": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "label_ref": {
+                                    "$ref": "#/$defs/__schema0"
+                                  },
+                                  "values": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/$defs/__schema0"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "label_ref",
+                                  "values"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "category_refs": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/$defs/__schema0"
+                              }
+                            },
+                            "value_format": {
+                              "type": "string",
+                              "const": "inherit"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "series",
+                            "category_refs",
+                            "value_format"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "component",
+                  "slots"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "downloads": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "pdf",
+                    "xlsx"
+                  ]
+                },
+                "tables": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "tables"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "path",
+          "template",
+          "title",
+          "regions",
+          "downloads"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "valid",
+            "invalid",
+            "unvalidated"
+          ]
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "errors"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "site_plan_id",
+    "doc_model_id",
+    "blueprint_version_id",
+    "blueprint_checksum",
+    "model",
+    "iteration",
+    "nav",
+    "pages",
+    "validation"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "pattern": "^(ext:|doc:)"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "assets/1"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "blob_path": {
+            "type": "string"
+          },
+          "css": {
+            "type": "string"
+          },
+          "px": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            ]
+          },
+          "mime": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "background": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "embed_budget_bytes": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "schema_version",
+    "project_id",
+    "assets",
+    "embed_budget_bytes"
+  ],
+  "additionalProperties": false
+}

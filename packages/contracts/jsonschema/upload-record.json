@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "upload_id": {
+      "type": "string"
+    },
+    "org_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "blob_path": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "pdf_meta": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "encrypted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "title",
+        "producer",
+        "created",
+        "encrypted"
+      ],
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "validated",
+        "rejected"
+      ]
+    },
+    "uploaded_by": {
+      "type": "string"
+    },
+    "uploaded_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "upload_id",
+    "org_id",
+    "project_id",
+    "blob_path",
+    "sha256",
+    "size_bytes",
+    "page_count",
+    "pdf_meta",
+    "status",
+    "uploaded_by",
+    "uploaded_at"
+  ],
+  "additionalProperties": false
+}

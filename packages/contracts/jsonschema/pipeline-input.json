@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "PipelineInput@1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "org_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "document_id": {
+      "type": "string"
+    },
+    "brief_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "flagship_model": {
+          "default": false,
+          "type": "boolean"
+        },
+        "budget_usd": {
+          "default": 40,
+          "type": "number"
+        },
+        "max_refine_rounds": {
+          "default": 40,
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "flagship_model",
+        "budget_usd",
+        "max_refine_rounds"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "org_id",
+    "project_id",
+    "document_id",
+    "brief_id",
+    "options"
+  ],
+  "additionalProperties": false
+}

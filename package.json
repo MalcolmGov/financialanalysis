@@ -1,0 +1,16 @@
+{
+  "name": "results-studio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Portal that converts a financial-results PDF into a verified, brand-faithful interactive HTML microsite",
+  "scripts": {
+    "contracts:build": "pnpm --filter @rs/contracts build",
+    "contracts:schemas": "pnpm --filter @rs/contracts emit-schemas",
+    "contracts:test": "pnpm --filter @rs/contracts test",
+    "portal:dev": "pnpm --filter portal dev",
+    "portal:build": "pnpm --filter portal build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": { "node": ">=20" }
+}

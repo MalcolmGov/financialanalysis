@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "failed"
+      ]
+    },
+    "result_pointer": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schema_version": {
+              "type": "string",
+              "const": "1.0"
+            },
+            "job_id": {
+              "type": "string"
+            },
+            "extraction_json_path": {
+              "type": "string"
+            },
+            "manifest_path": {
+              "type": "string"
+            },
+            "stats": {
+              "type": "object",
+              "properties": {
+                "pages": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "tables": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "figures": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "blocks": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "extraction_json_bytes": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "warnings": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "pages",
+                "tables",
+                "figures",
+                "blocks",
+                "extraction_json_bytes",
+                "warnings"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema_version",
+            "job_id",
+            "extraction_json_path",
+            "manifest_path",
+            "stats"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": [
+                "NOT_A_PDF",
+                "PDF_ENCRYPTED",
+                "PDF_CORRUPT",
+                "PAGE_LIMIT_EXCEEDED",
+                "SIZE_LIMIT_EXCEEDED",
+                "SOURCE_FETCH_FAILED",
+                "CHECKSUM_MISMATCH",
+                "EXTRACTION_TIMEOUT",
+                "EXTRACTION_FAILED",
+                "WORKER_CRASH",
+                "CANCELLED"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "detail": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "sent_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "job_id",
+    "status",
+    "result_pointer",
+    "error",
+    "attempt",
+    "sent_at"
+  ],
+  "additionalProperties": false
+}

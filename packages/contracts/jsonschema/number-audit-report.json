@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "audit-numbers/1"
+    },
+    "audit_id": {
+      "type": "string"
+    },
+    "site_plan_id": {
+      "type": "string"
+    },
+    "render_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "referential": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "dangling_refs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "coverage": {
+              "type": "object",
+              "properties": {
+                "must_appear_cells": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "placed": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "must_appear_cells",
+                "placed",
+                "missing"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "status",
+            "dangling_refs",
+            "coverage"
+          ],
+          "additionalProperties": false
+        },
+        "dom_audit": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "pages_scanned": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "numeric_tokens_found": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "matched": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "allowlisted": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "failures": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "page": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "dom_path": {
+                    "type": "string"
+                  },
+                  "data_src": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source_raw": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "verbatim-mismatch",
+                      "no-data-src",
+                      "dangling-src",
+                      "numeral-in-microcopy",
+                      "position-context-mismatch"
+                    ]
+                  },
+                  "source_prov": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "page": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "bbox": {
+                            "type": "object",
+                            "properties": {
+                              "l": {
+                                "type": "number"
+                              },
+                              "t": {
+                                "type": "number"
+                              },
+                              "r": {
+                                "type": "number"
+                              },
+                              "b": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "l",
+                              "t",
+                              "r",
+                              "b"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "page",
+                          "bbox"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "page",
+                  "token",
+                  "dom_path",
+                  "data_src",
+                  "source_raw",
+                  "reason",
+                  "source_prov"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "status",
+            "pages_scanned",
+            "numeric_tokens_found",
+            "matched",
+            "allowlisted",
+            "failures"
+          ],
+          "additionalProperties": false
+        },
+        "extraction_crosscheck": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail",
+                "skipped_scanned_source"
+              ]
+            },
+            "cells_checked": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "mismatches": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cell_ref": {
+                    "type": "string"
+                  },
+                  "docling": {
+                    "type": "string"
+                  },
+                  "text_layer": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "cell_ref",
+                  "docling",
+                  "text_layer"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "status",
+            "cells_checked",
+            "mismatches"
+          ],
+          "additionalProperties": false
+        },
+        "arithmetic_advisory": {
+          "type": "object",
+          "properties": {
+            "checked": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "discrepancies": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "checked",
+            "discrepancies",
+            "note"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "referential",
+        "dom_audit",
+        "extraction_crosscheck",
+        "arithmetic_advisory"
+      ],
+      "additionalProperties": false
+    },
+    "allowlist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "approved_by": {
+            "type": "string"
+          },
+          "justification": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pattern",
+          "context",
+          "approved_by",
+          "justification"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "blocking": {
+      "type": "boolean",
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "audit_id",
+    "site_plan_id",
+    "render_hash",
+    "verdict",
+    "gates",
+    "allowlist",
+    "blocking"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "org_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "signed_url": {
+          "type": "string"
+        },
+        "blob_path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "signed_url",
+        "blob_path",
+        "sha256",
+        "size_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "output_prefix": {
+      "type": "string"
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "ocr": {
+          "default": "auto",
+          "type": "string",
+          "enum": [
+            "auto",
+            "force",
+            "off"
+          ]
+        },
+        "ocr_langs": {
+          "default": [
+            "en"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "table_mode": {
+          "default": "accurate",
+          "type": "string",
+          "enum": [
+            "accurate",
+            "fast"
+          ]
+        },
+        "images_scale": {
+          "default": 2,
+          "type": "number"
+        },
+        "page_range": {
+          "default": null,
+          "anyOf": [
+            {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "document_timeout_s": {
+          "default": 3600,
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "ocr",
+        "ocr_langs",
+        "table_mode",
+        "images_scale",
+        "page_range",
+        "document_timeout_s"
+      ],
+      "additionalProperties": false
+    },
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "hmac_key_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "hmac_key_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "job_id",
+    "org_id",
+    "project_id",
+    "source",
+    "output_prefix",
+    "options",
+    "webhook"
+  ],
+  "additionalProperties": false
+}

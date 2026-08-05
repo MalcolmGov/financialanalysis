@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "export/1"
+    },
+    "bundle_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "doc_model_hash": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "site_plan_id": {
+          "type": "string"
+        },
+        "blueprint_version_id": {
+          "type": "string"
+        },
+        "blueprint_checksum": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "render_hash": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": [
+        "doc_model_hash",
+        "site_plan_id",
+        "blueprint_version_id",
+        "blueprint_checksum",
+        "render_hash"
+      ],
+      "additionalProperties": false
+    },
+    "integrity": {
+      "type": "object",
+      "properties": {
+        "number_audit_id": {
+          "type": "string"
+        },
+        "qa_report_id": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string",
+          "const": "pass"
+        },
+        "human_signoff_by": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number_audit_id",
+        "qa_report_id",
+        "verdict",
+        "human_signoff_by"
+      ],
+      "additionalProperties": false
+    },
+    "entrypoints": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "additionalProperties": false
+    },
+    "layout": {
+      "type": "string",
+      "enum": [
+        "singleFile",
+        "multiPage"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "sha256": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "licence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "bytes",
+          "sha256"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "external_requests": {
+      "type": "number",
+      "const": 0
+    },
+    "hosting": {
+      "type": "object",
+      "properties": {
+        "requires_server": {
+          "type": "boolean",
+          "const": false
+        },
+        "relative_links": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "requires_server",
+        "relative_links"
+      ],
+      "additionalProperties": false
+    },
+    "zip": {
+      "type": "object",
+      "properties": {
+        "blob_path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "blob_path",
+        "sha256",
+        "bytes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "project_id",
+    "created_at",
+    "inputs",
+    "integrity",
+    "entrypoints",
+    "layout",
+    "files",
+    "external_requests",
+    "hosting",
+    "zip"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

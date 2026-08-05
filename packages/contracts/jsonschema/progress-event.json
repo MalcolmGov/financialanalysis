@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ProgressEvent@1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "step.started",
+        "step.progress",
+        "step.completed",
+        "step.failed",
+        "awaiting.dna",
+        "awaiting.review",
+        "awaiting.lock",
+        "awaiting.qa",
+        "artifact.created",
+        "budget.warning",
+        "run.completed",
+        "run.failed"
+      ]
+    },
+    "step": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "artifact_id": {
+      "type": "string"
+    },
+    "pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "ts",
+    "type"
+  ],
+  "additionalProperties": false
+}

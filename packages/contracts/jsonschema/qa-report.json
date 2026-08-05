@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "qa/1"
+    },
+    "qa_report_id": {
+      "type": "string"
+    },
+    "audit_id": {
+      "type": "string"
+    },
+    "render_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "pass_with_warnings"
+      ]
+    },
+    "automated": {
+      "type": "object",
+      "properties": {
+        "smoke": {
+          "type": "object",
+          "properties": {
+            "viewport": {
+              "type": "string"
+            },
+            "no_body_h_scroll": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "table_overflow_contained": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "charts_rendered": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "anchors_resolve": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "external_requests": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "fail"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "status",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "viewport",
+            "no_body_h_scroll",
+            "table_overflow_contained",
+            "charts_rendered",
+            "anchors_resolve",
+            "external_requests"
+          ],
+          "additionalProperties": false
+        },
+        "downloads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "sha256_matches_source": {
+                "type": "boolean"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "path",
+              "sha256_matches_source",
+              "bytes"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "axe": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "violations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "contrast_pairs_checked": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "status",
+            "violations",
+            "contrast_pairs_checked"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "smoke",
+        "downloads",
+        "axe"
+      ],
+      "additionalProperties": false
+    },
+    "human_checklist": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "signed_off"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "checked",
+                  "flagged"
+                ]
+              },
+              "note": {
+                "default": "",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "state",
+              "note"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "signed_off_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signed_off_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "items",
+        "signed_off_by",
+        "signed_off_at"
+      ],
+      "additionalProperties": false
+    },
+    "export_eligible": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "qa_report_id",
+    "audit_id",
+    "render_hash",
+    "verdict",
+    "automated",
+    "human_checklist",
+    "export_eligible"
+  ],
+  "additionalProperties": false
+}

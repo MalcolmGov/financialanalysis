@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "fetching",
+        "converting",
+        "postprocessing",
+        "uploading_assets",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "progress": {
+      "type": "object",
+      "properties": {
+        "pages_done": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "total_pages": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "pages_done",
+        "total_pages"
+      ],
+      "additionalProperties": false
+    },
+    "ocr_applied": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timings_ms": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": [
+                "NOT_A_PDF",
+                "PDF_ENCRYPTED",
+                "PDF_CORRUPT",
+                "PAGE_LIMIT_EXCEEDED",
+                "SIZE_LIMIT_EXCEEDED",
+                "SOURCE_FETCH_FAILED",
+                "CHECKSUM_MISMATCH",
+                "EXTRACTION_TIMEOUT",
+                "EXTRACTION_FAILED",
+                "WORKER_CRASH",
+                "CANCELLED"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "detail": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "job_id",
+    "status",
+    "progress",
+    "ocr_applied",
+    "timings_ms",
+    "error"
+  ],
+  "additionalProperties": false
+}

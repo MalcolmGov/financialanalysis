@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "dna-correction/1"
+    },
+    "dna_id": {
+      "type": "string"
+    },
+    "edits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "path",
+          "value"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "approve": {
+      "type": "boolean"
+    },
+    "approved_by": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "dna_id",
+    "edits",
+    "approve",
+    "approved_by"
+  ],
+  "additionalProperties": false
+}
