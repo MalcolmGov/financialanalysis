@@ -1,5 +1,7 @@
 import { QaGateEvent } from "@rs/contracts";
 import { resumeGate } from "../../../../../lib/gates";
+import { latestQaReportId } from "../../../../../lib/gate-ids";
+import { env } from "../../../../../lib/env";
 
 export async function POST(
   request: Request,
@@ -8,10 +10,15 @@ export async function POST(
   const { id: projectId } = await params;
   try {
     const evt = QaGateEvent.parse(await request.json());
+    if (!evt.qa_report_id && !env.MOCK_BLOB) {
+      const id = await latestQaReportId(projectId);
+      if (!id) {
+        return Response.json({ error: "no QA report for this project yet" }, { status: 409 });
+      }
+      return await resumeGate("qa", projectId, { ...evt, qa_report_id: id });
+    }
     return await resumeGate("qa", projectId, evt);
   } catch (err) {
-    // requireOperator() (inside resumeGate) throws a Response, not an Error,
-    // on an auth failure — return it as-is instead of flattening to a 400.
     if (err instanceof Response) return err;
     return Response.json({ error: (err as Error).message }, { status: 400 });
   }

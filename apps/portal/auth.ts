@@ -14,6 +14,8 @@ import { clearAttempts, isLockedOut, recordFailedAttempt } from "./lib/rate-limi
  * public self-serve signup, matching the operator-only access model.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Required behind Railway / reverse proxies so Auth.js trusts the public host.
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Credentials({

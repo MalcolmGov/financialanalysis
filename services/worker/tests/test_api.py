@@ -5,6 +5,8 @@ import os
 
 os.environ.setdefault("QUEUE_BACKEND", "memory")
 os.environ.setdefault("BLOB_BACKEND", "fs")
+# Tests that omit a bearer token rely on the explicit local-dev escape hatch.
+os.environ.setdefault("ALLOW_INSECURE_WORKER", "1")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

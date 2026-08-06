@@ -129,6 +129,7 @@ export const ProgressEvent = z.object({
     "step.progress",
     "step.completed",
     "step.failed",
+    "awaiting.extraction",
     "awaiting.dna",
     "awaiting.review",
     "awaiting.lock",

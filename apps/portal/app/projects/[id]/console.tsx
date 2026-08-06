@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { upload } from "@vercel/blob/client";
 
 /** The nine steps, for the timeline rail. */
@@ -20,6 +20,8 @@ type EventRow = { id: number; type: string; createdAt: string };
 
 export function ProjectConsole(props: {
   projectId: string;
+  orgId: string;
+  documentId: string | null;
   initialStatus: string;
   companyName: string;
   periodLabel: string | null;
@@ -27,16 +29,36 @@ export function ProjectConsole(props: {
   initialEvents: EventRow[];
 }) {
   const [status, setStatus] = useState(props.initialStatus);
+  const [documentId, setDocumentId] = useState<string | null>(props.documentId);
   const [events, setEvents] = useState<EventRow[]>(props.initialEvents);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const refreshEvents = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${props.projectId}/events`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { events: EventRow[]; status?: string; documentId?: string | null };
+      setEvents(data.events);
+      if (data.status) setStatus(data.status);
+      if (data.documentId) setDocumentId(data.documentId);
+    } catch {
+      /* ignore poll errors */
+    }
+  }, [props.projectId]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void refreshEvents();
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [refreshEvents]);
 
   const onUpload = useCallback(
     async (file: File) => {
       setBusy(true);
       setNote(null);
       try {
-        // Client pre-checks: magic bytes + size before a byte moves.
         const head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
         if (String.fromCharCode(...head) !== "%PDF-") {
           setNote("That file is not a PDF.");
@@ -57,6 +79,7 @@ export function ProjectConsole(props: {
           setNote(`Rejected: ${data.error.code ?? ""} ${data.error.message ?? data.error}`);
           return;
         }
+        if (data.document_id) setDocumentId(data.document_id);
         setNote(`Uploaded ${data.page_count}-page PDF. Ready to run.`);
         setStatus("uploaded");
       } catch (err) {
@@ -68,6 +91,42 @@ export function ProjectConsole(props: {
     [props.projectId],
   );
 
+  const startPipeline = useCallback(async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      if (!documentId) {
+        setNote("Upload a PDF before starting the pipeline.");
+        return;
+      }
+      if (!props.orgId) {
+        setNote("Project is missing an org id — recreate the project.");
+        return;
+      }
+      const res = await fetch("/api/pipeline/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: props.projectId,
+          orgId: props.orgId,
+          documentId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNote(`Pipeline start failed: ${data.error ?? res.statusText}`);
+        return;
+      }
+      setStatus("extracting");
+      setNote(`Pipeline started (run ${data.runId}). Waiting on extraction…`);
+      void refreshEvents();
+    } catch (err) {
+      setNote(`Pipeline start failed: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [documentId, props.orgId, props.projectId, refreshEvents]);
+
   const gate = useCallback(
     async (path: string, body: object, label: string) => {
       setBusy(true);
@@ -77,15 +136,18 @@ export function ProjectConsole(props: {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
         });
-        setNote(res.ok ? `${label} sent.` : `Failed: ${(await res.json()).error}`);
+        const data = await res.json().catch(() => ({}));
+        setNote(res.ok ? `${label} sent.` : `Failed: ${data.error ?? res.statusText}`);
+        void refreshEvents();
       } finally {
         setBusy(false);
       }
     },
-    [props.projectId],
+    [props.projectId, refreshEvents],
   );
 
   const currentStepIndex = stepIndexForStatus(status);
+  const canRun = status === "uploaded" && !!documentId;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -102,7 +164,6 @@ export function ProjectConsole(props: {
         </p>
       </header>
 
-      {/* Nine-step rail */}
       <ol
         style={{
           display: "flex",
@@ -139,7 +200,6 @@ export function ProjectConsole(props: {
         })}
       </ol>
 
-      {/* Upload */}
       <section style={panel}>
         <h2 style={h2}>1 · Upload the results PDF</h2>
         <label
@@ -165,38 +225,75 @@ export function ProjectConsole(props: {
           />
           Drop a PDF here, or click to choose. Private storage; 150 MB / 250 pages max.
         </label>
-        {status === "uploaded" ? (
-          <button
-            style={primary}
-            disabled={busy}
-            onClick={() =>
-              gate("../pipeline/start" as string, {}, "Pipeline start").then(() =>
-                setNote("Pipeline start is wired via /api/pipeline/start (needs org/document ids)."),
-              )
-            }
-          >
+        {canRun ? (
+          <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
             Run pipeline
           </button>
         ) : null}
       </section>
 
-      {/* Human gates */}
       <section style={panel}>
         <h2 style={h2}>Human gates</h2>
         <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
-          Four decisions are yours. These POST to the workflow hooks; the run resumes when you act.
+          Four decisions are yours. Server resolves the current prototype / blueprint / QA IDs.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={ghost} disabled={busy} onClick={() => gate("dna", { schema_version: "dna-correction/1", dna_id: "", edits: [], approve: true, approved_by: "operator" }, "DNA approval")}>
+          <button
+            style={ghost}
+            disabled={busy}
+            onClick={() =>
+              void gate(
+                "dna",
+                {
+                  schema_version: "dna-correction/1",
+                  dna_id: "",
+                  edits: [],
+                  approve: true,
+                  approved_by: "operator",
+                },
+                "DNA approval",
+              )
+            }
+          >
             Approve design DNA
           </button>
-          <button style={ghost} disabled={busy} onClick={() => gate("review", { type: "approve", prototype_version_id: "", actor_user_id: "operator" }, "Design approval")}>
+          <button
+            style={ghost}
+            disabled={busy}
+            onClick={() =>
+              void gate(
+                "review",
+                { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
+                "Design approval",
+              )
+            }
+          >
             Approve design
           </button>
-          <button style={ghost} disabled={busy} onClick={() => gate("lock", { type: "confirm_lock", blueprint_version_id: "", actor_user_id: "operator" }, "Blueprint lock")}>
+          <button
+            style={ghost}
+            disabled={busy}
+            onClick={() =>
+              void gate(
+                "lock",
+                { type: "confirm_lock", blueprint_version_id: "", actor_user_id: "operator" },
+                "Blueprint lock",
+              )
+            }
+          >
             Confirm lock
           </button>
-          <button style={ghost} disabled={busy} onClick={() => gate("qa", { type: "approve", qa_report_id: "", actor_user_id: "operator" }, "QA sign-off")}>
+          <button
+            style={ghost}
+            disabled={busy}
+            onClick={() =>
+              void gate(
+                "qa",
+                { type: "approve", qa_report_id: "", actor_user_id: "operator" },
+                "QA sign-off",
+              )
+            }
+          >
             Approve QA &amp; export
           </button>
         </div>
@@ -206,7 +303,6 @@ export function ProjectConsole(props: {
         <p style={{ fontSize: 13, color: "var(--accent-strong)", margin: 0 }}>{note}</p>
       ) : null}
 
-      {/* Timeline */}
       <section style={panel}>
         <h2 style={h2}>Run timeline</h2>
         {events.length === 0 ? (

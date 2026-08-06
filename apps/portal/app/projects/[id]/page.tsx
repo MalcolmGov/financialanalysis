@@ -9,12 +9,20 @@ async function loadProject(id: string) {
   try {
     const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, id));
     if (!project) return null;
-    const events = await db()
-      .select()
-      .from(schema.runEvents)
-      .where(eq(schema.runEvents.runId, project.pipelineRunId ?? id))
-      .orderBy(desc(schema.runEvents.id))
-      .limit(50);
+    const [run] = await db()
+      .select({ id: schema.pipelineRuns.id })
+      .from(schema.pipelineRuns)
+      .where(eq(schema.pipelineRuns.projectId, id))
+      .orderBy(desc(schema.pipelineRuns.createdAt))
+      .limit(1);
+    const events = run
+      ? await db()
+          .select()
+          .from(schema.runEvents)
+          .where(eq(schema.runEvents.runId, run.id))
+          .orderBy(desc(schema.runEvents.id))
+          .limit(50)
+      : [];
     return { project, events };
   } catch {
     return null;
@@ -29,6 +37,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <ProjectConsole
       projectId={id}
+      orgId={data?.project.orgId ?? ""}
+      documentId={data?.project.currentDocumentId ?? null}
       initialStatus={data?.project.status ?? "created"}
       companyName={data?.project.companyName ?? "Project"}
       periodLabel={data?.project.periodLabel ?? null}

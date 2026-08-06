@@ -1,7 +1,5 @@
-import { getRun } from "workflow/api";
-import { createHook } from "workflow";
 import {
-  hookTokens,
+  ExtractionResultPointer,
   UPLOAD_LIMITS,
   type ArtifactRef,
   type Blueprint,
@@ -100,6 +98,7 @@ export async function persistArtifactStub(
 
 /** Seed the shared extraction_jobs queue and hand the job to the worker. */
 export async function seedExtractionJob(input: PipelineInput, jobId: string) {
+  "use step";
   console.log(`[run ${input.run_id}] seeding extraction job ${jobId}`);
   if (env.MOCK_BLOB) return;
   const { db, schema } = await loadDb();
@@ -151,33 +150,67 @@ export async function seedExtractionJob(input: PipelineInput, jobId: string) {
 }
 
 /**
- * Await extraction completion. The worker posts a webhook to
- * /api/hooks/extraction which resumeHooks token extraction:{jobId}. We block on
- * that hook; a durable poll fallback would sit alongside in production.
+ * Persist the worker's extraction.json as a real ArtifactRef after the
+ * workflow-level extraction hook resumes. The webhook delivers a
+ * result_pointer; we adopt that blob path (same private store) rather than
+ * stubbing a placeholder JSON that breaks DNA/map/QA.
  */
-export async function waitForExtraction(
+export async function persistExtractionResult(
   runId: string,
   projectId: string,
   jobId: string,
+  resultPointer: unknown,
 ): Promise<ArtifactRef> {
-  console.log(`[run ${runId}] awaiting extraction ${jobId}`);
+  "use step";
+  console.log(`[run ${runId}] persisting extraction result for ${jobId}`);
   if (env.MOCK_BLOB) {
     return persistArtifactStub(runId, projectId, "extraction_result", {
       jobId,
       note: "MOCK extraction — worker not invoked",
     });
   }
-  using hook = createHook<{ status: "succeeded" | "failed"; result_pointer?: unknown }>({
-    token: hookTokens.extraction(jobId),
-  });
-  const result = await hook;
-  if (result.status !== "succeeded") {
-    throw new Error(`extraction ${jobId} failed`);
+
+  const pointer = ExtractionResultPointer.parse(resultPointer);
+  const { getPrivate, sha256 } = await import("../lib/blob");
+  const body = await getPrivate(pointer.extraction_json_path);
+  const parsed = JSON.parse(body.toString("utf8")) as { stub?: boolean; pages?: unknown[] };
+  if (parsed.stub || !Array.isArray(parsed.pages)) {
+    throw new Error(
+      `extraction ${jobId} at ${pointer.extraction_json_path} is not a valid ExtractionResult (missing pages)`,
+    );
   }
-  return persistArtifactStub(runId, projectId, "extraction_result", {
-    jobId,
-    result_pointer: result.result_pointer,
-  });
+
+  const digest = await sha256(body);
+  const artifactId = `art_extraction_${jobId}`;
+  const ref: ArtifactRef = {
+    schema: "ArtifactRef@1",
+    artifact_id: artifactId,
+    kind: "extraction_result",
+    version: 1,
+    blob_path: pointer.extraction_json_path,
+    sha256: digest,
+    bytes: body.byteLength,
+    content_type: "application/json",
+    meta: { jobId, result_pointer: pointer, pages: pointer.stats.pages },
+  };
+
+  const { db, schema } = await loadDb();
+  // Idempotent on step retry — unique (run_id, kind, version).
+  await db()
+    .insert(schema.artifacts)
+    .values({
+      runId,
+      kind: "extraction_result",
+      version: 1,
+      blobPath: ref.blob_path,
+      sha256: ref.sha256,
+      bytes: ref.bytes,
+      contentType: "application/json",
+      meta: ref.meta,
+    })
+    .onConflictDoNothing();
+  console.log(`[run ${runId}] artifact extraction_result ${artifactId} (${pointer.stats.pages} pages)`);
+  return ref;
 }
 
 /**
@@ -591,4 +624,3 @@ export async function unlockBlueprint(
 }
 
 export const _limits = UPLOAD_LIMITS;
-export { getRun };

@@ -73,6 +73,7 @@ export async function POST(request: Request): Promise<Response> {
     uploaded_at: new Date().toISOString(),
   };
 
+  let documentId: string | null = null;
   if (!env.MOCK_BLOB) {
     const [doc] = await db()
       .insert(schema.documents)
@@ -85,13 +86,14 @@ export async function POST(request: Request): Promise<Response> {
         pdfMeta: record.pdf_meta,
       })
       .returning();
+    documentId = doc.id;
     await db()
       .update(schema.projects)
       .set({ currentDocumentId: doc.id, status: "uploaded", updatedAt: new Date() })
       .where(eq(schema.projects.id, projectId));
   }
 
-  return Response.json(record);
+  return Response.json({ ...record, document_id: documentId });
 }
 
 function safe(fn: () => string | undefined): string {

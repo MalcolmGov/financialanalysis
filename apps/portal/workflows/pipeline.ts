@@ -1,5 +1,6 @@
 import { createHook, FatalError, getWritable } from "workflow";
 import {
+  ExtractionResultPointer,
   hookTokens,
   type ArtifactRef,
   type LockGateEvent,
@@ -15,12 +16,12 @@ import {
   lockBlueprint,
   mapContent,
   persistArtifactStub,
+  persistExtractionResult,
   recordEvent,
   runQa,
   seedExtractionJob,
   setProjectStatus,
   unlockBlueprint,
-  waitForExtraction,
 } from "./steps";
 
 /**
@@ -152,13 +153,34 @@ async function emit(runId: string, type: ProgressEvent["type"], detail?: string)
   await recordEvent(runId, type, { detail });
 }
 
+/**
+ * Seed the worker job (step), park on a workflow-level hook for the webhook,
+ * then persist the real extraction.json ArtifactRef (step). createHook must
+ * live in the workflow body — not inside a step — so the run can suspend.
+ */
 async function runExtraction(input: PipelineInput): Promise<ArtifactRef> {
-  "use step";
   const jobId = `ext_${input.run_id}`;
   await seedExtractionJob(input, jobId);
-  // The worker fires a webhook to /api/hooks/extraction which resumeHooks
-  // token extraction:{jobId}; waitForExtraction awaits it with a poll fallback.
-  return waitForExtraction(input.run_id, input.project_id, jobId);
+
+  using hook = createHook<{
+    status: "succeeded" | "failed";
+    result_pointer?: unknown;
+  }>({
+    token: hookTokens.extraction(jobId),
+  });
+  await emit(input.run_id, "awaiting.extraction");
+  const result = await hook;
+  if (result.status !== "succeeded") {
+    throw new FatalError(`extraction ${jobId} failed`);
+  }
+  // Validate shape early so a bad webhook fails before we touch Blob/DB.
+  ExtractionResultPointer.parse(result.result_pointer);
+  return persistExtractionResult(
+    input.run_id,
+    input.project_id,
+    jobId,
+    result.result_pointer,
+  );
 }
 
 async function refinePrototype(

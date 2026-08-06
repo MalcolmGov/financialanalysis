@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -25,8 +26,14 @@ _models_warm = False
 
 def require_token(request: Request) -> None:
     expected = settings().service_token
+    # Open only when explicitly opted into local/dev. Production must set a token.
     if not expected:
-        return  # dev: no token configured => open (never in production)
+        if os.environ.get("ALLOW_INSECURE_WORKER") == "1":
+            return
+        raise HTTPException(
+            status_code=500,
+            detail="WORKER_SERVICE_TOKEN is not configured",
+        )
     auth = request.headers.get("authorization", "")
     if auth != f"Bearer {expected}":
         raise HTTPException(status_code=401, detail="unauthorized")
