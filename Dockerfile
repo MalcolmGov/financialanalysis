@@ -25,16 +25,17 @@ WORKDIR /app
 # ---------------------------------------------------------------------------
 FROM base AS deps
 # Lockfile-only fetch: this layer is cached until pnpm-lock.yaml changes.
+# (No BuildKit cache mounts — Railway's builder rejects unprefixed cache ids;
+# the fetched store persists within this stage's layers anyway.)
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm fetch
+RUN pnpm fetch
 # Copy every manifest (paths preserved) so the workspace resolves, then link.
 COPY package.json ./
 COPY apps/portal/package.json ./apps/portal/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/mapper/package.json ./packages/mapper/
 COPY packages/render/package.json ./packages/render/
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile --offline
+RUN pnpm install --frozen-lockfile --offline
 
 # ---------------------------------------------------------------------------
 # build — compile the @rs/* workspace packages (tsc -> dist) in dependency
