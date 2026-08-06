@@ -149,7 +149,8 @@ export function ProjectConsole(props: {
         setNote((prev) =>
           prev?.startsWith("Extraction failed:") ||
           prev?.startsWith("Pipeline started") ||
-          prev?.includes("Waiting on extraction")
+          prev?.includes("Waiting on extraction") ||
+          prev?.startsWith("DNA approval")
             ? null
             : prev,
         );
@@ -457,6 +458,20 @@ export function ProjectConsole(props: {
           <p style={{ color: "var(--ink-2)", fontSize: 12, margin: 0 }}>
             Start over clears the failed run so you can upload a new PDF (section 1) or re-run the
             current one after the worker is healthy again.
+          </p>
+        </section>
+      ) : null}
+
+      {status === "prototype_generating" ? (
+        <section style={panel} aria-live="polite">
+          <h2 style={h2}>4 · Generating prototype</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+            Claude is building the first interactive HTML prototype from the approved DNA and extracted
+            content. This usually takes several minutes — leave this tab open. When it finishes, status
+            becomes <strong>IN_REVIEW</strong> and you can refine or approve the design.
+          </p>
+          <p style={{ color: "var(--accent-strong)", fontSize: 13, margin: 0 }}>
+            Nothing to click right now — waiting on generation.
           </p>
         </section>
       ) : null}
