@@ -23,8 +23,15 @@ export const CONFORMANCE = {
   /** ≥ this share of :root palette values must derive from the DNA (ΔE ≤ DELTA_E_TOLERANCE). */
   DNA_PALETTE_DERIVATION_MIN: 0.9,
   DELTA_E_TOLERANCE: 4,
-  /** Cap on neutral-ramp coverage — closes the near-monochrome loophole. */
-  NEUTRAL_COVERAGE_MAX: 0.6,
+  /**
+   * Closes the near-monochrome loophole. Financial documents are legitimately
+   * ink-on-paper heavy, so a fraction cap on neutrals produces false positives.
+   * Instead the design must APPLY at least this many distinct non-neutral,
+   * DNA-derived colors — a pure-greyscale "one lone accent" generic site fails.
+   */
+  MIN_DISTINCT_BRAND_COLORS: 1,
+  /** Neutral share above this is a soft warning only, never a hard fail. */
+  NEUTRAL_COVERAGE_WARN: 0.95,
   FIDELITY_GATE_TOTAL: 75,
   FIDELITY_GATE_DIM_FLOOR: 0.5,
   MAX_REPAIR_ITERATIONS: 2,
