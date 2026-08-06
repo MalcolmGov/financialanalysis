@@ -2,13 +2,23 @@
  * Lazy env access. Never assert at module load — the app must BUILD without
  * real credentials. Call these getters inside request handlers / steps only.
  */
+/** Strip accidental shell/UI wrapping quotes from Railway-pasted secrets. */
+function clean(v: string): string {
+  const t = v.trim();
+  if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
+    return t.slice(1, -1).trim();
+  }
+  return t;
+}
+
 function req(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
+  return clean(v);
 }
 function opt(name: string, fallback = ""): string {
-  return process.env[name] ?? fallback;
+  const v = process.env[name];
+  return v == null || v === "" ? fallback : clean(v);
 }
 
 export const env = {
