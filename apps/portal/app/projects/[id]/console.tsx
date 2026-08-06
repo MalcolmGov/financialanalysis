@@ -86,12 +86,19 @@ export function ProjectConsole(props: {
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
       if (data.extraction) {
         setExtraction(data.extraction);
-        if (data.status === "extracting" || data.status === "uploaded" || data.status === "created") {
-          // Clear sticky failure copy once a fresh run/upload is underway.
-          setNote((prev) => (prev?.startsWith("Extraction failed:") ? null : prev));
-        }
       } else if (data.status === "uploaded" || data.status === "created") {
         setExtraction(null);
+      }
+      // Drop stale wait/fail banners once the run has moved on.
+      if (data.status && data.status !== "extracting" && data.status !== "extraction_failed") {
+        setNote((prev) =>
+          prev?.startsWith("Extraction failed:") ||
+          prev?.startsWith("Pipeline started") ||
+          prev?.includes("Waiting on extraction")
+            ? null
+            : prev,
+        );
+      } else if (data.status === "extracting" || data.status === "uploaded" || data.status === "created") {
         setNote((prev) => (prev?.startsWith("Extraction failed:") ? null : prev));
       }
       if (data.qaVerdict === "pass" || data.qaVerdict === "fail" || data.qaVerdict === null) {
@@ -399,6 +406,35 @@ export function ProjectConsole(props: {
         </section>
       ) : null}
 
+      {status === "dna_review" ? (
+        <section style={panel}>
+          <h2 style={h2}>3 · Design DNA ready for approval</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+            Extraction finished. Review the measured design DNA, then approve to generate the first
+            prototype. This is a required human gate — the pipeline is waiting on you.
+          </p>
+          <button
+            style={primary}
+            disabled={busy}
+            onClick={() =>
+              void gate(
+                "dna",
+                {
+                  schema_version: "dna-correction/1",
+                  dna_id: "",
+                  edits: [],
+                  approve: true,
+                  approved_by: "operator",
+                },
+                "DNA approval",
+              )
+            }
+          >
+            Approve design DNA
+          </button>
+        </section>
+      ) : null}
+
       {extracting ? (
         <section style={panel} aria-live="polite">
           <h2 style={h2}>2 · Extraction in progress</h2>
@@ -552,7 +588,7 @@ export function ProjectConsole(props: {
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
-            style={ghost}
+            style={status === "dna_review" ? primary : ghost}
             disabled={busy}
             onClick={() =>
               void gate(
