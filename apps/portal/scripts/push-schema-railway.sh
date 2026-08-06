@@ -23,7 +23,7 @@ if [ -z "$URL" ] || printf '%s' "$URL" | grep -q '@:'; then
   exit 1
 fi
 
-for f in drizzle/0000_init.sql drizzle/0001_blueprint_immutability.sql; do
+for f in drizzle/0000_init.sql drizzle/0001_blueprint_immutability.sql drizzle/0002_password_auth.sql; do
   echo "Applying $f …"
   psql "$URL" -v ON_ERROR_STOP=1 -f "$f" >/dev/null
 done

@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   orgId: uuid("org_id").references(() => orgs.id),
   email: text("email").notNull().unique(),
   role: text("role").notNull().default("owner"), // owner | member
+  passwordHash: text("password_hash"), // scrypt, see lib/password.ts; null = no login provisioned
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -274,7 +275,7 @@ export const extractionJobs = pgTable(
   (t) => [index("extraction_jobs_status_idx").on(t.status, t.updatedAt)],
 );
 
-/** Auth.js (next-auth) magic-link tables — verification tokens + sessions. */
+/** Unused since the switch to password auth (was Auth.js's magic-link verification-token store); left in place, no code writes to it anymore. */
 export const verificationTokens = pgTable(
   "verification_tokens",
   {
