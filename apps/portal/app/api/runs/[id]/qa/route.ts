@@ -10,6 +10,9 @@ export async function POST(
     const evt = QaGateEvent.parse(await request.json());
     return await resumeGate("qa", projectId, evt);
   } catch (err) {
+    // requireOperator() (inside resumeGate) throws a Response, not an Error,
+    // on an auth failure — return it as-is instead of flattening to a 400.
+    if (err instanceof Response) return err;
     return Response.json({ error: (err as Error).message }, { status: 400 });
   }
 }

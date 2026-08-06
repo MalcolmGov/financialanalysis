@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "../../../lib/db";
 import { env } from "../../../lib/env";
+import { requireOperatorOrRedirect } from "../../../lib/authz";
 import { ProjectConsole } from "./console";
 
 async function loadProject(id: string) {
@@ -21,6 +22,7 @@ async function loadProject(id: string) {
 }
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireOperatorOrRedirect();
   const { id } = await params;
   const data = await loadProject(id);
 

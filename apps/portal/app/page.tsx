@@ -1,6 +1,7 @@
 import { desc } from "drizzle-orm";
 import { db, schema } from "../lib/db";
 import { env } from "../lib/env";
+import { requireOperatorOrRedirect } from "../lib/authz";
 import { NewProject } from "./new-project";
 
 async function listProjects() {
@@ -13,6 +14,7 @@ async function listProjects() {
 }
 
 export default async function Home() {
+  await requireOperatorOrRedirect();
   const projects = await listProjects();
   return (
     <div style={{ display: "grid", gap: 24 }}>

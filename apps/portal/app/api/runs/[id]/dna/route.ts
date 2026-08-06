@@ -11,6 +11,10 @@ export async function POST(
     const correction = DnaCorrection.parse(body);
     return await resumeGate("dna", projectId, { approve: correction.approve, correction });
   } catch (err) {
+    // requireOperator() (inside resumeGate) throws a Response, not an Error,
+    // on an auth failure — return it as-is so a real 401/403 reaches the
+    // client instead of being flattened into a generic 400.
+    if (err instanceof Response) return err;
     return Response.json({ error: (err as Error).message }, { status: 400 });
   }
 }
