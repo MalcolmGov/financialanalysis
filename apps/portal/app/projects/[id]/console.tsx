@@ -60,6 +60,8 @@ export function ProjectConsole(props: {
   const [extraction, setExtraction] = useState<ExtractionProgress | null>(null);
   const [qaVerdict, setQaVerdict] = useState<"pass" | "fail" | null>(null);
   const [exportReady, setExportReady] = useState(false);
+  const [refinePrompt, setRefinePrompt] = useState("");
+  const [forceRegen, setForceRegen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   const refreshEvents = useCallback(async () => {
@@ -363,6 +365,76 @@ export function ProjectConsole(props: {
               ? "Still working — large or OCR-heavy PDFs can overrun the estimate. Leave this tab open."
               : `Rough guide ~${formatDuration(waitStats.estimate)} for this document. Countdown is an estimate, not a hard deadline.`}
           </p>
+        </section>
+      ) : null}
+
+      {status === "in_review" ? (
+        <section style={panel}>
+          <h2 style={h2}>5 · Refine prototype</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
+            Patch-first edits against the current prototype. Numbers cannot change — describe layout,
+            styling, or non-numeric copy only. Approve design when the head version looks right.
+          </p>
+          <textarea
+            value={refinePrompt}
+            onChange={(e) => setRefinePrompt(e.target.value)}
+            placeholder="e.g. Make the masthead tighter and move KPIs into a single horizontal band."
+            rows={3}
+            disabled={busy}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 12px",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+              font: "inherit",
+              fontSize: 13,
+              resize: "vertical",
+              background: "var(--paper)",
+              color: "var(--ink)",
+            }}
+          />
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              color: "var(--ink-2)",
+              marginTop: 8,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={forceRegen}
+              disabled={busy}
+              onChange={(e) => setForceRegen(e.target.checked)}
+            />
+            Force full regen (slow / expensive — only if patch cannot express the change)
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            <button
+              style={primary}
+              disabled={busy || !refinePrompt.trim()}
+              onClick={() => {
+                const prompt = refinePrompt.trim();
+                if (!prompt) return;
+                void gate(
+                  "review",
+                  {
+                    type: "refine",
+                    prompt,
+                    base_version_id: "",
+                    force_mode: forceRegen ? "regen" : null,
+                    actor_user_id: "operator",
+                  },
+                  forceRegen ? "Full regen" : "Refine",
+                ).then(() => setRefinePrompt(""));
+              }}
+            >
+              {forceRegen ? "Rebuild prototype" : "Send refine"}
+            </button>
+          </div>
         </section>
       ) : null}
 

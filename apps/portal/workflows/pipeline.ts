@@ -16,9 +16,9 @@ import {
   generatePrototypeArtifact,
   lockBlueprint,
   mapContent,
-  persistArtifactStub,
   persistExtractionResult,
   recordEvent,
+  refinePrototype,
   runQa,
   seedExtractionJob,
   setProjectStatus,
@@ -137,8 +137,8 @@ export async function resultsPipeline(input: PipelineInput) {
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
-// Extraction, DNA, prototype, blueprint, mapping, QA and static export are real
-// steps imported from ./steps. Chat-based refinement remains a typed stub.
+// Extraction, DNA, prototype, refinement, blueprint, mapping, QA and static
+// export are real steps imported from ./steps.
 
 async function emit(runId: string, type: ProgressEvent["type"], detail?: string) {
   "use step";
@@ -185,21 +185,6 @@ async function runExtraction(input: PipelineInput): Promise<ArtifactRef> {
     jobId,
     result.result_pointer,
   );
-}
-
-async function refinePrototype(
-  runId: string,
-  projectId: string,
-  cycle: number,
-  evt: Extract<ReviewGateEvent, { type: "refine" }>,
-): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "prototype", {
-    cycle,
-    mode: evt.force_mode ?? "patch",
-    prompt: evt.prompt,
-    note: "refinement — TODO",
-  });
 }
 
 // Guard against an unrecoverable document class (kept for symmetry; the

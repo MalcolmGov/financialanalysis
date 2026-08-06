@@ -8,11 +8,13 @@ import {
   type PipelineInput,
   type ProjectStatus,
   type QaGateEvent,
+  type ReviewGateEvent,
 } from "@rs/contracts";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { env } from "../lib/env";
 import { putPrivate, signedSourceUrl } from "../lib/blob";
 import { submitExtraction } from "../lib/worker";
+import type { RefinePatch } from "../lib/refine";
 
 /**
  * Shared step helpers. All persist small facts; large bodies go to Blob and
@@ -315,6 +317,238 @@ export async function generatePrototypeArtifact(
     bytes: assembled.bytes, contentType: "text/html", meta: { versionId, placeholder: placeholder.blob_path },
   });
   return { schema: "ArtifactRef@1", artifact_id: versionId, kind: "prototype", version, blob_path: assembled.blob_path, sha256: assembled.sha256, bytes: assembled.bytes, content_type: "text/html", meta: { versionId } };
+}
+
+/**
+ * Step 5 — prototype refinement. Patch-first (sonnet search/replace on the
+ * placeholder form) with optional full regen. Enforces numeral invariant +
+ * conformance lint. Failures persist a `failed` version and leave the review
+ * hook open so the operator can retry.
+ */
+export async function refinePrototype(
+  runId: string,
+  projectId: string,
+  cycle: number,
+  evt: Extract<ReviewGateEvent, { type: "refine" }>,
+): Promise<ArtifactRef> {
+  "use step";
+  const mode = evt.force_mode ?? "patch";
+  console.log(`[run ${runId}] refining prototype (cycle ${cycle}, mode ${mode})`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "prototype", {
+      cycle,
+      mode,
+      prompt: evt.prompt,
+      note: "MOCK refinement",
+    });
+  }
+
+  const { getPrivate, putPrivate } = await import("../lib/blob");
+  const { assembleAssets, runStudio } = await import("../lib/studio");
+  const { MODELS, generateStructured } = await import("../lib/anthropic");
+  const {
+    PATCH_SCHEMA,
+    REFINE_SYSTEM,
+    applyPatches,
+    assertNumeralsUnchanged,
+    PatchApplyError,
+    NumeralGuardError,
+  } = await import("../lib/refine");
+  const { conformanceLint } = await import("@rs/render");
+  const { randomUUID } = await import("node:crypto");
+  const { db, schema } = await loadDb();
+
+  const [parent] = evt.base_version_id
+    ? await db()
+        .select()
+        .from(schema.prototypeVersions)
+        .where(eq(schema.prototypeVersions.id, evt.base_version_id))
+        .limit(1)
+    : await db()
+        .select()
+        .from(schema.prototypeVersions)
+        .where(
+          and(
+            eq(schema.prototypeVersions.projectId, projectId),
+            eq(schema.prototypeVersions.status, "ready"),
+          ),
+        )
+        .orderBy(desc(schema.prototypeVersions.versionNumber))
+        .limit(1);
+  if (!parent) {
+    throw new Error(
+      evt.base_version_id
+        ? `base prototype version ${evt.base_version_id} not found`
+        : `no ready prototype to refine for project ${projectId}`,
+    );
+  }
+
+  const [head] = await db()
+    .select({ versionNumber: schema.prototypeVersions.versionNumber })
+    .from(schema.prototypeVersions)
+    .where(eq(schema.prototypeVersions.projectId, projectId))
+    .orderBy(desc(schema.prototypeVersions.versionNumber))
+    .limit(1);
+  const nextVersion = (head?.versionNumber ?? parent.versionNumber) + 1;
+  const versionId = randomUUID();
+
+  const parentPlaceholder = (await getPrivate(parent.placeholderHtmlBlobKey)).toString("utf8");
+
+  const runArtifacts = await db().select().from(schema.artifacts).where(eq(schema.artifacts.runId, runId));
+  const dnaRow = runArtifacts.find((a) => a.kind === "design_dna");
+  if (!dnaRow) throw new Error(`no design_dna artifact for run ${runId}`);
+  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8"));
+
+  let placeholderHtml = parentPlaceholder;
+  let patches: RefinePatch[] | null = null;
+  let model: string = MODELS.refine;
+  let costUsd = 0;
+  let failure: string | null = null;
+  let lintReport: { passed: boolean; errors: unknown[]; warnings: unknown[] } | null = null;
+
+  try {
+    if (mode === "regen") {
+      const extractionRow = [...runArtifacts].reverse().find((a) => a.kind === "extraction_result");
+      if (!extractionRow) throw new Error(`no extraction_result for regen on run ${runId}`);
+      const { buildContentSample, highlightsText } = await import("../lib/build-content");
+      const { extractKpis } = await import("../lib/enrich-kpis");
+      const { mapToDocModel } = await import("@rs/mapper");
+      const extractionJson = JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"));
+      const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+      const meta = {
+        company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
+        period_label: project?.periodLabel ?? "",
+        doc_kind: "interim_unaudited" as const,
+        currency: "ZAR",
+      };
+      const docModel = mapToDocModel(extractionJson, meta);
+      const kpis = await extractKpis(highlightsText(docModel));
+      const content = buildContentSample(docModel, extractionJson, { kpis });
+      const studio = await runStudio({
+        dna,
+        content,
+        brief: `Operator refinement (full regen): ${evt.prompt}`,
+      });
+      placeholderHtml = studio.placeholderHtml;
+      model = MODELS.generate;
+      costUsd = studio.usage.cost_usd;
+    } else {
+      const generatePatches = async (feedback?: string) => {
+        const user = [
+          `OPERATOR PROMPT:\n${evt.prompt}`,
+          feedback ? `\nPREVIOUS APPLY FAILURE (fix and retry):\n${feedback}` : "",
+          `\nCURRENT PLACEHOLDER HTML:\n${parentPlaceholder}`,
+        ].join("\n");
+        return generateStructured<{ patches: RefinePatch[] }>({
+          model: MODELS.refine,
+          system: REFINE_SYSTEM,
+          messages: [{ role: "user", content: user }],
+          schema: PATCH_SCHEMA as unknown as Record<string, unknown>,
+          maxTokens: 8000,
+          effort: "medium",
+        });
+      };
+
+      let lastErr: string | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, usage } = await generatePatches(lastErr ?? undefined);
+        costUsd += usage.cost_usd;
+        patches = data.patches ?? [];
+        try {
+          placeholderHtml = applyPatches(parentPlaceholder, patches);
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err instanceof Error ? err.message : String(err);
+          if (attempt === 1) throw new PatchApplyError(lastErr);
+        }
+      }
+    }
+
+    assertNumeralsUnchanged(parentPlaceholder, placeholderHtml);
+    const assembledHtml = assembleAssets(placeholderHtml);
+    const lint = conformanceLint(assembledHtml, dna);
+    lintReport = { passed: lint.passed, errors: lint.errors, warnings: lint.warnings };
+    if (!lint.passed) {
+      failure = `conformance lint failed (${lint.errors.length} errors)`;
+    }
+  } catch (err) {
+    if (err instanceof NumeralGuardError || err instanceof PatchApplyError) {
+      failure = err.message;
+    } else {
+      throw err;
+    }
+  }
+
+  const status = failure ? "failed" : "ready";
+  // Persist the attempt (including lint/numeral failures) for audit; only
+  // `ready` versions are selectable as approve/refine heads.
+  const finalPlaceholder = placeholderHtml;
+  const assembledHtml = assembleAssets(finalPlaceholder);
+
+  const base = `runs/${runId}/prototypes/v${nextVersion}`;
+  const placeholder = await putPrivate(`${base}/placeholder.html`, finalPlaceholder, "text/html");
+  const assembled = await putPrivate(`${base}/assembled.html`, assembledHtml, "text/html");
+
+  await db().insert(schema.prototypeVersions).values({
+    id: versionId,
+    projectId,
+    cycle,
+    versionNumber: nextVersion,
+    parentVersionId: parent.id,
+    placeholderHtmlBlobKey: placeholder.blob_path,
+    assembledHtmlBlobKey: assembled.blob_path,
+    sha256: assembled.sha256,
+    sizeBytes: assembled.bytes,
+    promptText: evt.prompt,
+    refinementMode: mode === "regen" ? "regen" : "patch",
+    patchJson: patches,
+    lintReport,
+    audit: failure ? { failure } : { numerals_unchanged: true },
+    model,
+    costUsdMicros: Math.round(costUsd * 1e6),
+    status,
+  });
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "prototype",
+    version: nextVersion,
+    blobPath: assembled.blob_path,
+    sha256: assembled.sha256,
+    bytes: assembled.bytes,
+    contentType: "text/html",
+    meta: {
+      versionId,
+      placeholder: placeholder.blob_path,
+      parentVersionId: parent.id,
+      mode,
+      status,
+      ...(failure ? { failure } : {}),
+    },
+  });
+  await recordEvent(runId, failure ? "prototype.refine_failed" : "prototype.refined", {
+    versionId,
+    versionNumber: nextVersion,
+    parentVersionId: parent.id,
+    mode,
+    prompt: evt.prompt,
+    failure,
+  });
+  console.log(
+    `[run ${runId}] refine v${nextVersion} status=${status}${failure ? ` (${failure})` : ""}`,
+  );
+
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: versionId,
+    kind: "prototype",
+    version: nextVersion,
+    blob_path: assembled.blob_path,
+    sha256: assembled.sha256,
+    bytes: assembled.bytes,
+    content_type: "text/html",
+    meta: { versionId, status, ...(failure ? { failure } : {}) },
+  };
 }
 
 /**
