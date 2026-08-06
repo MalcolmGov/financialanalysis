@@ -62,7 +62,23 @@ export async function GET(
         .limit(50)
     : [];
 
-  const [job] = await db()
+  // Prefer the job for the latest pipeline run (ext_<runId>) so an older
+  // failed job cannot shadow a newly queued extract.
+  const preferredJobId = run ? `ext_${run.id}` : null;
+  const [jobByRun] = preferredJobId
+    ? await db()
+        .select({
+          jobId: schema.extractionJobs.jobId,
+          status: schema.extractionJobs.status,
+          progress: schema.extractionJobs.progress,
+          error: schema.extractionJobs.error,
+          updatedAt: schema.extractionJobs.updatedAt,
+        })
+        .from(schema.extractionJobs)
+        .where(eq(schema.extractionJobs.jobId, preferredJobId))
+        .limit(1)
+    : [undefined];
+  const [jobLatest] = await db()
     .select({
       jobId: schema.extractionJobs.jobId,
       status: schema.extractionJobs.status,
@@ -74,6 +90,7 @@ export async function GET(
     .where(eq(schema.extractionJobs.projectId, projectId))
     .orderBy(desc(schema.extractionJobs.updatedAt))
     .limit(1);
+  const job = jobByRun ?? jobLatest;
 
   const progress = (job?.progress ?? null) as {
     pages_done?: number;

@@ -86,15 +86,13 @@ export function ProjectConsole(props: {
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
       if (data.extraction) {
         setExtraction(data.extraction);
-        if (
-          data.status === "extraction_failed" &&
-          data.extraction.status === "failed" &&
-          data.extraction.error
-        ) {
-          setNote(`Extraction failed: ${data.extraction.error}`);
+        if (data.status === "extracting" || data.status === "uploaded" || data.status === "created") {
+          // Clear sticky failure copy once a fresh run/upload is underway.
+          setNote((prev) => (prev?.startsWith("Extraction failed:") ? null : prev));
         }
       } else if (data.status === "uploaded" || data.status === "created") {
         setExtraction(null);
+        setNote((prev) => (prev?.startsWith("Extraction failed:") ? null : prev));
       }
       if (data.qaVerdict === "pass" || data.qaVerdict === "fail" || data.qaVerdict === null) {
         setQaVerdict(data.qaVerdict);
@@ -396,8 +394,7 @@ export function ProjectConsole(props: {
           </div>
           <p style={{ color: "var(--ink-2)", fontSize: 12, margin: 0 }}>
             Start over clears the failed run so you can upload a new PDF (section 1) or re-run the
-            current one. The worker fix is already deployed — a fresh run should get past this import
-            error.
+            current one after the worker is healthy again.
           </p>
         </section>
       ) : null}
