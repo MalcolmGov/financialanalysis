@@ -18,11 +18,15 @@ dependencies = [
     # Docling is the extraction engine; heavy (pulls torch). Imported lazily so
     # the API and unit tests run without it installed.
     "docling>=2.15",
-    # Declared directly (docling only pulls it transitively) so the
+    # Declared directly (docling only pulls them transitively) so the
     # [tool.uv.sources] CPU-only index override below actually applies — uv
     # silently ignores a source override for a package that never appears as
-    # a direct dependency. Range mirrors docling's own constraint.
+    # a direct dependency. Without a direct torchvision pin, the lock resolves
+    # it from PyPI (CUDA-flavoured) against CPU torch and AutoImageProcessor
+    # fails at runtime with a misleading import error.
     "torch>=2.2.2,<3.0.0",
+    "torchvision>=0.17,<1.0.0",
+    "transformers>=4.46,<6.0.0",
 ]
 
 [project.optional-dependencies]

@@ -67,6 +67,7 @@ export async function GET(
       jobId: schema.extractionJobs.jobId,
       status: schema.extractionJobs.status,
       progress: schema.extractionJobs.progress,
+      error: schema.extractionJobs.error,
       updatedAt: schema.extractionJobs.updatedAt,
     })
     .from(schema.extractionJobs)
@@ -78,6 +79,14 @@ export async function GET(
     pages_done?: number;
     total_pages?: number | null;
   } | null;
+  const jobError = (job?.error ?? null) as { code?: string; message?: string } | null;
+
+  // If the worker already failed but the workflow died before flipping status,
+  // surface extraction_failed so the console stops the infinite wait panel.
+  let status = project.status;
+  if (job?.status === "failed" && (status === "extracting" || status === "uploaded")) {
+    status = "extraction_failed";
+  }
 
   let qaVerdict: "pass" | "fail" | null = null;
   let exportReady = false;
@@ -101,7 +110,7 @@ export async function GET(
   }
 
   return Response.json({
-    status: project.status,
+    status,
     documentId: project.currentDocumentId,
     pageCount,
     runStartedAt: run?.createdAt ? run.createdAt.toISOString() : null,
@@ -111,6 +120,7 @@ export async function GET(
           status: job.status,
           pagesDone: progress?.pages_done ?? 0,
           totalPages: progress?.total_pages ?? pageCount,
+          error: jobError?.message ?? jobError?.code ?? null,
         }
       : null,
     qaVerdict,

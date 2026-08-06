@@ -23,6 +23,7 @@ type ExtractionProgress = {
   status: string;
   pagesDone: number;
   totalPages: number | null;
+  error?: string | null;
 };
 
 /** Docling on CPU is slow; warm-up + ~25–40s/page is a realistic operator guide. */
@@ -83,7 +84,12 @@ export function ProjectConsole(props: {
       if (data.documentId) setDocumentId(data.documentId);
       if (typeof data.pageCount === "number") setPageCount(data.pageCount);
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
-      if (data.extraction) setExtraction(data.extraction);
+      if (data.extraction) {
+        setExtraction(data.extraction);
+        if (data.extraction.status === "failed" && data.extraction.error) {
+          setNote(`Extraction failed: ${data.extraction.error}`);
+        }
+      }
       if (data.qaVerdict === "pass" || data.qaVerdict === "fail" || data.qaVerdict === null) {
         setQaVerdict(data.qaVerdict);
       }
@@ -218,7 +224,8 @@ export function ProjectConsole(props: {
   }, [pageCount, runStartedAt, now, extraction]);
 
   const currentStepIndex = stepIndexForStatus(status);
-  const canRun = status === "uploaded" && !!documentId;
+  const canRun =
+    (status === "uploaded" || status === "extraction_failed") && !!documentId;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -303,12 +310,28 @@ export function ProjectConsole(props: {
         ) : null}
       </section>
 
+      {status === "extraction_failed" ? (
+        <section style={panel}>
+          <h2 style={h2}>2 · Extraction failed</h2>
+          <p style={{ color: "#b91c1c", fontSize: 13, margin: 0 }}>
+            {extraction?.error ??
+              "The worker could not convert this PDF. Fix the worker and click Run pipeline again."}
+          </p>
+          {canRun ? (
+            <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
+              Retry pipeline
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
       {extracting ? (
         <section style={panel} aria-live="polite">
           <h2 style={h2}>2 · Extraction in progress</h2>
           <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            Docling is reading the PDF on the worker. This is the slow step — typically a few
-            minutes for a {pageCount ?? "multi"}-page results pack.
+            Docling is reading the PDF on the worker. First convert after deploy can take longer
+            while models load; page counts update after the document convert finishes. Typically a
+            few minutes for a {pageCount ?? "multi"}-page results pack.
           </p>
           <div
             style={{

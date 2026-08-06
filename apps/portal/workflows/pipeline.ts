@@ -175,6 +175,12 @@ async function runExtraction(input: PipelineInput): Promise<ArtifactRef> {
   await emit(input.run_id, "awaiting.extraction");
   const result = await hook;
   if (result.status !== "succeeded") {
+    await setProjectStatus(input.run_id, input.project_id, "extraction_failed");
+    await recordEvent(input.run_id, "extraction.failed", {
+      jobId,
+      status: result.status,
+      result_pointer: result.result_pointer ?? null,
+    });
     throw new FatalError(`extraction ${jobId} failed`);
   }
   // Validate shape early so a bad webhook fails before we touch Blob/DB.
