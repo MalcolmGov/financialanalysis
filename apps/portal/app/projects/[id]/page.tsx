@@ -10,7 +10,7 @@ async function loadProject(id: string) {
     const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, id));
     if (!project) return null;
     const [run] = await db()
-      .select({ id: schema.pipelineRuns.id })
+      .select({ id: schema.pipelineRuns.id, createdAt: schema.pipelineRuns.createdAt })
       .from(schema.pipelineRuns)
       .where(eq(schema.pipelineRuns.projectId, id))
       .orderBy(desc(schema.pipelineRuns.createdAt))
