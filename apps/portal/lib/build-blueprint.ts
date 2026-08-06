@@ -35,6 +35,23 @@ function contrastRatio(hex1: string, hex2: string): number {
 const NEG_STYLE: Record<string, "parens" | "minus"> = { parentheses: "parens", minus: "minus" };
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+/** Baseline layout CSS for the deterministic statements render (uses DNA tokens). */
+const STATEMENT_BASE_CSS = `
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:24px 20px 48px;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
+main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:grid;gap:28px}
+.statement-table{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fin-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-family:var(--dna-font-heading,inherit);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 18%,transparent);vertical-align:bottom}
+.fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
+.fin-table td{padding:7px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
+.fin-table tbody tr:nth-child(even) td{background:var(--dna-shading,var(--dna-table-shading,#f2f2f2))}
+.fin-table .num{font-variant-numeric:tabular-nums}
+.fin-table .cell-nil{color:color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);text-align:right}
+.fin-table .cell-noteRef{text-align:center;width:3.5em;color:color-mix(in srgb,var(--dna-ink,#111) 55%,transparent)}
+@media print{body{padding:0}.statement-table{overflow:visible}}
+`.trim();
+
 /**
  * The worker's probe (services/worker/app/probe.py) currently populates
  * table_style.header_bg/header_text with palette ROLE-KEY references (e.g.
@@ -79,6 +96,11 @@ export function buildBlueprintV1(opts: {
   const values: Record<string, string> = {};
   for (const [role, entry] of Object.entries(roles)) values[`--dna-${role}`] = entry.hex;
 
+  // tokens.css must include usable rules — :root alone leaves statement tables
+  // as browser-default unstyled markup (broken-looking export).
+  const tokensCss = `${buildTokenBlock(dna)}
+${STATEMENT_BASE_CSS}`;
+
   return {
     schema_version: "1.0",
     blueprint_version_id: opts.blueprintVersionId,
@@ -90,7 +112,7 @@ export function buildBlueprintV1(opts: {
     locked_at: null,
     locked_by: null,
 
-    tokens: { css: buildTokenBlock(dna), values },
+    tokens: { css: tokensCss, values },
 
     typography: {
       font_faces: dna.type.faces.map((f) => ({

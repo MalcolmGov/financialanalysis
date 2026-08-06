@@ -153,9 +153,28 @@ export function renderSitePlan(
         .join("\n");
     });
 
-    const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${blueprint.tokens.css}</style></head><body>${shell}</body></html>`;
+    const css = ensureStatementCss(blueprint.tokens.css ?? "");
+    const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style></head><body>${shell}</body></html>`;
     files[page.path] = doc;
   }
 
   return { files };
+}
+
+/** Older blueprints only locked :root tokens — inject baseline table layout. */
+function ensureStatementCss(tokensCss: string): string {
+  if (tokensCss.includes(".fin-table")) return tokensCss;
+  return `${tokensCss}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:24px 20px 48px;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
+main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:grid;gap:28px}
+.statement-table{overflow-x:auto}
+.fin-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:600;text-align:left;padding:8px 10px;vertical-align:bottom}
+.fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
+.fin-table td{padding:7px 10px;border-bottom:1px solid rgba(0,0,0,.1);vertical-align:top}
+.fin-table tbody tr:nth-child(even) td{background:var(--dna-shading,#f2f2f2)}
+.fin-table .cell-nil{text-align:right;opacity:.55}
+.fin-table .cell-noteRef{text-align:center;width:3.5em;opacity:.6}
+`;
 }

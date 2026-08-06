@@ -945,8 +945,31 @@ export async function buildExport(
   const docModel = mapToDocModel(extractionJson, meta);
   const { files } = renderSitePlan(sitePlan, blueprint, { extraction: extractionJson, docModel });
 
-  // Ensure a root entrypoint — mapper currently emits statements/index.html.
-  if (!files["index.html"]) {
+  // Primary entry = the approved prototype microsite (what the operator signed
+  // off in review). Mapped statements remain under statements/ as the verified
+  // number-integrity pages. Without this, export was only unstyled tables.
+  const [proto] = await db()
+    .select()
+    .from(schema.prototypeVersions)
+    .where(
+      and(
+        eq(schema.prototypeVersions.projectId, projectId),
+        eq(schema.prototypeVersions.status, "ready"),
+      ),
+    )
+    .orderBy(desc(schema.prototypeVersions.versionNumber))
+    .limit(1);
+  if (proto?.assembledHtmlBlobKey) {
+    const prototypeHtml = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
+    files["index.html"] = prototypeHtml;
+    if (files["statements/index.html"]) {
+      // Soft link from the statements page back to the designed cover.
+      files["statements/index.html"] = files["statements/index.html"].replace(
+        "<body>",
+        `<body><p style="font:13px/1.4 var(--dna-font-body,system-ui);margin:0 0 16px"><a href="../index.html" style="color:var(--dna-brand,#0a6)">← ${meta.company.replace(/[<>&"]/g, "")} interactive results</a> · verified statements</p>`,
+      );
+    }
+  } else if (!files["index.html"]) {
     const target = files["statements/index.html"]
       ? "statements/index.html"
       : Object.keys(files).find((p) => p.endsWith(".html")) ?? "statements/index.html";
