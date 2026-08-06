@@ -23,7 +23,15 @@ async function loadProject(id: string) {
           .orderBy(desc(schema.runEvents.id))
           .limit(50)
       : [];
-    return { project, events };
+    let pageCount: number | null = null;
+    if (project.currentDocumentId) {
+      const [doc] = await db()
+        .select({ pageCount: schema.documents.pageCount })
+        .from(schema.documents)
+        .where(eq(schema.documents.id, project.currentDocumentId));
+      pageCount = doc?.pageCount ?? null;
+    }
+    return { project, events, pageCount, runStartedAt: run?.createdAt ?? null };
   } catch {
     return null;
   }
@@ -40,6 +48,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       orgId={data?.project.orgId ?? ""}
       documentId={data?.project.currentDocumentId ?? null}
       initialStatus={data?.project.status ?? "created"}
+      initialPageCount={data?.pageCount ?? null}
+      initialRunStartedAt={data?.runStartedAt ? data.runStartedAt.toISOString() : null}
       companyName={data?.project.companyName ?? "Project"}
       periodLabel={data?.project.periodLabel ?? null}
       workflowRunId={data?.project.pipelineRunId ?? null}

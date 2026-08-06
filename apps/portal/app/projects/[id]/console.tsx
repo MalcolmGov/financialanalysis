@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { upload } from "@vercel/blob/client";
 
 /** The nine steps, for the timeline rail. */
@@ -18,11 +18,33 @@ const STEPS = [
 
 type EventRow = { id: number; type: string; createdAt: string };
 
+type ExtractionProgress = {
+  jobId: string;
+  status: string;
+  pagesDone: number;
+  totalPages: number | null;
+};
+
+/** Docling on CPU is slow; warm-up + ~25–40s/page is a realistic operator guide. */
+function estimateExtractionSeconds(pageCount: number | null): number {
+  const pages = Math.max(1, pageCount ?? 10);
+  return Math.min(45 * 60, Math.max(2 * 60, 75 + pages * 30));
+}
+
+function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
 export function ProjectConsole(props: {
   projectId: string;
   orgId: string;
   documentId: string | null;
   initialStatus: string;
+  initialPageCount: number | null;
+  initialRunStartedAt: string | null;
   companyName: string;
   periodLabel: string | null;
   workflowRunId: string | null;
@@ -30,29 +52,52 @@ export function ProjectConsole(props: {
 }) {
   const [status, setStatus] = useState(props.initialStatus);
   const [documentId, setDocumentId] = useState<string | null>(props.documentId);
+  const [pageCount, setPageCount] = useState<number | null>(props.initialPageCount);
   const [events, setEvents] = useState<EventRow[]>(props.initialEvents);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [runStartedAt, setRunStartedAt] = useState<string | null>(props.initialRunStartedAt);
+  const [extraction, setExtraction] = useState<ExtractionProgress | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const refreshEvents = useCallback(async () => {
     try {
       const res = await fetch(`/api/projects/${props.projectId}/events`);
       if (!res.ok) return;
-      const data = (await res.json()) as { events: EventRow[]; status?: string; documentId?: string | null };
+      const data = (await res.json()) as {
+        events: EventRow[];
+        status?: string;
+        documentId?: string | null;
+        pageCount?: number | null;
+        runStartedAt?: string | null;
+        extraction?: ExtractionProgress | null;
+      };
       setEvents(data.events);
       if (data.status) setStatus(data.status);
       if (data.documentId) setDocumentId(data.documentId);
+      if (typeof data.pageCount === "number") setPageCount(data.pageCount);
+      if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
+      if (data.extraction) setExtraction(data.extraction);
     } catch {
       /* ignore poll errors */
     }
   }, [props.projectId]);
 
+  const extracting = status === "extracting";
+
   useEffect(() => {
+    const ms = extracting ? 2000 : 4000;
     const id = window.setInterval(() => {
       void refreshEvents();
-    }, 4000);
+    }, ms);
     return () => window.clearInterval(id);
-  }, [refreshEvents]);
+  }, [refreshEvents, extracting]);
+
+  useEffect(() => {
+    if (!extracting) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [extracting]);
 
   const onUpload = useCallback(
     async (file: File) => {
@@ -80,6 +125,7 @@ export function ProjectConsole(props: {
           return;
         }
         if (data.document_id) setDocumentId(data.document_id);
+        if (typeof data.page_count === "number") setPageCount(data.page_count);
         setNote(`Uploaded ${data.page_count}-page PDF. Ready to run.`);
         setStatus("uploaded");
       } catch (err) {
@@ -118,6 +164,7 @@ export function ProjectConsole(props: {
         return;
       }
       setStatus("extracting");
+      setRunStartedAt(new Date().toISOString());
       setNote(`Pipeline started (run ${data.runId}). Waiting on extraction…`);
       void refreshEvents();
     } catch (err) {
@@ -145,6 +192,20 @@ export function ProjectConsole(props: {
     },
     [props.projectId, refreshEvents],
   );
+
+  const waitStats = useMemo(() => {
+    const estimate = estimateExtractionSeconds(pageCount);
+    const started = runStartedAt ? Date.parse(runStartedAt) : now;
+    const elapsedSec = Math.max(0, Math.floor((now - started) / 1000));
+    const remainingSec = Math.max(0, estimate - elapsedSec);
+    const pctFromTime = Math.min(0.95, elapsedSec / estimate);
+    const totalPages = extraction?.totalPages ?? pageCount;
+    const pagesDone = extraction?.pagesDone ?? 0;
+    const pctFromPages =
+      totalPages && totalPages > 0 ? Math.min(0.99, pagesDone / totalPages) : null;
+    const pct = pctFromPages ?? pctFromTime;
+    return { estimate, elapsedSec, remainingSec, pct, pagesDone, totalPages, overdue: elapsedSec > estimate };
+  }, [pageCount, runStartedAt, now, extraction]);
 
   const currentStepIndex = stepIndexForStatus(status);
   const canRun = status === "uploaded" && !!documentId;
@@ -232,6 +293,71 @@ export function ProjectConsole(props: {
         ) : null}
       </section>
 
+      {extracting ? (
+        <section style={panel} aria-live="polite">
+          <h2 style={h2}>2 · Extraction in progress</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+            Docling is reading the PDF on the worker. This is the slow step — typically a few
+            minutes for a {pageCount ?? "multi"}-page results pack.
+          </p>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 12,
+              marginTop: 4,
+            }}
+          >
+            <div>
+              <div style={statLabel}>Elapsed</div>
+              <div style={statValue}>{formatDuration(waitStats.elapsedSec)}</div>
+            </div>
+            <div>
+              <div style={statLabel}>
+                {waitStats.overdue ? "Past estimate" : "Est. remaining"}
+              </div>
+              <div style={statValue}>
+                {waitStats.overdue
+                  ? `+${formatDuration(waitStats.elapsedSec - waitStats.estimate)}`
+                  : formatDuration(waitStats.remainingSec)}
+              </div>
+            </div>
+            <div>
+              <div style={statLabel}>Pages</div>
+              <div style={statValue}>
+                {waitStats.totalPages != null
+                  ? `${waitStats.pagesDone} / ${waitStats.totalPages}`
+                  : pageCount != null
+                    ? `0 / ${pageCount}`
+                    : "—"}
+              </div>
+            </div>
+          </div>
+          <div
+            style={{
+              height: 8,
+              borderRadius: 99,
+              background: "var(--rule)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.round(waitStats.pct * 100)}%`,
+                background: "var(--accent)",
+                transition: "width 0.6s ease",
+              }}
+            />
+          </div>
+          <p style={{ color: "var(--ink-2)", fontSize: 12, margin: 0 }}>
+            {waitStats.overdue
+              ? "Still working — large or OCR-heavy PDFs can overrun the estimate. Leave this tab open."
+              : `Rough guide ~${formatDuration(waitStats.estimate)} for this document. Countdown is an estimate, not a hard deadline.`}
+          </p>
+        </section>
+      ) : null}
+
       <section style={panel}>
         <h2 style={h2}>Human gates</h2>
         <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
@@ -307,7 +433,9 @@ export function ProjectConsole(props: {
         <h2 style={h2}>Run timeline</h2>
         {events.length === 0 ? (
           <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            No events yet. Upload a PDF and run the pipeline to see progress stream in.
+            {extracting
+              ? "Extraction is running. Timeline events will appear as steps complete."
+              : "No events yet. Upload a PDF and run the pipeline to see progress stream in."}
           </p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
@@ -374,4 +502,16 @@ const ghost: React.CSSProperties = {
   color: "var(--ink)",
   cursor: "pointer",
   fontSize: 13,
+};
+const statLabel: React.CSSProperties = {
+  fontSize: 11,
+  color: "var(--ink-2)",
+  letterSpacing: ".06em",
+  textTransform: "uppercase",
+};
+const statValue: React.CSSProperties = {
+  fontSize: 22,
+  fontWeight: 600,
+  fontVariantNumeric: "tabular-nums",
+  color: "var(--ink)",
 };

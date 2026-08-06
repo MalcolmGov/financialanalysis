@@ -32,6 +32,7 @@ async function loadDb() {
 }
 
 export async function recordEvent(runId: string, type: string, payload: unknown) {
+  "use step";
   console.log(`[run ${runId}] event ${type}`);
   if (env.MOCK_BLOB) return;
   const { db, schema } = await loadDb();
@@ -44,6 +45,7 @@ export async function setProjectStatus(
   status: ProjectStatus,
   cycle?: number,
 ) {
+  "use step";
   console.log(`[run ${runId}] status -> ${status}${cycle ? ` (cycle ${cycle})` : ""}`);
   if (env.MOCK_BLOB) return;
   const { db, schema } = await loadDb();
