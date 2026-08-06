@@ -39,10 +39,13 @@ function renderFinTable(table: FinTable): string {
     .map(
       (row) =>
         `<tr>${row
-          .map(
-            (h) =>
-              `<th${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${escapeHtml(h.raw)}</th>`,
-          )
+          .map((h) => {
+            // Header cells carry provenance too: they hold dates ("31 Dec 2025")
+            // and unit labels whose digits must be traceable + verified. Empty
+            // header slots (real tables are sparse) carry no data-src.
+            const src = h.raw.trim() !== "" ? ` data-src="${escapeHtml(h.src_ref)}"` : "";
+            return `<th${src}${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${escapeHtml(h.raw)}</th>`;
+          })
           .join("")}</tr>`,
     )
     .join("");
@@ -52,15 +55,15 @@ function renderFinTable(table: FinTable): string {
       const cells = row.cells
         .map((cell) => {
           if (cell.kind === "number") {
-            // Verbatim value, provenance-tagged. Source of truth is cell.raw,
-            // which the mapper copied byte-for-byte from the extraction.
             return `<td class="cell-num">${numberSpan(cell.src_ref, cell.raw)}</td>`;
           }
-          if (cell.kind === "text") {
-            return `<td class="cell-label">${escapeHtml(cell.raw)}</td>`;
-          }
-          // nil / noteRef — the marker is not a traceable number.
-          return `<td class="cell-${cell.kind}" data-allow-number>${escapeHtml(cell.raw)}</td>`;
+          // Every cell with CONTENT is provenance-tagged — text row-labels
+          // ("Balance at 30 June 2024"), nil markers and note refs all carry
+          // digits that must trace to their source cell (cell.raw is the
+          // mapper's byte-for-byte copy). Empty grid slots — real Docling tables
+          // omit cells — carry no digit and need no provenance.
+          const src = cell.raw.trim() !== "" ? ` data-src="${escapeHtml(cell.src_ref)}"` : "";
+          return `<td class="cell-${cell.kind}"${src}>${escapeHtml(cell.raw)}</td>`;
         })
         .join("");
       return `<tr>${cells}</tr>`;

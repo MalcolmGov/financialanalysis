@@ -188,6 +188,24 @@ describe("deterministic render + integrity gates", () => {
     expect(b.matched).toBeGreaterThan(0);
   });
 
+  it("traces digits in text label cells and ignores empty sparse cells (real-table shapes)", () => {
+    // Reproduces the real-DRDGOLD run: a row-label cell carries a date, and
+    // real Docling tables are sparse (a grid slot with no source cell). The
+    // label's digits must be traceable; the empty slot must not be flagged.
+    const c = ctx();
+    (c.extraction.tables["t_pnl"].cells as unknown[]).push({ r: 4, c: 0, row_span: 1, col_span: 1, text: "Balance at 30 June 2024", is_col_header: false, is_row_header: true, is_section: false });
+    c.docModel.tables[0].rows.push({
+      cells: [
+        { src_ref: "ext:t_pnl:r4c0", raw: "Balance at 30 June 2024", kind: "text", footnote_refs: [] },
+        { src_ref: "ext:t_pnl:r4c1", raw: "", kind: "nil", footnote_refs: [] }, // empty gap — no source cell
+      ],
+    });
+    const { files } = renderSitePlan(statementPlan(), blueprint(), c);
+    const b = gateB(files, c);
+    expect(b.status).toBe("pass"); // "30"/"2024" traced in the label; empty slot ignored
+    expect(b.failures).toEqual([]);
+  });
+
   it("Gate B CATCHES a transposed digit (simulated renderer bug)", () => {
     const c = ctx();
     const { files } = renderSitePlan(statementPlan(), blueprint(), c);
