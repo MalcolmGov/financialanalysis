@@ -31,13 +31,16 @@ _NUMERIC_RE = re.compile(r"^[\(\-]?\s*[\d    ,.]*\d[\d    ,.]*\)?$")
 
 @dataclass
 class InBBox:
-    """Bottom-left origin bbox as Docling provides it, plus the page height so
-    we can flip the y-axis exactly once."""
+    """A Docling bbox plus its coordinate origin. Docling's default is TOPLEFT,
+    but the PDF backend may emit BOTTOMLEFT — so we carry the origin and let the
+    post-processor normalize, rather than assuming. Normalization happens
+    exactly once, here."""
 
     l: float
     t: float
     r: float
     b: float
+    coord_origin: str = "BOTTOMLEFT"  # "TOPLEFT" | "BOTTOMLEFT"
 
 
 @dataclass
@@ -105,10 +108,13 @@ class InPage:
     scale: float
 
 
-def _flip_bbox(b: InBBox, page_height_pt: float) -> dict:
-    """Bottom-left origin (Docling: t is the top edge, larger y; b the bottom
-    edge, smaller y) → top-left origin, y increasing downward. Each edge's new
-    coordinate is its distance from the page top."""
+def _to_top_left(b: InBBox, page_height_pt: float) -> dict:
+    """Normalize any Docling bbox to top-left origin (y increasing downward).
+    TOPLEFT bboxes pass through; BOTTOMLEFT (t = top edge / larger y, b = bottom
+    edge / smaller y) are flipped so each edge's coordinate is its distance from
+    the page top."""
+    if b.coord_origin == "TOPLEFT":
+        return {"l": b.l, "t": b.t, "r": b.r, "b": b.b}
     return {
         "l": b.l,
         "t": page_height_pt - b.t,
@@ -121,7 +127,7 @@ def _prov(prov: list[InProv], page_heights: dict[int, float]) -> list[dict]:
     out = []
     for p in prov:
         h = page_heights.get(p.page_no, 0.0)
-        entry: dict = {"page_no": p.page_no, "bbox": _flip_bbox(p.bbox, h)}
+        entry: dict = {"page_no": p.page_no, "bbox": _to_top_left(p.bbox, h)}
         if p.charspan is not None:
             entry["charspan"] = list(p.charspan)
         out.append(entry)
@@ -207,7 +213,7 @@ def build_extraction_result(
                 "is_section": cell.is_section,
             }
             if cell.bbox is not None:
-                cell_out["bbox"] = _flip_bbox(cell.bbox, page_heights.get(t.prov[0].page_no, 0.0))
+                cell_out["bbox"] = _to_top_left(cell.bbox, page_heights.get(t.prov[0].page_no, 0.0))
             if cell.confidence is not None:
                 cell_out["confidence"] = cell.confidence
             cells_out.append(cell_out)

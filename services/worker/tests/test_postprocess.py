@@ -96,6 +96,18 @@ def test_bbox_flipped_to_top_left_origin_once():
     assert bbox["t"] < bbox["b"]
 
 
+def test_bbox_topleft_origin_passes_through_unflipped():
+    # Docling's default origin is TOPLEFT; such a bbox must NOT be flipped.
+    block = InBlock(
+        id="blk-1", type="heading", level=1, text="Highlights",
+        prov=[InProv(1, InBBox(l=36, t=200, r=559, b=220, coord_origin="TOPLEFT"))],
+    )
+    res = _result([block], [], [])
+    bbox = res["body"][0]["prov"][0]["bbox"]
+    assert bbox["t"] == 200 and bbox["b"] == 220  # unchanged
+    assert bbox["t"] < bbox["b"]
+
+
 def test_furniture_separated_from_body():
     heading = InBlock(id="blk-1", type="heading", level=1, text="Cash Dividend",
                       prov=[InProv(1, InBBox(36, 600, 300, 580))])
