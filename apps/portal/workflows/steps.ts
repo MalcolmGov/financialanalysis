@@ -163,5 +163,100 @@ export async function waitForExtraction(
   });
 }
 
+/**
+ * Step 3 — design DNA. Real mode: probe (worker) + vision (opus-5) + reconcile.
+ * MOCK mode: a stub artifact so the pipeline runs credential-free in dev.
+ * Heavy AI/render deps are dynamic-imported so the WDK sandbox never analyses
+ * them at the module level.
+ */
+export async function detectDnaArtifact(
+  runId: string,
+  projectId: string,
+  extraction: ArtifactRef,
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] detecting design DNA`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "design_dna", { note: "MOCK DNA" });
+  }
+  const { getPrivate, signedSourceUrl, putPrivate } = await import("../lib/blob");
+  const { detectDna } = await import("../lib/detect-dna");
+
+  const extractionJson = JSON.parse((await getPrivate(extraction.blob_path)).toString("utf8"));
+  const pageImages = await Promise.all(
+    (extractionJson.pages ?? []).map((p: { image: { blob_path: string } }) => getPrivate(p.image.blob_path)),
+  );
+  const signed = await signedSourceUrl(extractionJson.source.blob_path);
+  const { dna } = await detectDna({
+    projectId,
+    signedSourceUrl: signed,
+    pageImages,
+    pages: extractionJson.source.page_count ?? pageImages.length,
+  });
+
+  const artifactId = `art_design_dna_${runId}`;
+  const path = `runs/${runId}/dna/${artifactId}.json`;
+  const put = await putPrivate(path, JSON.stringify(dna), "application/json");
+  await db().insert(schema.artifacts).values({
+    runId, kind: "design_dna", version: dna.revision, blobPath: put.blob_path,
+    sha256: put.sha256, bytes: put.bytes, contentType: "application/json", meta: { confidence: dna.confidence.overall },
+  });
+  return { schema: "ArtifactRef@1", artifact_id: artifactId, kind: "design_dna", version: dna.revision, blob_path: put.blob_path, sha256: put.sha256, bytes: put.bytes, content_type: "application/json", meta: { confidence: dna.confidence.overall } };
+}
+
+/**
+ * Step 4 — prototype. Real mode: map extraction → content sample, run the studio
+ * (opus-5), store both prototype forms + a prototype_versions row. MOCK: stub.
+ */
+export async function generatePrototypeArtifact(
+  runId: string,
+  projectId: string,
+  dnaRef: ArtifactRef,
+  extraction: ArtifactRef,
+  version: number,
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] generating prototype v${version}`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "prototype", { version, note: "MOCK prototype" });
+  }
+  const { getPrivate, putPrivate } = await import("../lib/blob");
+  const { runStudio } = await import("../lib/studio");
+  const { buildContentSample } = await import("../lib/build-content");
+  const { mapToDocModel } = await import("@rs/mapper");
+
+  const dna = JSON.parse((await getPrivate(dnaRef.blob_path)).toString("utf8"));
+  const extractionJson = JSON.parse((await getPrivate(extraction.blob_path)).toString("utf8"));
+
+  const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+  const meta = {
+    company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
+    period_label: project?.periodLabel ?? "",
+    doc_kind: "interim_unaudited" as const,
+    currency: "ZAR",
+  };
+  const docModel = mapToDocModel(extractionJson, meta);
+  const content = buildContentSample(docModel, extractionJson);
+
+  const studio = await runStudio({ dna, content, brief: "Confident, understated, premium; mirror the printed report." });
+
+  const base = `runs/${runId}/prototypes/v${version}`;
+  const placeholder = await putPrivate(`${base}/placeholder.html`, studio.placeholderHtml, "text/html");
+  const assembled = await putPrivate(`${base}/assembled.html`, studio.assembledHtml, "text/html");
+
+  const versionId = `pv_${runId}_${version}`;
+  await db().insert(schema.prototypeVersions).values({
+    id: versionId, projectId, cycle: 1, versionNumber: version, parentVersionId: null,
+    placeholderHtmlBlobKey: placeholder.blob_path, assembledHtmlBlobKey: assembled.blob_path,
+    sha256: assembled.sha256, sizeBytes: assembled.bytes, refinementMode: "initial",
+    model: "claude-opus-5", costUsdMicros: Math.round(studio.usage.cost_usd * 1e6), status: "ready",
+  });
+  await db().insert(schema.artifacts).values({
+    runId, kind: "prototype", version, blobPath: assembled.blob_path, sha256: assembled.sha256,
+    bytes: assembled.bytes, contentType: "text/html", meta: { versionId, placeholder: placeholder.blob_path },
+  });
+  return { schema: "ArtifactRef@1", artifact_id: versionId, kind: "prototype", version, blob_path: assembled.blob_path, sha256: assembled.sha256, bytes: assembled.bytes, content_type: "text/html", meta: { versionId } };
+}
+
 export const _limits = UPLOAD_LIMITS;
 export { getRun };

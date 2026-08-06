@@ -19,6 +19,11 @@ from typing import Optional
 # fall back to a nearest open family, flagged low-confidence for human review.
 _SUBSET_PREFIX = re.compile(r"^[A-Z]{6}\+")
 
+
+def _strip_leading_slash(s: str) -> str:
+    # pikepdf stringifies a Name as "/Foo"; drop the leading slash.
+    return s[1:] if s.startswith("/") else s
+
 _FONT_MAP: dict[str, tuple[str, str, str]] = {
     # normalized base name -> (web_family, provider, licence)
     "sourcesanspro": ("Source Sans 3", "fontsource-selfhost", "OFL-1.1"),
@@ -45,8 +50,9 @@ _FALLBACK_SERIF = ("Source Serif 4", "fontsource-selfhost", "OFL-1.1")
 
 
 def strip_subset_prefix(base_font: str) -> str:
-    """'EAAAAA+SourceSansPro-Bold' -> 'SourceSansPro-Bold'."""
-    return _SUBSET_PREFIX.sub("", base_font or "")
+    """'/EAAAAA+SourceSansPro-Bold' -> 'SourceSansPro-Bold' (also tolerates the
+    leading slash pikepdf emits on a PDF Name)."""
+    return _SUBSET_PREFIX.sub("", _strip_leading_slash(base_font or ""))
 
 
 def _normalize_family(name: str) -> str:

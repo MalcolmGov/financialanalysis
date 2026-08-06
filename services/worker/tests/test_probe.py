@@ -13,7 +13,17 @@ from app.probe import (
 def test_strip_subset_prefix():
     assert strip_subset_prefix("EAAAAA+SourceSansPro-Bold") == "SourceSansPro-Bold"
     assert strip_subset_prefix("SourceSansPro-Bold") == "SourceSansPro-Bold"
+    # pikepdf emits a leading slash on the PDF Name — must be tolerated
+    assert strip_subset_prefix("/AAAXCF+OpenSans-ExtraBold") == "OpenSans-ExtraBold"
     assert strip_subset_prefix("") == ""
+
+
+def test_map_font_family_handles_slash_prefixed_opensans():
+    # The bug the live DRDGOLD run caught: "/AAAXCF+OpenSans-ExtraBold" must map
+    # to the exact Open Sans web family, not the generic fallback.
+    m = map_font_family("/AAAXCF+OpenSans-ExtraBold")
+    assert m["web_family"] == "Open Sans"
+    assert m["match_quality"] == "exact"
 
 
 def test_map_font_family_exact_match_is_license_safe():

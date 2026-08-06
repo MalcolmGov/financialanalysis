@@ -9,6 +9,8 @@ import {
   type ReviewGateEvent,
 } from "@rs/contracts";
 import {
+  detectDnaArtifact,
+  generatePrototypeArtifact,
   persistArtifactStub,
   recordEvent,
   seedExtractionJob,
@@ -36,7 +38,7 @@ export async function resultsPipeline(input: PipelineInput) {
   const extraction = await runExtraction(input);
 
   await setProjectStatus(runId, projectId, "dna_detecting");
-  const dna = await detectDesignDna(runId, projectId, extraction);
+  const dna = await detectDnaArtifact(runId, projectId, extraction);
 
   // Gate A — DNA card approval (owner corrects measured DNA before generation).
   await setProjectStatus(runId, projectId, "dna_review");
@@ -48,7 +50,7 @@ export async function resultsPipeline(input: PipelineInput) {
 
   // ── Step 4: first prototype ────────────────────────────────────────────────
   await setProjectStatus(runId, projectId, "prototype_generating");
-  await generatePrototype(runId, projectId, dna, extraction, 1);
+  await generatePrototypeArtifact(runId, projectId, dna, extraction, 1);
 
   // ── Steps 5–8: the review → lock → QA cycle ────────────────────────────────
   let cycle = 1;
@@ -149,26 +151,6 @@ async function runExtraction(input: PipelineInput): Promise<ArtifactRef> {
   // The worker fires a webhook to /api/hooks/extraction which resumeHooks
   // token extraction:{jobId}; waitForExtraction awaits it with a poll fallback.
   return waitForExtraction(input.run_id, input.project_id, jobId);
-}
-
-async function detectDesignDna(
-  runId: string,
-  projectId: string,
-  _extraction: ArtifactRef,
-): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "design_dna", { note: "DNA probe + vision — TODO" });
-}
-
-async function generatePrototype(
-  runId: string,
-  projectId: string,
-  _dna: ArtifactRef,
-  _extraction: ArtifactRef,
-  version: number,
-): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "prototype", { version, note: "studio — TODO" });
 }
 
 async function refinePrototype(

@@ -84,10 +84,24 @@ export function conformanceLint(html: string, dna: DesignDNA): LintResult {
     }
   }
 
+  // A conformant prototype applies color through var(--dna-*) TOKENS, not
+  // literal hexes — so also count non-neutral DNA tokens actually used outside
+  // :root. Build the token→hex map from the prototype's own :root definitions,
+  // then credit each applied non-neutral token toward brand-color usage.
+  const tokenMap = new Map<string, string>();
+  for (const m of allCss.matchAll(/--([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,6})/gi)) {
+    tokenMap.set(m[1].toLowerCase(), m[2].toLowerCase());
+  }
+  for (const m of appliedCss.matchAll(/var\(\s*--([a-z0-9-]+)\s*\)/gi)) {
+    const hex = tokenMap.get(m[1].toLowerCase());
+    if (hex && !isNeutral(hex) && !BANNED_HEXES.has(hex)) brandColorsApplied.add(hex);
+  }
+  const anyColorApplied = colorUsages > 0 || brandColorsApplied.size > 0;
+
   // Near-monochrome guard: the design must actually apply the brand's
   // distinctive (non-neutral, DNA-derived) colors — not pass as a greyscale
   // card grid with one lone accent.
-  if (colorUsages > 0 && brandColorsApplied.size < CONFORMANCE.MIN_DISTINCT_BRAND_COLORS) {
+  if (anyColorApplied && brandColorsApplied.size < CONFORMANCE.MIN_DISTINCT_BRAND_COLORS) {
     errors.push({
       rule: "near-monochrome",
       detail: `only ${brandColorsApplied.size} distinct brand color(s) applied (min ${CONFORMANCE.MIN_DISTINCT_BRAND_COLORS}) — output reads as generic`,

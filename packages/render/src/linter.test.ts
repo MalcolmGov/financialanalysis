@@ -100,6 +100,22 @@ describe("conformance linter (no generic templates)", () => {
     expect(r.errors.some((e) => e.rule === "missing-annotations")).toBe(true);
   });
 
+  it("passes a token-only prototype (brand color applied via var(--dna-*), no literal hexes)", () => {
+    // The correct, expected pattern: :root defines the DNA tokens, and the rest
+    // of the CSS references them via var(). No literal brand hex is applied.
+    const tokenOnly = `<!doctype html><html><head><style>
+      :root{--dna-ink:#231F20;--dna-brand:#B8912A;--dna-accent:#E77724;--dna-paper:#FFFFFF}
+      body{background:var(--dna-paper);color:var(--dna-ink)}
+      .accent{color:var(--dna-accent)}
+      .brand-rule{border-top:3px solid var(--dna-brand)}
+    </style></head><body>
+      <section data-dna-component="kpi-card"><h2 class="accent">Highlights</h2></section>
+    </body></html>`;
+    const r = conformanceLint(tokenOnly, dna);
+    expect(r.errors).toEqual([]);
+    expect(r.passed).toBe(true);
+  });
+
   it("catches the near-monochrome loophole (greyscale + no applied brand color)", () => {
     // A generic card grid: only ink-on-paper neutrals, zero brand color applied.
     const mono = `<!doctype html><html><head><style>
