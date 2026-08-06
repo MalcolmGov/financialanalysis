@@ -89,14 +89,14 @@ export function ProjectConsole(props: {
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
-      <a href="/" style={{ color: "var(--gold-deep)", fontSize: 13, textDecoration: "none" }}>
+      <a href="/" style={{ color: "var(--accent-strong)", fontSize: 13, textDecoration: "none" }}>
         ← Projects
       </a>
       <header>
         <h1 style={{ fontSize: 26, margin: "0 0 2px" }}>{props.companyName}</h1>
         <p style={{ color: "var(--ink-2)", margin: 0 }}>
           {props.periodLabel ?? "—"} ·{" "}
-          <span style={{ color: "var(--gold-deep)", letterSpacing: ".06em" }}>
+          <span style={{ color: "var(--accent-strong)", letterSpacing: ".06em" }}>
             {status.toUpperCase()}
           </span>
         </p>
@@ -126,9 +126,9 @@ export function ProjectConsole(props: {
                 color: state === "todo" ? "var(--ink-2)" : "#fff",
                 background:
                   state === "done"
-                    ? "var(--gold-deep)"
+                    ? "var(--accent-strong)"
                     : state === "active"
-                      ? "var(--gold)"
+                      ? "var(--accent)"
                       : "transparent",
                 fontVariantNumeric: "tabular-nums",
               }}
@@ -203,7 +203,7 @@ export function ProjectConsole(props: {
       </section>
 
       {note ? (
-        <p style={{ fontSize: 13, color: "var(--gold-deep)", margin: 0 }}>{note}</p>
+        <p style={{ fontSize: 13, color: "var(--accent-strong)", margin: 0 }}>{note}</p>
       ) : null}
 
       {/* Timeline */}
@@ -264,7 +264,7 @@ const primary: React.CSSProperties = {
   padding: "9px 18px",
   border: "none",
   borderRadius: 6,
-  background: "var(--gold)",
+  background: "var(--accent)",
   color: "#fff",
   fontWeight: 600,
   cursor: "pointer",

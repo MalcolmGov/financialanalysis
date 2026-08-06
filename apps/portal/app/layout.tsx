@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header
           style={{
-            borderBottom: "3px solid var(--gold)",
+            borderBottom: "3px solid var(--accent)",
             padding: "18px 28px",
             display: "flex",
             alignItems: "baseline",

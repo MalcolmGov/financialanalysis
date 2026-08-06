@@ -1,23 +1,51 @@
 @import "tailwindcss";
 
+/*
+ * Results Studio — operator tool identity. Deliberately COOL (petrol teal on
+ * cool slate) so the portal never reads as tied to any one customer's brand.
+ * Customer deliverables carry their OWN warm/cool identity, derived from their
+ * PDF; the portal chrome stays neutral and product-like.
+ */
 :root {
-  --paper: #fbfaf7;
-  --ink: #1c1b18;
-  --ink-2: #4a463d;
-  --rule: #ddd8cb;
-  --gold: #a8842c;
-  --gold-deep: #7a5e1d;
+  --paper: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #14181c;
+  --ink-2: #4c545c;
+  --rule: #dde1e7;
+  --accent: #1f7a8c;
+  --accent-strong: #135562;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #16150f;
-    --ink: #e8e4d8;
-    --ink-2: #b5af9e;
-    --rule: #38352a;
-    --gold: #c9a54b;
-    --gold-deep: #e0be68;
+    --paper: #0e1216;
+    --surface: #161b21;
+    --ink: #e7ebef;
+    --ink-2: #98a2ac;
+    --rule: #2a313a;
+    --accent: #3ba7bc;
+    --accent-strong: #6fcada;
   }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0e1216;
+  --surface: #161b21;
+  --ink: #e7ebef;
+  --ink-2: #98a2ac;
+  --rule: #2a313a;
+  --accent: #3ba7bc;
+  --accent-strong: #6fcada;
+}
+
+:root[data-theme="light"] {
+  --paper: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #14181c;
+  --ink-2: #4c545c;
+  --rule: #dde1e7;
+  --accent: #1f7a8c;
+  --accent-strong: #135562;
 }
 
 html,

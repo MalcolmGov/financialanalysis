@@ -64,7 +64,7 @@ export function NewProject() {
           padding: "9px 18px",
           border: "none",
           borderRadius: 6,
-          background: "var(--gold)",
+          background: "var(--accent)",
           color: "#fff",
           fontWeight: 600,
           cursor: busy ? "default" : "pointer",

@@ -51,7 +51,7 @@ export default async function Home() {
                   <span style={{ color: "var(--ink-2)" }}> · {p.periodLabel}</span>
                 ) : null}
               </span>
-              <span style={{ fontSize: 12, color: "var(--gold-deep)", letterSpacing: ".06em" }}>
+              <span style={{ fontSize: 12, color: "var(--accent-strong)", letterSpacing: ".06em" }}>
                 {p.status.toUpperCase()}
               </span>
             </a>

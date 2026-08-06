@@ -56,9 +56,12 @@ def test_missing_job_id_rejected():
         assert r.status_code == 400
 
 
-def test_step3_endpoints_stable_but_not_implemented():
+def test_probe_wired_validates_input_and_render_still_stubbed():
     with TestClient(app) as client:
-        assert client.post("/probe").status_code == 501
+        # /probe is implemented — rejects a body with no source URL (400),
+        # rather than the old 501.
+        assert client.post("/probe", json={}).status_code == 400
+        # /render lands in a later phase.
         assert client.post("/render").status_code == 501
 
 

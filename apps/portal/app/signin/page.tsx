@@ -33,7 +33,7 @@ export default function SignIn() {
             padding: "10px 18px",
             border: "none",
             borderRadius: 6,
-            background: "var(--gold)",
+            background: "var(--accent)",
             color: "#fff",
             fontWeight: 600,
             cursor: "pointer",

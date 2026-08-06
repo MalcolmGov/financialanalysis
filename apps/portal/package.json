@@ -13,7 +13,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@rs/contracts": "workspace:*",
+    "@rs/mapper": "workspace:*",
+    "@rs/render": "workspace:*",
     "@neondatabase/serverless": "^0.10.4",
     "@vercel/blob": "^2.6.1",
     "drizzle-orm": "^0.45.2",

@@ -88,10 +88,23 @@ def cancel_extraction(job_id: str, _auth: None = Depends(require_token)) -> dict
     return {"cancelled": queue().cancel(job_id)}
 
 
-# Step-3 endpoints land in a later phase; the surface is stable now.
+# Step-3 deterministic DNA probe (fonts + palette). Vision role-assignment and
+# the reconciler run portal-side; this returns the measured probe half.
 @app.post("/probe")
-def probe(_auth: None = Depends(require_token)) -> JSONResponse:
-    return JSONResponse({"detail": "design-DNA probe not implemented"}, status_code=501)
+def probe(req: dict, _auth: None = Depends(require_token)) -> JSONResponse:
+    signed_url = (req.get("source") or {}).get("signed_url") or req.get("signed_url")
+    if not signed_url:
+        raise HTTPException(status_code=400, detail="source.signed_url required")
+    pdf_bytes = fetch_source(signed_url)
+    from .probe import probe_design_dna
+
+    dna = probe_design_dna(
+        pdf_bytes,
+        project_id=req.get("project_id", ""),
+        sha256=hashlib.sha256(pdf_bytes).hexdigest(),
+        pages=int(req.get("pages", 0)),
+    )
+    return JSONResponse(dna)
 
 
 @app.post("/render")
