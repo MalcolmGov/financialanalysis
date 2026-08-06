@@ -1,0 +1,41 @@
+import { desc, eq } from "drizzle-orm";
+import { db, schema } from "../../../lib/db";
+import { env } from "../../../lib/env";
+import { ProjectConsole } from "./console";
+
+async function loadProject(id: string) {
+  if (env.MOCK_BLOB) return null;
+  try {
+    const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, id));
+    if (!project) return null;
+    const events = await db()
+      .select()
+      .from(schema.runEvents)
+      .where(eq(schema.runEvents.runId, project.pipelineRunId ?? id))
+      .orderBy(desc(schema.runEvents.id))
+      .limit(50);
+    return { project, events };
+  } catch {
+    return null;
+  }
+}
+
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const data = await loadProject(id);
+
+  return (
+    <ProjectConsole
+      projectId={id}
+      initialStatus={data?.project.status ?? "created"}
+      companyName={data?.project.companyName ?? "Project"}
+      periodLabel={data?.project.periodLabel ?? null}
+      workflowRunId={data?.project.pipelineRunId ?? null}
+      initialEvents={(data?.events ?? []).map((e) => ({
+        id: Number(e.id),
+        type: e.type,
+        createdAt: (e.createdAt ?? new Date()).toISOString(),
+      }))}
+    />
+  );
+}

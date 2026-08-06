@@ -204,6 +204,8 @@ export const ExtractionError = z.object({
   detail: z.record(z.string(), z.unknown()).optional(),
 });
 
+export type ExtractionError = z.infer<typeof ExtractionError>;
+
 export const ExtractionJobSubmit = z.object({
   schema_version: z.literal("1.0"),
   /** Idempotency key — retried steps re-attach rather than double-submit. */
@@ -227,6 +229,7 @@ export const ExtractionJobSubmit = z.object({
   }),
   webhook: z.object({ url: z.string(), hmac_key_id: z.string() }),
 });
+export type ExtractionJobSubmit = z.infer<typeof ExtractionJobSubmit>;
 
 export const ExtractionJobStatus = z.enum([
   "queued",
@@ -251,6 +254,7 @@ export const ExtractionStatus = z.object({
   timings_ms: z.record(z.string(), z.number()).default({}),
   error: ExtractionError.nullable(),
 });
+export type ExtractionStatus = z.infer<typeof ExtractionStatus>;
 
 export const ExtractionResultPointer = z.object({
   schema_version: z.literal("1.0"),
@@ -266,6 +270,7 @@ export const ExtractionResultPointer = z.object({
     warnings: z.number().int(),
   }),
 });
+export type ExtractionResultPointer = z.infer<typeof ExtractionResultPointer>;
 
 /** HMAC-signed, terminal-only, idempotent on job_id+status. */
 export const ExtractionWebhook = z.object({
@@ -277,6 +282,7 @@ export const ExtractionWebhook = z.object({
   attempt: z.number().int(),
   sent_at: IsoDateTime,
 });
+export type ExtractionWebhook = z.infer<typeof ExtractionWebhook>;
 
 export const UploadRecord = z.object({
   schema_version: z.literal("1.0"),
@@ -297,6 +303,7 @@ export const UploadRecord = z.object({
   uploaded_by: z.string(),
   uploaded_at: IsoDateTime,
 });
+export type UploadRecord = z.infer<typeof UploadRecord>;
 
 export const UPLOAD_LIMITS = {
   max_bytes: 150 * 1024 * 1024,

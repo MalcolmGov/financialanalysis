@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #fbfaf7;
+  --ink: #1c1b18;
+  --ink-2: #4a463d;
+  --rule: #ddd8cb;
+  --gold: #a8842c;
+  --gold-deep: #7a5e1d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16150f;
+    --ink: #e8e4d8;
+    --ink-2: #b5af9e;
+    --rule: #38352a;
+    --gold: #c9a54b;
+    --gold-deep: #e0be68;
+  }
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+}

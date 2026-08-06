@@ -64,6 +64,7 @@ export const hookTokens = {
   extraction: (jobId: string) => `extraction:${jobId}`,
 } as const;
 export const HookGate = z.enum(["dna", "review", "lock", "qa", "extraction"]);
+export type HookGate = z.infer<typeof HookGate>;
 
 export const ReviewGateEvent = z.discriminatedUnion("type", [
   z.object({
@@ -154,3 +155,4 @@ export const ModelCall = z.object({
   cache_write_tokens: z.number().int().default(0),
   cost_usd: z.number(),
 });
+export type ModelCall = z.infer<typeof ModelCall>;
