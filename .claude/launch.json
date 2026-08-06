@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "portal",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "portal", "dev"],
+      "port": 3000
+    }
+  ]
+}

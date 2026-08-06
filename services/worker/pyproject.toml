@@ -1,0 +1,42 @@
+[project]
+name = "results-studio-worker"
+version = "0.1.0"
+description = "Docling extraction + design-DNA probe + render/QA service for Results Studio"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "httpx>=0.27",
+    "psycopg[binary]>=3.2",
+    "python-dotenv>=1.0",
+    "pypdfium2>=4.30",
+    "pikepdf>=9.0",
+    "pdfplumber>=0.11",
+    "fonttools>=4.55",
+    "pillow>=11.0",
+    # Docling is the extraction engine; heavy (pulls torch). Imported lazily so
+    # the API and unit tests run without it installed.
+    "docling>=2.15",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "datamodel-code-generator>=0.26",
+]
+
+[tool.uv]
+# Allow running the API + tests without the heavy docling/torch stack.
+# `uv sync --no-install-package docling` for a light dev env.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
