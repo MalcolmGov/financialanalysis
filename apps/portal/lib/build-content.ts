@@ -7,14 +7,26 @@ import type { ContentSample } from "./studio";
  * values are carried VERBATIM — the studio must reproduce them exactly; the
  * final exported numbers still flow through the ref-only, gate-verified path.
  */
+/** The raw "Highlights" prose (for the KPI enricher), or "" if absent. */
+export function highlightsText(docModel: FinancialDocModel): string {
+  const hi = docModel.sections.find((s) => s.kind === "highlights");
+  return (hi?.blocks ?? [])
+    .filter((b) => b.text)
+    .map((b) => b.text as string)
+    .join(" ");
+}
+
 export function buildContentSample(
   docModel: FinancialDocModel,
   extraction: ExtractionResult,
+  opts?: { kpis?: { label: string; value: string }[] },
 ): ContentSample {
-  const kpis = extraction.enrichment.key_figures.slice(0, 6).map((k) => ({
-    label: k.label,
-    value: k.value_raw,
-  }));
+  // Prefer caller-supplied (AI-segmented, verbatim-validated) KPIs; fall back to
+  // the extraction's key_figures enrichment.
+  const kpis =
+    opts?.kpis && opts.kpis.length > 0
+      ? opts.kpis.slice(0, 6)
+      : extraction.enrichment.key_figures.slice(0, 6).map((k) => ({ label: k.label, value: k.value_raw }));
 
   // Prefer the P&L statement table; else the first must-appear financial table.
   const stmt =

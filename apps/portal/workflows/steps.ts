@@ -222,7 +222,8 @@ export async function generatePrototypeArtifact(
   }
   const { getPrivate, putPrivate } = await import("../lib/blob");
   const { runStudio } = await import("../lib/studio");
-  const { buildContentSample } = await import("../lib/build-content");
+  const { buildContentSample, highlightsText } = await import("../lib/build-content");
+  const { extractKpis } = await import("../lib/enrich-kpis");
   const { mapToDocModel } = await import("@rs/mapper");
 
   const dna = JSON.parse((await getPrivate(dnaRef.blob_path)).toString("utf8"));
@@ -236,7 +237,8 @@ export async function generatePrototypeArtifact(
     currency: "ZAR",
   };
   const docModel = mapToDocModel(extractionJson, meta);
-  const content = buildContentSample(docModel, extractionJson);
+  const kpis = await extractKpis(highlightsText(docModel));
+  const content = buildContentSample(docModel, extractionJson, { kpis });
 
   const studio = await runStudio({ dna, content, brief: "Confident, understated, premium; mirror the printed report." });
 

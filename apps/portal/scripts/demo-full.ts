@@ -17,7 +17,8 @@ import { mapToDocModel, buildSitePlan } from "@rs/mapper";
 import { analyzeVision } from "../lib/vision";
 import { reconcileDna } from "../lib/reconcile";
 import { runStudio } from "../lib/studio";
-import { buildContentSample } from "../lib/build-content";
+import { buildContentSample, highlightsText } from "../lib/build-content";
+import { extractKpis } from "../lib/enrich-kpis";
 
 const DIR =
   "/private/tmp/claude-501/-Users-malcolmgovender-Projects-Automation-tool/c553c9e2-94ee-48b1-b8b5-30ca10b34aca/scratchpad/full-run";
@@ -56,10 +57,12 @@ async function main() {
   const dna = await reconcileDna(probe, vision);
   process.stdout.write(`  DNA overall confidence ${dna.confidence.overall}; brand=${dna.palette.roles.brand?.hex} theme=${dna.theme.mode}\n`);
 
-  // ── Content from the REAL extraction (mapper) ──────────────────────────────
+  // ── Content from the REAL extraction (mapper + KPI enricher) ───────────────
   const docModel = mapToDocModel(extraction, meta);
-  const content = buildContentSample(docModel, extraction);
+  const kpis = await extractKpis(highlightsText(docModel));
+  const content = buildContentSample(docModel, extraction, { kpis });
   process.stdout.write(`  mapped ${docModel.tables.length} financial tables; ${content.kpis.length} KPIs, ${content.table.rows.length} statement rows, ${content.letter.paragraphs.length} letter paragraphs\n`);
+  for (const k of content.kpis) process.stdout.write(`    KPI: "${k.label}" = ${k.value}\n`);
 
   // ── Design deliverable draft (studio) ──────────────────────────────────────
   process.stdout.write("Studio…\n");

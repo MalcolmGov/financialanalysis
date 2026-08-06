@@ -88,12 +88,94 @@ function buildFinTable(table: ExtractionTable, docTableId: string, mustAppear: b
   };
 }
 
+type Body = ExtractionResult["body"];
+type BlockNode = Body[number];
+
+function flattenBody(nodes: Body, out: BlockNode[] = []): BlockNode[] {
+  for (const n of nodes) {
+    out.push(n);
+    if (n.children?.length) flattenBody(n.children, out);
+  }
+  return out;
+}
+
+const LETTER_START = /dear shareholder|shareholder letter/i;
+const HIGHLIGHTS = /^highlights$/i;
+const DIVIDEND = /cash dividend|dividend declaration|salient dates/i;
+/** Prose ends where the primary statements begin. */
+const STATEMENTS_START =
+  /statement of (profit or loss|financial position|changes in equity|cash flows)|condensed consolidated financial statements|notes to the/i;
+
+/**
+ * Prose sections (shareholder letter, highlights, dividend) from the reading-
+ * ordered body blocks — deterministic. The letter runs from its opening heading
+ * to the first financial statement; every block keeps its verbatim text and a
+ * src_ref back to the extraction block.
+ */
+export function extractProseSections(extraction: ExtractionResult): FinancialDocModel["sections"] {
+  const flat = flattenBody(extraction.body);
+  const sections: FinancialDocModel["sections"] = [];
+
+  const proseBlocks = (start: number, stop: (b: BlockNode, i: number) => boolean) => {
+    const blocks: { kind: "paragraph" | "heading" | "list"; text: string; src_ref: string }[] = [];
+    for (let i = start; i < flat.length; i++) {
+      const b = flat[i];
+      if (i > start && stop(b, i)) break;
+      if (b.text && (b.type === "paragraph" || b.type === "list_item")) {
+        blocks.push({ kind: "paragraph", text: b.text, src_ref: `ext:${b.id}` });
+      }
+    }
+    return blocks;
+  };
+
+  const letterStart = flat.findIndex((b) => b.type === "heading" && LETTER_START.test(b.text ?? ""));
+  if (letterStart >= 0) {
+    const blocks = proseBlocks(letterStart, (b) => b.type === "heading" && STATEMENTS_START.test(b.text ?? ""));
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_letter",
+        kind: "letter",
+        title: { text: flat[letterStart].text ?? "Shareholder letter", src_ref: `ext:${flat[letterStart].id}` },
+        blocks,
+        items: [],
+      });
+  }
+
+  const hiStart = flat.findIndex((b) => b.type === "heading" && HIGHLIGHTS.test((b.text ?? "").trim()));
+  if (hiStart >= 0) {
+    const blocks = proseBlocks(hiStart, (b) => b.type === "heading");
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_highlights",
+        kind: "highlights",
+        title: { text: "Highlights", src_ref: `ext:${flat[hiStart].id}` },
+        blocks,
+        items: [],
+      });
+  }
+
+  const divStart = flat.findIndex((b) => b.type === "heading" && DIVIDEND.test(b.text ?? ""));
+  if (divStart >= 0) {
+    const blocks = proseBlocks(divStart, (b) => b.type === "heading");
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_dividend",
+        kind: "dividendDeclaration",
+        title: { text: flat[divStart].text ?? "Cash dividend", src_ref: `ext:${flat[divStart].id}` },
+        blocks,
+        items: [],
+      });
+  }
+
+  return sections;
+}
+
 export function mapToDocModel(
   extraction: ExtractionResult,
   meta: FinancialDocModel["meta"],
 ): FinancialDocModel {
   const tables: FinTable[] = [];
-  const sections: FinancialDocModel["sections"] = [];
+  const sections: FinancialDocModel["sections"] = [...extractProseSections(extraction)];
 
   let i = 0;
   for (const [extId, table] of Object.entries(extraction.tables)) {
