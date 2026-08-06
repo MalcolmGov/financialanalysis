@@ -8,8 +8,7 @@ import {
   type PipelineInput,
   type ProjectStatus,
 } from "@rs/contracts";
-import { and, eq } from "drizzle-orm";
-import { db, schema } from "../lib/db";
+import { eq } from "drizzle-orm";
 import { env } from "../lib/env";
 import { putPrivate, signedSourceUrl } from "../lib/blob";
 import { submitExtraction } from "../lib/worker";
@@ -18,11 +17,23 @@ import { submitExtraction } from "../lib/worker";
  * Shared step helpers. All persist small facts; large bodies go to Blob and
  * only ArtifactRefs flow back into the workflow (keeps replay/streams cheap).
  * DB writes are skipped under MOCK_BLOB so the pipeline runs credential-free.
+ *
+ * The DB is loaded LAZILY (loadDb) from the workflow-safe accessor
+ * (lib/db/workflow-db), whose `postgres` driver is dynamic-imported so no
+ * node-dependent module is statically reachable from the Workflow build graph.
+ * loadDb returns a `db()` thunk so the call sites below read identically to a
+ * plain drizzle client. These bodies only run inside step executions (Node).
  */
+async function loadDb() {
+  const { getDb, schema } = await import("../lib/db/workflow-db");
+  const instance = await getDb();
+  return { db: () => instance, schema };
+}
 
 export async function recordEvent(runId: string, type: string, payload: unknown) {
   console.log(`[run ${runId}] event ${type}`);
   if (env.MOCK_BLOB) return;
+  const { db, schema } = await loadDb();
   await db().insert(schema.runEvents).values({ runId, type, payload: payload as object });
 }
 
@@ -34,6 +45,7 @@ export async function setProjectStatus(
 ) {
   console.log(`[run ${runId}] status -> ${status}${cycle ? ` (cycle ${cycle})` : ""}`);
   if (env.MOCK_BLOB) return;
+  const { db, schema } = await loadDb();
   await db()
     .update(schema.projects)
     .set({ status, ...(cycle ? { cycle } : {}), updatedAt: new Date() })
@@ -67,6 +79,7 @@ export async function persistArtifactStub(
     meta,
   };
   if (!env.MOCK_BLOB) {
+    const { db, schema } = await loadDb();
     await db().insert(schema.artifacts).values({
       runId,
       kind,
@@ -86,6 +99,7 @@ export async function persistArtifactStub(
 export async function seedExtractionJob(input: PipelineInput, jobId: string) {
   console.log(`[run ${input.run_id}] seeding extraction job ${jobId}`);
   if (env.MOCK_BLOB) return;
+  const { db, schema } = await loadDb();
 
   const [doc] = await db()
     .select()
@@ -181,6 +195,7 @@ export async function detectDnaArtifact(
   }
   const { getPrivate, signedSourceUrl, putPrivate } = await import("../lib/blob");
   const { detectDna } = await import("../lib/detect-dna");
+  const { db, schema } = await loadDb();
 
   const extractionJson = JSON.parse((await getPrivate(extraction.blob_path)).toString("utf8"));
   const pageImages = await Promise.all(
@@ -225,6 +240,7 @@ export async function generatePrototypeArtifact(
   const { buildContentSample, highlightsText } = await import("../lib/build-content");
   const { extractKpis } = await import("../lib/enrich-kpis");
   const { mapToDocModel } = await import("@rs/mapper");
+  const { db, schema } = await loadDb();
 
   const dna = JSON.parse((await getPrivate(dnaRef.blob_path)).toString("utf8"));
   const extractionJson = JSON.parse((await getPrivate(extraction.blob_path)).toString("utf8"));

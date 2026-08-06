@@ -1,0 +1,33 @@
+# Build context = repo root. Keep it small and never leak host artifacts.
+
+# --- version control / editor / agent tooling ---
+.git
+.gitignore
+.claude
+**/.DS_Store
+
+# --- dependencies & build output (reinstalled / rebuilt inside the image) ---
+# Excluding node_modules is critical: it stops host (macOS) binaries from being
+# copied over the linux deps installed in the image, and lets `COPY . .` in the
+# build stage overlay source without clobbering installed node_modules.
+**/node_modules
+**/.next
+**/dist
+**/*.tsbuildinfo
+.pnpm-store
+
+# --- local dev state / Workflow local-world durable data ---
+**/.workflow-data
+
+# --- secrets / local env (build needs none) ---
+**/.env
+**/.env.*
+
+# --- the Python extraction worker is a separate Railway service ---
+services
+
+# --- tests / coverage / docs not needed in the image ---
+**/coverage
+**/.vitest
+README.md
+
