@@ -85,6 +85,7 @@ export const SectionKind = z.enum([
   "disclaimers",
   "other",
 ]);
+export type SectionKind = z.infer<typeof SectionKind>;
 
 export const StatementType = z.enum([
   "pnl_oci",
@@ -92,6 +93,7 @@ export const StatementType = z.enum([
   "changes_in_equity",
   "cash_flows",
 ]);
+export type StatementType = z.infer<typeof StatementType>;
 
 export const DocBlock = z.object({
   kind: z.enum(["heading", "paragraph", "list", "signoff", "table"]),
