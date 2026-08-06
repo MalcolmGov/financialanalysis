@@ -1,0 +1,172 @@
+import type { Blueprint, DesignDNA } from "@rs/contracts";
+import { buildTokenBlock } from "./studio";
+
+/**
+ * Step 6 (v1) — construct a real, lockable Blueprint directly from the
+ * approved DesignDNA. This is NOT "parse the AI-generated prototype's HTML
+ * into a full component inventory" (extracting an arbitrary component set
+ * from generated markup is a separate, larger future feature). It derives
+ * tokens, typography and table styling from the SAME DNA the prototype was
+ * generated from, using a fixed, minimal component set that @rs/mapper's
+ * buildSitePlan already knows how to target (one statement-table component).
+ * Every value below is genuinely derived from the DNA, not placeholder data —
+ * only the component INVENTORY is fixed rather than extracted from markup.
+ */
+
+function srgbToLinear(c: number): number {
+  const s = c / 255;
+  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+function relativeLuminance(hex: string): number {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16) || 0;
+  const g = parseInt(h.substring(2, 4), 16) || 0;
+  const b = parseInt(h.substring(4, 6), 16) || 0;
+  return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+}
+/** WCAG 2.x contrast ratio, 1–21. */
+function contrastRatio(hex1: string, hex2: string): number {
+  const l1 = relativeLuminance(hex1);
+  const l2 = relativeLuminance(hex2);
+  const [lighter, darker] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+const NEG_STYLE: Record<string, "parens" | "minus"> = { parentheses: "parens", minus: "minus" };
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * The worker's probe (services/worker/app/probe.py) currently populates
+ * table_style.header_bg/header_text with palette ROLE-KEY references (e.g.
+ * the literal string "table-header-bg"), not resolved hex values — a
+ * placeholder convention, confirmed by running this against real DNA data.
+ * Resolve through palette.roles; fall back to treating the value as a literal
+ * hex if it already looks like one, so this keeps working if the worker is
+ * later changed to emit resolved hexes directly.
+ */
+function resolveTableColor(
+  value: string,
+  roles: Record<string, { hex: string }>,
+  fallback: string,
+): string {
+  if (HEX.test(value)) return value;
+  return roles[value]?.hex ?? fallback;
+}
+
+export function buildBlueprintV1(opts: {
+  dna: DesignDNA;
+  blueprintVersionId: string;
+  projectId: string;
+  cycle: number;
+  sourcePrototypeVersionId: string;
+  sourcePrototypeSha256: string;
+}): Omit<Blueprint, "checksum"> {
+  const { dna } = opts;
+  const roles = dna.palette.roles;
+  const paper = roles.paper?.hex ?? "#FFFFFF";
+  const ink = roles.ink?.hex ?? "#111111";
+  const headerBg = resolveTableColor(
+    dna.table_style.header_bg,
+    roles,
+    roles["table-header-bg"]?.hex ?? roles.brand?.hex ?? ink,
+  );
+  const headerFg = resolveTableColor(
+    dna.table_style.header_text,
+    roles,
+    roles["table-header-text"]?.hex ?? "#FFFFFF",
+  );
+
+  const values: Record<string, string> = {};
+  for (const [role, entry] of Object.entries(roles)) values[`--dna-${role}`] = entry.hex;
+
+  return {
+    schema_version: "1.0",
+    blueprint_version_id: opts.blueprintVersionId,
+    project_id: opts.projectId,
+    cycle: opts.cycle,
+    source_prototype_version_id: opts.sourcePrototypeVersionId,
+    source_prototype_sha256: opts.sourcePrototypeSha256,
+    status: "proposed",
+    locked_at: null,
+    locked_by: null,
+
+    tokens: { css: buildTokenBlock(dna), values },
+
+    typography: {
+      font_faces: dna.type.faces.map((f) => ({
+        family: f.mapping.web_family,
+        src_blob_path: null, // font files aren't embedded yet — a later feature.
+        licence: f.mapping.provider === "fontsource-selfhost" ? "embeddable" : "fallback-only",
+        fallbacks: f.role === "table" ? ["ui-monospace", "monospace"] : ["ui-sans-serif", "system-ui"],
+      })),
+      ramp: [
+        {
+          role: "heading",
+          size: `${Math.round(dna.type.scale.web_base_px * dna.type.scale.ratio ** 2)}px`,
+          weight: dna.type.heading_treatment.weight,
+          token_refs: ["--dna-font-heading"],
+        },
+        { role: "body", size: `${dna.type.scale.web_base_px}px`, weight: 400, token_refs: ["--dna-font-body"] },
+      ],
+    },
+    // Responsive breakpoint extraction isn't implemented — left empty rather
+    // than fabricated; unused by the renderer today regardless.
+    breakpoints: [],
+    navigation: {
+      model: "sticky",
+      items: [{ id: "statements", label: "Financial statements", template: "bp:tpl_statement" }],
+    },
+    page_templates: [
+      {
+        id: "bp:tpl_statement",
+        name: "Statement",
+        shell_html: `<main data-dna-component="page-shell">{{region:main}}</main>`,
+        regions: [{ id: "main", accepts: ["bp:cmp_statement_table"], min: 0, max: null }],
+      },
+    ],
+    components: [
+      {
+        id: "bp:cmp_statement_table",
+        name: "Statement table",
+        html: `<section data-dna-component="statement-table" class="statement-table">{{slot:table}}</section>`,
+        css: "",
+        slots: { table: { type: "ref", accepts: "table", required: true } },
+        variants: [],
+      },
+    ],
+    table_styles: {
+      header_bg: headerBg,
+      header_fg: headerFg,
+      current_period_shade: dna.table_style.period_shading?.target ?? null,
+      numeric_alignment: dna.table_style.numeric_alignment,
+      zebra: dna.table_style.zebra,
+      rule_style: Object.keys(dna.table_style.rules).length > 0 ? "hairline" : "none",
+      negative_number_style: NEG_STYLE[dna.table_style.negative_format] ?? "parens",
+      number_grouping: dna.table_style.thousands_separator,
+    },
+    chart_theme: {
+      palette: ["var(--dna-brand)", "var(--dna-accent)"],
+      grid_color: "var(--dna-ink)",
+      font_role: "body",
+      number_format: {
+        locale: "en-ZA",
+        thousands: dna.table_style.thousands_separator === "comma" ? "," : " ",
+      },
+      allowed_chart_kinds: ["bar", "line"],
+    },
+    print_stylesheet: null,
+    // Real WCAG 2.x contrast, computed from the DNA's own ink/paper and
+    // table header colors — not asserted, actually calculated.
+    a11y: {
+      approved_text_pairs: [
+        { fg: ink, bg: paper, ratio: Number(contrastRatio(ink, paper).toFixed(2)) },
+        { fg: headerFg, bg: headerBg, ratio: Number(contrastRatio(headerFg, headerBg).toFixed(2)) },
+      ],
+    },
+    assets: [],
+    usage_rules: [
+      "Numeric slots accept only ext:/doc: references — never a literal value.",
+      "Colors must be applied via var(--dna-*) tokens; a literal hex outside the token set fails the conformance linter.",
+    ],
+  };
+}

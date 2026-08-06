@@ -4,9 +4,12 @@ import {
   hookTokens,
   UPLOAD_LIMITS,
   type ArtifactRef,
+  type Blueprint,
   type ExtractionJobSubmit,
+  type LockGateEvent,
   type PipelineInput,
   type ProjectStatus,
+  type QaGateEvent,
 } from "@rs/contracts";
 import { eq } from "drizzle-orm";
 import { env } from "../lib/env";
@@ -262,7 +265,10 @@ export async function generatePrototypeArtifact(
   const placeholder = await putPrivate(`${base}/placeholder.html`, studio.placeholderHtml, "text/html");
   const assembled = await putPrivate(`${base}/assembled.html`, studio.assembledHtml, "text/html");
 
-  const versionId = `pv_${runId}_${version}`;
+  // prototype_versions.id is a real Postgres uuid column — a human-readable
+  // string like `pv_${runId}_${version}` would fail the insert outright.
+  const { randomUUID } = await import("node:crypto");
+  const versionId = randomUUID();
   await db().insert(schema.prototypeVersions).values({
     id: versionId, projectId, cycle: 1, versionNumber: version, parentVersionId: null,
     placeholderHtmlBlobKey: placeholder.blob_path, assembledHtmlBlobKey: assembled.blob_path,
@@ -274,6 +280,314 @@ export async function generatePrototypeArtifact(
     bytes: assembled.bytes, contentType: "text/html", meta: { versionId, placeholder: placeholder.blob_path },
   });
   return { schema: "ArtifactRef@1", artifact_id: versionId, kind: "prototype", version, blob_path: assembled.blob_path, sha256: assembled.sha256, bytes: assembled.bytes, content_type: "text/html", meta: { versionId } };
+}
+
+/**
+ * Step 6 — blueprint extraction. Real mode: build a DNA-derived Blueprint
+ * (see ../lib/build-blueprint — a fixed, minimal component set, NOT parsed
+ * from the prototype's arbitrary markup) and persist it as "proposed". MOCK:
+ * stub.
+ */
+export async function extractBlueprint(
+  runId: string,
+  projectId: string,
+  cycle: number,
+  prototypeVersionId: string,
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] extracting blueprint v${cycle} from prototype ${prototypeVersionId}`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "blueprint", {
+      cycle,
+      source: prototypeVersionId,
+      note: "MOCK blueprint",
+    });
+  }
+  const { getPrivate, putPrivate, sha256 } = await import("../lib/blob");
+  const { buildBlueprintV1 } = await import("../lib/build-blueprint");
+  const { Blueprint: BlueprintSchema } = await import("@rs/contracts");
+  const { randomUUID } = await import("node:crypto");
+  const { db, schema } = await loadDb();
+
+  const runArtifacts = await db().select().from(schema.artifacts).where(eq(schema.artifacts.runId, runId));
+  const dnaRow = runArtifacts.find((a) => a.kind === "design_dna");
+  if (!dnaRow) throw new Error(`no design_dna artifact for run ${runId}`);
+  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8"));
+
+  const [proto] = await db()
+    .select()
+    .from(schema.prototypeVersions)
+    .where(eq(schema.prototypeVersions.id, prototypeVersionId));
+  if (!proto) throw new Error(`prototype version ${prototypeVersionId} not found`);
+
+  const blueprintVersionId = randomUUID();
+  const draft = buildBlueprintV1({
+    dna,
+    blueprintVersionId,
+    projectId,
+    cycle,
+    sourcePrototypeVersionId: prototypeVersionId,
+    sourcePrototypeSha256: proto.sha256,
+  });
+  const checksum = await sha256(Buffer.from(JSON.stringify(draft)));
+  const blueprint = BlueprintSchema.parse({ ...draft, checksum });
+
+  const path = `runs/${runId}/blueprints/v${cycle}.json`;
+  const put = await putPrivate(path, JSON.stringify(blueprint), "application/json");
+
+  await db().insert(schema.blueprintVersions).values({
+    id: blueprintVersionId,
+    projectId,
+    cycle,
+    versionNumber: cycle,
+    sourcePrototypeVersionId: prototypeVersionId,
+    blueprintJson: blueprint,
+    checksum,
+    schemaVersion: "1.0",
+    status: "proposed",
+  });
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "blueprint",
+    version: cycle,
+    blobPath: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    contentType: "application/json",
+    meta: { blueprintVersionId },
+  });
+
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: blueprintVersionId,
+    kind: "blueprint",
+    version: cycle,
+    blob_path: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    content_type: "application/json",
+    meta: { blueprintVersionId },
+  };
+}
+
+/**
+ * Lock the blueprint: flip it to "locked" (immutability trigger takes over
+ * from here) and point the project at it. Previously a no-op beyond a status
+ * log — steps 7/8 need a genuinely locked row to reference.
+ */
+export async function lockBlueprint(
+  runId: string,
+  projectId: string,
+  blueprintVersionId: string,
+  decision: Extract<LockGateEvent, { type: "confirm_lock" }>,
+): Promise<void> {
+  "use step";
+  console.log(`[run ${runId}] locking blueprint ${blueprintVersionId}`);
+  await setProjectStatus(runId, projectId, "locked");
+  if (!env.MOCK_BLOB) {
+    const { db, schema } = await loadDb();
+    await db()
+      .update(schema.blueprintVersions)
+      .set({ status: "locked", lockedAt: new Date(), lockedBy: decision.actor_user_id })
+      .where(eq(schema.blueprintVersions.id, blueprintVersionId));
+    await db()
+      .update(schema.projects)
+      .set({ currentBlueprintId: blueprintVersionId })
+      .where(eq(schema.projects.id, projectId));
+  }
+  await recordEvent(runId, "blueprint.locked", { blueprintVersionId });
+}
+
+/**
+ * Step 7 — content mapping + blueprint-constrained composition. Real mode:
+ * map the extraction into a FinancialDocModel, compile it into a reference-
+ * only SitePlan against the LOCKED blueprint (@rs/mapper). MOCK: stub.
+ */
+export async function mapContent(
+  runId: string,
+  projectId: string,
+  extractionRef: ArtifactRef,
+  blueprintVersionId: string,
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] mapping content into locked blueprint ${blueprintVersionId}`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "site_plan", { blueprintVersionId, note: "MOCK site plan" });
+  }
+  const { getPrivate, putPrivate } = await import("../lib/blob");
+  const { mapToDocModel, buildSitePlan } = await import("@rs/mapper");
+  const { db, schema } = await loadDb();
+
+  const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+  const [bpRow] = await db()
+    .select()
+    .from(schema.blueprintVersions)
+    .where(eq(schema.blueprintVersions.id, blueprintVersionId));
+  if (!bpRow) throw new Error(`blueprint ${blueprintVersionId} not found`);
+  if (bpRow.status !== "locked") {
+    throw new Error(`blueprint ${blueprintVersionId} is not locked (status=${bpRow.status})`);
+  }
+
+  const extractionJson = JSON.parse((await getPrivate(extractionRef.blob_path)).toString("utf8"));
+  const meta = {
+    company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
+    period_label: project?.periodLabel ?? "",
+    doc_kind: "interim_unaudited" as const,
+    currency: "ZAR",
+  };
+  const docModel = mapToDocModel(extractionJson, meta);
+  const sitePlan = buildSitePlan(docModel, bpRow.blueprintJson as Blueprint);
+
+  const path = `runs/${runId}/siteplans/${sitePlan.site_plan_id}.json`;
+  const put = await putPrivate(path, JSON.stringify(sitePlan), "application/json");
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "site_plan",
+    version: 1,
+    blobPath: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    contentType: "application/json",
+    meta: { sitePlanId: sitePlan.site_plan_id, blueprintVersionId, docModelId: docModel.doc_model_id },
+  });
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: sitePlan.site_plan_id,
+    kind: "site_plan",
+    version: 1,
+    blob_path: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    content_type: "application/json",
+    meta: { sitePlanId: sitePlan.site_plan_id, blueprintVersionId },
+  };
+}
+
+/**
+ * Step 8 — final QA. Real mode: render the SitePlan (@rs/render), run Gate A
+ * (referential + coverage), Gate B (rendered-DOM number audit) and the
+ * conformance linter, and persist an honest QA report. Deliberately does NOT
+ * force-fit the full QAReport/NumberAuditReport contracts shapes, which also
+ * require an extraction↔PDF cross-check, an arithmetic re-summing pass and a
+ * Playwright smoke/axe suite — none of which exist yet. Fabricating a "pass"
+ * for a check that never ran would defeat the point of an audit gate; the
+ * report says plainly what wasn't checked. MOCK: stub.
+ */
+export async function runQa(
+  runId: string,
+  projectId: string,
+  extractionRef: ArtifactRef,
+  blueprintVersionId: string,
+  sitePlanRef: ArtifactRef,
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] running QA gates for blueprint ${blueprintVersionId}`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "qa_report", { blueprintVersionId, note: "MOCK QA gates" });
+  }
+  const { getPrivate, putPrivate } = await import("../lib/blob");
+  const { mapToDocModel } = await import("@rs/mapper");
+  const { renderSitePlan, gateA, gateB, conformanceLint } = await import("@rs/render");
+  const { db, schema } = await loadDb();
+
+  const [bpRow] = await db()
+    .select()
+    .from(schema.blueprintVersions)
+    .where(eq(schema.blueprintVersions.id, blueprintVersionId));
+  if (!bpRow) throw new Error(`blueprint ${blueprintVersionId} not found`);
+  const blueprint = bpRow.blueprintJson as Blueprint;
+
+  const extractionJson = JSON.parse((await getPrivate(extractionRef.blob_path)).toString("utf8"));
+  const sitePlan = JSON.parse((await getPrivate(sitePlanRef.blob_path)).toString("utf8"));
+  const runArtifacts = await db().select().from(schema.artifacts).where(eq(schema.artifacts.runId, runId));
+  const dnaRow = runArtifacts.find((a) => a.kind === "design_dna");
+  const dna = dnaRow ? JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8")) : null;
+
+  const meta = { company: "", period_label: "", doc_kind: "interim_unaudited" as const, currency: "ZAR" };
+  const docModel = mapToDocModel(extractionJson, meta);
+  const ctx = { extraction: extractionJson, docModel };
+
+  const a = gateA(sitePlan, ctx);
+  const { files } = renderSitePlan(sitePlan, blueprint, ctx);
+  const b = gateB(files, ctx);
+
+  const lintErrors: { rule: string; detail: string; page: string }[] = [];
+  if (dna) {
+    for (const [page, html] of Object.entries(files)) {
+      const lint = conformanceLint(html, dna);
+      for (const e of lint.errors) lintErrors.push({ ...e, page });
+    }
+  }
+
+  const verdict: "pass" | "fail" = a.status === "pass" && b.status === "pass" && lintErrors.length === 0 ? "pass" : "fail";
+  const report = {
+    schema_version: "results-studio-qa/1",
+    generated_at: new Date().toISOString(),
+    blueprint_version_id: blueprintVersionId,
+    site_plan_id: sitePlan.site_plan_id,
+    verdict,
+    gate_a: a,
+    gate_b: b,
+    conformance_lint: { passed: lintErrors.length === 0, errors: lintErrors },
+    not_yet_implemented: [
+      "extraction_crosscheck (pdfium text-layer diff)",
+      "arithmetic_advisory (statement re-summing)",
+      "automated smoke/axe suite (Playwright)",
+    ],
+  };
+
+  const path = `runs/${runId}/qa/${blueprintVersionId}.json`;
+  const put = await putPrivate(path, JSON.stringify(report), "application/json");
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "qa_report",
+    version: 1,
+    blobPath: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    contentType: "application/json",
+    meta: { verdict, gateA: a.status, gateB: b.status, lintPassed: lintErrors.length === 0, blueprintVersionId },
+  });
+  console.log(
+    `[run ${runId}] QA verdict=${verdict} gateA=${a.status} gateB=${b.status} lint=${lintErrors.length === 0 ? "pass" : "fail"}`,
+  );
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: `qa_${blueprintVersionId}`,
+    kind: "qa_report",
+    version: 1,
+    blob_path: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    content_type: "application/json",
+    meta: { verdict, gateA: a.status, gateB: b.status, blueprintVersionId },
+  };
+}
+
+/**
+ * A QA change-request unlocks the blueprint (status -> "superseded", the
+ * only transition the DB trigger permits on a locked row) so the next cycle
+ * can lock a new one — without this, a second cycle's lock would violate the
+ * one-locked-blueprint-per-project unique index.
+ */
+export async function unlockBlueprint(
+  runId: string,
+  projectId: string,
+  cycle: number,
+  blueprintVersionId: string,
+  qa: Extract<QaGateEvent, { type: "change_request" }>,
+): Promise<void> {
+  "use step";
+  console.log(`[run ${runId}] unlocking blueprint ${blueprintVersionId} (cycle ${cycle} -> ${cycle + 1})`);
+  await setProjectStatus(runId, projectId, "change_requested");
+  if (!env.MOCK_BLOB) {
+    const { db, schema } = await loadDb();
+    await db()
+      .update(schema.blueprintVersions)
+      .set({ status: "superseded" })
+      .where(eq(schema.blueprintVersions.id, blueprintVersionId));
+  }
+  await recordEvent(runId, "blueprint.unlocked", { cycle, blueprintVersionId, reason: qa.reason, scope: qa.scope });
 }
 
 export const _limits = UPLOAD_LIMITS;

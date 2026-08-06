@@ -10,11 +10,16 @@ import {
 } from "@rs/contracts";
 import {
   detectDnaArtifact,
+  extractBlueprint,
   generatePrototypeArtifact,
+  lockBlueprint,
+  mapContent,
   persistArtifactStub,
   recordEvent,
+  runQa,
   seedExtractionJob,
   setProjectStatus,
+  unlockBlueprint,
   waitForExtraction,
 } from "./steps";
 
@@ -57,6 +62,7 @@ export async function resultsPipeline(input: PipelineInput) {
   while (true) {
     await setProjectStatus(runId, projectId, "in_review", cycle);
     let approvedPrototypeId: string | null = null;
+    let lockedBlueprintId: string | null = null;
 
     using reviewHook = createHook<ReviewGateEvent>({
       token: hookTokens.review(projectId, cycle),
@@ -83,8 +89,10 @@ export async function resultsPipeline(input: PipelineInput) {
         const decision = await lockHook;
 
         if (decision.type === "confirm_lock") {
-          await lockBlueprint(runId, projectId, blueprint.artifact_id, decision);
+          const blueprintVersionId = blueprint.meta.blueprintVersionId as string;
+          await lockBlueprint(runId, projectId, blueprintVersionId, decision);
           approvedPrototypeId = evt.prototype_version_id;
+          lockedBlueprintId = blueprintVersionId;
           break; // leave the review loop
         }
         await setProjectStatus(runId, projectId, "in_review", cycle); // lock rejected
@@ -96,11 +104,11 @@ export async function resultsPipeline(input: PipelineInput) {
 
     // ── Step 7: content mapping + blueprint-constrained composition ───────────
     await setProjectStatus(runId, projectId, "mapping");
-    await mapContent(runId, projectId, approvedPrototypeId!);
+    const sitePlan = await mapContent(runId, projectId, extraction, lockedBlueprintId!);
 
     // ── Step 8: QA + human sign-off ───────────────────────────────────────────
     await setProjectStatus(runId, projectId, "qa_running");
-    await runQa(runId, projectId);
+    await runQa(runId, projectId, extraction, lockedBlueprintId!, sitePlan);
 
     await setProjectStatus(runId, projectId, "qa_review");
     using qaHook = createHook<QaGateEvent>({ token: hookTokens.qa(projectId, cycle) });
@@ -116,16 +124,16 @@ export async function resultsPipeline(input: PipelineInput) {
     }
 
     // change_request → unlock the blueprint, bump cycle, back to review.
-    await unlockBlueprint(runId, projectId, cycle, qa);
+    await unlockBlueprint(runId, projectId, cycle, lockedBlueprintId!, qa);
     cycle += 1;
   }
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
-// Extraction is real (submit + await webhook via hook, poll fallback). The
-// creative steps are typed stubs that persist placeholder artifacts so the
-// end-to-end control flow, gates and streaming are exercisable now; each is
-// replaced by its subsystem in later phases.
+// Extraction, DNA detection, prototype generation, blueprint extraction/lock/
+// unlock, content mapping (step 7) and QA (step 8) are real — imported from
+// ./steps. Chat-based refinement and static export remain typed stubs below;
+// each is replaced by its subsystem in a later phase.
 
 async function emit(runId: string, type: ProgressEvent["type"], detail?: string) {
   "use step";
@@ -168,55 +176,9 @@ async function refinePrototype(
   });
 }
 
-async function extractBlueprint(
-  runId: string,
-  projectId: string,
-  cycle: number,
-  prototypeVersionId: string,
-): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "blueprint", {
-    cycle,
-    source: prototypeVersionId,
-    note: "blueprint extraction — TODO",
-  });
-}
-
-async function lockBlueprint(
-  runId: string,
-  projectId: string,
-  blueprintArtifactId: string,
-  _decision: Extract<LockGateEvent, { type: "confirm_lock" }>,
-): Promise<void> {
-  "use step";
-  await setProjectStatus(runId, projectId, "locked");
-  await recordEvent(runId, "blueprint.locked", { blueprintArtifactId });
-}
-
-async function mapContent(runId: string, projectId: string, prototypeId: string): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "site_plan", { prototypeId, note: "mapping — TODO" });
-}
-
-async function runQa(runId: string, projectId: string): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "qa_report", { note: "QA gates — TODO" });
-}
-
 async function buildExport(runId: string, projectId: string): Promise<ArtifactRef> {
   "use step";
-  return persistArtifactStub(runId, projectId, "export_bundle", { note: "static export — TODO" });
-}
-
-async function unlockBlueprint(
-  runId: string,
-  projectId: string,
-  cycle: number,
-  qa: Extract<QaGateEvent, { type: "change_request" }>,
-): Promise<void> {
-  "use step";
-  await setProjectStatus(runId, projectId, "change_requested");
-  await recordEvent(runId, "blueprint.unlocked", { cycle, reason: qa.reason, scope: qa.scope });
+  return persistArtifactStub(runId, projectId, "export_bundle", { note: "static export — TODO (step 9)" });
 }
 
 // Guard against an unrecoverable document class (kept for symmetry; the
