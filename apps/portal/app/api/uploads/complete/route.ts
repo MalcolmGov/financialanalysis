@@ -87,10 +87,14 @@ export async function POST(request: Request): Promise<Response> {
       })
       .returning();
     documentId = doc.id;
+    // Point at the new PDF first, then park — park clears the active run so an
+    // old workflow cannot keep overwriting status after this upload.
     await db()
       .update(schema.projects)
       .set({ currentDocumentId: doc.id, status: "uploaded", updatedAt: new Date() })
       .where(eq(schema.projects.id, projectId));
+    const { parkProjectForFreshStart } = await import("../../../../lib/project-reset");
+    await parkProjectForFreshStart(projectId);
   }
 
   return Response.json({ ...record, document_id: documentId });

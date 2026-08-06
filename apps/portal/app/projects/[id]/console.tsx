@@ -297,6 +297,9 @@ export function ProjectConsole(props: {
       setEvents([]);
       setQaVerdict(null);
       setExportReady(false);
+      setDna(null);
+      setDnaError(null);
+      setPrototype(null);
       setNote(
         data.documentId
           ? "Ready to run again with the current PDF, or upload a new one first."
@@ -382,20 +385,43 @@ export function ProjectConsole(props: {
   const currentStepIndex = stepIndexForStatus(status);
   const canRun =
     (status === "uploaded" || status === "extraction_failed") && !!documentId;
+  // Anything past a parked project can be abandoned and restarted.
+  const canStartOver = status !== "created" && status !== "uploaded";
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
       <a href="/" style={{ color: "var(--accent-strong)", fontSize: 13, textDecoration: "none" }}>
         ← Projects
       </a>
-      <header>
-        <h1 style={{ fontSize: 26, margin: "0 0 2px" }}>{props.companyName}</h1>
-        <p style={{ color: "var(--ink-2)", margin: 0 }}>
-          {props.periodLabel ?? "—"} ·{" "}
-          <span style={{ color: "var(--accent-strong)", letterSpacing: ".06em" }}>
-            {status.toUpperCase()}
-          </span>
-        </p>
+      <header
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: 26, margin: "0 0 2px" }}>{props.companyName}</h1>
+          <p style={{ color: "var(--ink-2)", margin: 0 }}>
+            {props.periodLabel ?? "—"} ·{" "}
+            <span style={{ color: "var(--accent-strong)", letterSpacing: ".06em" }}>
+              {status.toUpperCase()}
+            </span>
+          </p>
+        </div>
+        {canStartOver ? (
+          <button
+            type="button"
+            style={ghost}
+            disabled={busy}
+            onClick={() => void startOver()}
+            title="Detach the current run so you can upload a new PDF or re-run from scratch"
+          >
+            Start over
+          </button>
+        ) : null}
       </header>
 
       <ol

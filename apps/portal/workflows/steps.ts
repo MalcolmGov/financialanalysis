@@ -298,7 +298,17 @@ export async function generatePrototypeArtifact(
 
   const studio = await runStudio({ dna, content, brief: "Confident, understated, premium; mirror the printed report." });
 
-  const base = `runs/${runId}/prototypes/v${version}`;
+  // project_id + version_number is unique — after a re-run / start-over residue,
+  // allocate the next free number instead of always inserting v1.
+  const [maxRow] = await db()
+    .select({ n: schema.prototypeVersions.versionNumber })
+    .from(schema.prototypeVersions)
+    .where(eq(schema.prototypeVersions.projectId, projectId))
+    .orderBy(desc(schema.prototypeVersions.versionNumber))
+    .limit(1);
+  const versionNumber = Math.max(version, (maxRow?.n ?? 0) + 1);
+
+  const base = `runs/${runId}/prototypes/v${versionNumber}`;
   const placeholder = await putPrivate(`${base}/placeholder.html`, studio.placeholderHtml, "text/html");
   const assembled = await putPrivate(`${base}/assembled.html`, studio.assembledHtml, "text/html");
 
@@ -307,16 +317,16 @@ export async function generatePrototypeArtifact(
   const { randomUUID } = await import("node:crypto");
   const versionId = randomUUID();
   await db().insert(schema.prototypeVersions).values({
-    id: versionId, projectId, cycle: 1, versionNumber: version, parentVersionId: null,
+    id: versionId, projectId, cycle: 1, versionNumber, parentVersionId: null,
     placeholderHtmlBlobKey: placeholder.blob_path, assembledHtmlBlobKey: assembled.blob_path,
     sha256: assembled.sha256, sizeBytes: assembled.bytes, refinementMode: "initial",
     model: "claude-opus-5", costUsdMicros: Math.round(studio.usage.cost_usd * 1e6), status: "ready",
   });
   await db().insert(schema.artifacts).values({
-    runId, kind: "prototype", version, blobPath: assembled.blob_path, sha256: assembled.sha256,
+    runId, kind: "prototype", version: versionNumber, blobPath: assembled.blob_path, sha256: assembled.sha256,
     bytes: assembled.bytes, contentType: "text/html", meta: { versionId, placeholder: placeholder.blob_path },
   });
-  return { schema: "ArtifactRef@1", artifact_id: versionId, kind: "prototype", version, blob_path: assembled.blob_path, sha256: assembled.sha256, bytes: assembled.bytes, content_type: "text/html", meta: { versionId } };
+  return { schema: "ArtifactRef@1", artifact_id: versionId, kind: "prototype", version: versionNumber, blob_path: assembled.blob_path, sha256: assembled.sha256, bytes: assembled.bytes, content_type: "text/html", meta: { versionId } };
 }
 
 /**
