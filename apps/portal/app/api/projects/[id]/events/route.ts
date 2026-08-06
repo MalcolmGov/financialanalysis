@@ -81,12 +81,20 @@ export async function GET(
   } | null;
   const jobError = (job?.error ?? null) as { code?: string; message?: string } | null;
 
-  // If the worker already failed but the workflow died before flipping status,
-  // surface extraction_failed so the console stops the infinite wait panel.
+  // Only coerce while still parked on extracting — never after a fresh upload
+  // (status uploaded) or an explicit start-over, or the failed job sticks forever.
   let status = project.status;
-  if (job?.status === "failed" && (status === "extracting" || status === "uploaded")) {
+  if (job?.status === "failed" && status === "extracting") {
     status = "extraction_failed";
   }
+
+  const showExtraction =
+    status === "extracting" ||
+    status === "extraction_failed" ||
+    job?.status === "queued" ||
+    job?.status === "fetching" ||
+    job?.status === "converting" ||
+    job?.status === "uploading_assets";
 
   let qaVerdict: "pass" | "fail" | null = null;
   let exportReady = false;
@@ -114,15 +122,19 @@ export async function GET(
     documentId: project.currentDocumentId,
     pageCount,
     runStartedAt: run?.createdAt ? run.createdAt.toISOString() : null,
-    extraction: job
-      ? {
-          jobId: job.jobId,
-          status: job.status,
-          pagesDone: progress?.pages_done ?? 0,
-          totalPages: progress?.total_pages ?? pageCount,
-          error: jobError?.message ?? jobError?.code ?? null,
-        }
-      : null,
+    extraction:
+      showExtraction && job
+        ? {
+            jobId: job.jobId,
+            status: job.status,
+            pagesDone: progress?.pages_done ?? 0,
+            totalPages: progress?.total_pages ?? pageCount,
+            error:
+              job.status === "failed"
+                ? (jobError?.message ?? jobError?.code ?? null)
+                : null,
+          }
+        : null,
     qaVerdict,
     exportReady,
     events: events.map((e) => ({

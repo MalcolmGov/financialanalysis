@@ -86,9 +86,15 @@ export function ProjectConsole(props: {
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
       if (data.extraction) {
         setExtraction(data.extraction);
-        if (data.extraction.status === "failed" && data.extraction.error) {
+        if (
+          data.status === "extraction_failed" &&
+          data.extraction.status === "failed" &&
+          data.extraction.error
+        ) {
           setNote(`Extraction failed: ${data.extraction.error}`);
         }
+      } else if (data.status === "uploaded" || data.status === "created") {
+        setExtraction(null);
       }
       if (data.qaVerdict === "pass" || data.qaVerdict === "fail" || data.qaVerdict === null) {
         setQaVerdict(data.qaVerdict);
@@ -142,6 +148,8 @@ export function ProjectConsole(props: {
         }
         if (data.document_id) setDocumentId(data.document_id);
         if (typeof data.page_count === "number") setPageCount(data.page_count);
+        setExtraction(null);
+        setRunStartedAt(null);
         setNote(`Uploaded ${data.page_count}-page PDF. Ready to run.`);
         setStatus("uploaded");
       } catch (err) {
@@ -152,6 +160,39 @@ export function ProjectConsole(props: {
     },
     [props.projectId],
   );
+
+  const startOver = useCallback(async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch(`/api/projects/${props.projectId}/reset`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        status?: string;
+        documentId?: string | null;
+        error?: string;
+      };
+      if (!res.ok) {
+        setNote(`Start over failed: ${data.error ?? res.statusText}`);
+        return;
+      }
+      setStatus(data.status ?? "uploaded");
+      if (data.documentId !== undefined) setDocumentId(data.documentId);
+      setExtraction(null);
+      setRunStartedAt(null);
+      setEvents([]);
+      setQaVerdict(null);
+      setExportReady(false);
+      setNote(
+        data.documentId
+          ? "Ready to run again with the current PDF, or upload a new one first."
+          : "Upload a PDF to begin.",
+      );
+    } catch (err) {
+      setNote(`Start over failed: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [props.projectId]);
 
   const startPipeline = useCallback(async () => {
     setBusy(true);
@@ -317,11 +358,21 @@ export function ProjectConsole(props: {
             {extraction?.error ??
               "The worker could not convert this PDF. Fix the worker and click Run pipeline again."}
           </p>
-          {canRun ? (
-            <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
-              Retry pipeline
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {canRun ? (
+              <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
+                Retry pipeline
+              </button>
+            ) : null}
+            <button style={ghost} disabled={busy} onClick={() => void startOver()}>
+              Start over
             </button>
-          ) : null}
+          </div>
+          <p style={{ color: "var(--ink-2)", fontSize: 12, margin: 0 }}>
+            Start over clears the failed run so you can upload a new PDF (section 1) or re-run the
+            current one. The worker fix is already deployed — a fresh run should get past this import
+            error.
+          </p>
         </section>
       ) : null}
 
