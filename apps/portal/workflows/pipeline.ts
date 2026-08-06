@@ -10,6 +10,7 @@ import {
   type ReviewGateEvent,
 } from "@rs/contracts";
 import {
+  buildExport,
   detectDnaArtifact,
   extractBlueprint,
   generatePrototypeArtifact,
@@ -118,7 +119,12 @@ export async function resultsPipeline(input: PipelineInput) {
 
     if (qa.type === "approve") {
       await setProjectStatus(runId, projectId, "exporting");
-      const bundle = await buildExport(runId, projectId);
+      const actorUserId =
+        (qa as { actor?: { id?: string } }).actor?.id ?? qa.actor_user_id ?? "operator";
+      const bundle = await buildExport(runId, projectId, {
+        actorUserId,
+        qaReportId: qa.qa_report_id,
+      });
       await setProjectStatus(runId, projectId, "exported");
       await emit(runId, "run.completed");
       return { status: "exported" as const, bundle };
@@ -131,10 +137,8 @@ export async function resultsPipeline(input: PipelineInput) {
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
-// Extraction, DNA detection, prototype generation, blueprint extraction/lock/
-// unlock, content mapping (step 7) and QA (step 8) are real — imported from
-// ./steps. Chat-based refinement and static export remain typed stubs below;
-// each is replaced by its subsystem in a later phase.
+// Extraction, DNA, prototype, blueprint, mapping, QA and static export are real
+// steps imported from ./steps. Chat-based refinement remains a typed stub.
 
 async function emit(runId: string, type: ProgressEvent["type"], detail?: string) {
   "use step";
@@ -196,11 +200,6 @@ async function refinePrototype(
     prompt: evt.prompt,
     note: "refinement — TODO",
   });
-}
-
-async function buildExport(runId: string, projectId: string): Promise<ArtifactRef> {
-  "use step";
-  return persistArtifactStub(runId, projectId, "export_bundle", { note: "static export — TODO (step 9)" });
 }
 
 // Guard against an unrecoverable document class (kept for symmetry; the

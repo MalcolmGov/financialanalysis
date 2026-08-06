@@ -72,3 +72,41 @@ export async function latestQaReportId(projectId: string): Promise<string | null
   const meta = art.meta as { blueprintVersionId?: string } | null;
   return meta?.blueprintVersionId ? `qa_${meta.blueprintVersionId}` : art.id;
 }
+
+export async function latestQaVerdict(
+  projectId: string,
+): Promise<"pass" | "fail" | null> {
+  const [run] = await db()
+    .select({ id: schema.pipelineRuns.id })
+    .from(schema.pipelineRuns)
+    .where(eq(schema.pipelineRuns.projectId, projectId))
+    .orderBy(desc(schema.pipelineRuns.createdAt))
+    .limit(1);
+  if (!run) return null;
+  const [art] = await db()
+    .select({ meta: schema.artifacts.meta })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "qa_report")))
+    .orderBy(desc(schema.artifacts.createdAt))
+    .limit(1);
+  const verdict = (art?.meta as { verdict?: string } | null)?.verdict;
+  return verdict === "pass" || verdict === "fail" ? verdict : null;
+}
+
+export async function latestExportZipPath(projectId: string): Promise<string | null> {
+  const [run] = await db()
+    .select({ id: schema.pipelineRuns.id })
+    .from(schema.pipelineRuns)
+    .where(eq(schema.pipelineRuns.projectId, projectId))
+    .orderBy(desc(schema.pipelineRuns.createdAt))
+    .limit(1);
+  if (!run) return null;
+  const [art] = await db()
+    .select({ meta: schema.artifacts.meta })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "export_bundle")))
+    .orderBy(desc(schema.artifacts.createdAt))
+    .limit(1);
+  const zipPath = (art?.meta as { zipPath?: string } | null)?.zipPath;
+  return zipPath ?? null;
+}

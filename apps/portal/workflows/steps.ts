@@ -625,4 +625,181 @@ export async function unlockBlueprint(
   await recordEvent(runId, "blueprint.unlocked", { cycle, blueprintVersionId, reason: qa.reason, scope: qa.scope });
 }
 
+/**
+ * Step 9 — static export. Re-render the locked SitePlan deterministically,
+ * package HTML into a zip + ExportBundle manifest. Hard-requires a passing
+ * Gate A/B/lint QA verdict (Playwright/crosscheck remain disclosed as unfinished
+ * in the QA report, not silently marked pass).
+ */
+export async function buildExport(
+  runId: string,
+  projectId: string,
+  signoff: { actorUserId: string; qaReportId: string },
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] building export bundle`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "export_bundle", {
+      note: "MOCK export",
+      ...signoff,
+    });
+  }
+
+  const { getPrivate, putPrivate, sha256 } = await import("../lib/blob");
+  const { mapToDocModel } = await import("@rs/mapper");
+  const { renderSitePlan } = await import("@rs/render");
+  const { ExportBundle } = await import("@rs/contracts");
+  const { zipSync, strToU8 } = await import("fflate");
+  const { randomUUID } = await import("node:crypto");
+  const { db, schema } = await loadDb();
+
+  const runArtifacts = await db().select().from(schema.artifacts).where(eq(schema.artifacts.runId, runId));
+  const sitePlanRow = [...runArtifacts].reverse().find((a) => a.kind === "site_plan");
+  const extractionRow = [...runArtifacts].reverse().find((a) => a.kind === "extraction_result");
+  const qaRow = [...runArtifacts].reverse().find((a) => a.kind === "qa_report");
+  if (!sitePlanRow || !extractionRow || !qaRow) {
+    throw new Error(`export missing prerequisites (site_plan/extraction/qa) for run ${runId}`);
+  }
+  const qaMeta = qaRow.meta as { verdict?: string; blueprintVersionId?: string };
+  if (qaMeta.verdict !== "pass") {
+    throw new Error(`export blocked: QA verdict is ${qaMeta.verdict ?? "unknown"} (must be pass)`);
+  }
+
+  const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+  const blueprintVersionId =
+    project?.currentBlueprintId ?? (qaMeta.blueprintVersionId as string | undefined);
+  if (!blueprintVersionId) throw new Error(`no locked blueprint for project ${projectId}`);
+  const [bpRow] = await db()
+    .select()
+    .from(schema.blueprintVersions)
+    .where(eq(schema.blueprintVersions.id, blueprintVersionId));
+  if (!bpRow || bpRow.status !== "locked") {
+    throw new Error(`blueprint ${blueprintVersionId} is not locked`);
+  }
+  const blueprint = bpRow.blueprintJson as Blueprint;
+
+  const extractionJson = JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"));
+  const sitePlan = JSON.parse((await getPrivate(sitePlanRow.blobPath)).toString("utf8"));
+  const qaReport = JSON.parse((await getPrivate(qaRow.blobPath)).toString("utf8"));
+  const meta = {
+    company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
+    period_label: project?.periodLabel ?? "",
+    doc_kind: "interim_unaudited" as const,
+    currency: "ZAR",
+  };
+  const docModel = mapToDocModel(extractionJson, meta);
+  const { files } = renderSitePlan(sitePlan, blueprint, { extraction: extractionJson, docModel });
+
+  // Ensure a root entrypoint — mapper currently emits statements/index.html.
+  if (!files["index.html"]) {
+    const target = files["statements/index.html"]
+      ? "statements/index.html"
+      : Object.keys(files).find((p) => p.endsWith(".html")) ?? "statements/index.html";
+    files["index.html"] = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="refresh" content="0; url=${target}"/>
+  <title>${meta.company} — Results</title>
+</head>
+<body>
+  <p><a href="${target}">Open interactive results</a></p>
+</body>
+</html>
+`;
+  }
+
+  const fileEntries: { path: string; bytes: number; sha256: string; content_type: string }[] = [];
+  const zipInput: Record<string, Uint8Array> = {};
+  const hashParts: string[] = [];
+  for (const path of Object.keys(files).sort()) {
+    const body = files[path]!;
+    const digest = await sha256(Buffer.from(body, "utf8"));
+    fileEntries.push({
+      path,
+      bytes: Buffer.byteLength(body, "utf8"),
+      sha256: digest,
+      content_type: "text/html; charset=utf-8",
+    });
+    zipInput[path] = strToU8(body);
+    hashParts.push(`${path}:${digest}`);
+  }
+
+  const docModelHash = await sha256(Buffer.from(JSON.stringify(docModel)));
+  const renderHash = await sha256(Buffer.from(hashParts.join("\n")));
+  const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  const qaReportId = signoff.qaReportId || `qa_${blueprintVersionId}`;
+
+  const bundleDraft = {
+    schema_version: "export/1" as const,
+    bundle_id: bundleId,
+    project_id: projectId,
+    created_at: new Date().toISOString(),
+    inputs: {
+      doc_model_hash: docModelHash,
+      site_plan_id: sitePlan.site_plan_id,
+      blueprint_version_id: blueprintVersionId,
+      blueprint_checksum: bpRow.checksum,
+      render_hash: renderHash,
+    },
+    integrity: {
+      number_audit_id: `gateb_${blueprintVersionId}`,
+      qa_report_id: qaReportId,
+      verdict: "pass" as const,
+      human_signoff_by: signoff.actorUserId,
+    },
+    entrypoints: { index: "index.html" },
+    layout: Object.keys(files).length > 1 ? ("multiPage" as const) : ("singleFile" as const),
+    files: fileEntries,
+    external_requests: 0 as const,
+    hosting: { requires_server: false as const, relative_links: true as const },
+    zip: { blob_path: "", sha256: "0".repeat(64), bytes: 0 },
+  };
+
+  zipInput["_meta/export-bundle.json"] = strToU8(JSON.stringify(bundleDraft, null, 2));
+  zipInput["_meta/qa-report.json"] = strToU8(JSON.stringify(qaReport, null, 2));
+
+  const zipBytes = zipSync(zipInput, { level: 6 });
+  const zipBuf = Buffer.from(zipBytes);
+  const zipDigest = await sha256(zipBuf);
+  const zipPath = `runs/${runId}/exports/${bundleId}.zip`;
+  const zipPut = await putPrivate(zipPath, zipBuf, "application/zip");
+
+  const bundle = ExportBundle.parse({
+    ...bundleDraft,
+    zip: { blob_path: zipPut.blob_path, sha256: zipDigest, bytes: zipBuf.byteLength },
+  });
+
+  const manifestPath = `runs/${runId}/exports/${bundleId}.json`;
+  const manifestPut = await putPrivate(manifestPath, JSON.stringify(bundle), "application/json");
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "export_bundle",
+    version: 1,
+    blobPath: manifestPut.blob_path,
+    sha256: manifestPut.sha256,
+    bytes: manifestPut.bytes,
+    contentType: "application/json",
+    meta: {
+      bundleId,
+      zipPath: zipPut.blob_path,
+      zipBytes: zipBuf.byteLength,
+      entrypoint: "index.html",
+      fileCount: fileEntries.length,
+    },
+  });
+  console.log(`[run ${runId}] export ${bundleId} zip=${zipPut.blob_path} files=${fileEntries.length}`);
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: bundleId,
+    kind: "export_bundle",
+    version: 1,
+    blob_path: manifestPut.blob_path,
+    sha256: manifestPut.sha256,
+    bytes: manifestPut.bytes,
+    content_type: "application/json",
+    meta: { bundleId, zipPath: zipPut.blob_path },
+  };
+}
+
 export const _limits = UPLOAD_LIMITS;

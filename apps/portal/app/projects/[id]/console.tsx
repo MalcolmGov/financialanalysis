@@ -58,6 +58,8 @@ export function ProjectConsole(props: {
   const [busy, setBusy] = useState(false);
   const [runStartedAt, setRunStartedAt] = useState<string | null>(props.initialRunStartedAt);
   const [extraction, setExtraction] = useState<ExtractionProgress | null>(null);
+  const [qaVerdict, setQaVerdict] = useState<"pass" | "fail" | null>(null);
+  const [exportReady, setExportReady] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   const refreshEvents = useCallback(async () => {
@@ -71,6 +73,8 @@ export function ProjectConsole(props: {
         pageCount?: number | null;
         runStartedAt?: string | null;
         extraction?: ExtractionProgress | null;
+        qaVerdict?: "pass" | "fail" | null;
+        exportReady?: boolean;
       };
       setEvents(data.events);
       if (data.status) setStatus(data.status);
@@ -78,6 +82,10 @@ export function ProjectConsole(props: {
       if (typeof data.pageCount === "number") setPageCount(data.pageCount);
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
       if (data.extraction) setExtraction(data.extraction);
+      if (data.qaVerdict === "pass" || data.qaVerdict === "fail" || data.qaVerdict === null) {
+        setQaVerdict(data.qaVerdict);
+      }
+      if (typeof data.exportReady === "boolean") setExportReady(data.exportReady);
     } catch {
       /* ignore poll errors */
     }
@@ -362,6 +370,16 @@ export function ProjectConsole(props: {
         <h2 style={h2}>Human gates</h2>
         <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
           Four decisions are yours. Server resolves the current prototype / blueprint / QA IDs.
+          {qaVerdict ? (
+            <>
+              {" "}
+              Latest QA: <strong style={{ color: qaVerdict === "pass" ? "var(--accent-strong)" : "#b91c1c" }}>{qaVerdict}</strong>
+              {qaVerdict === "fail" ? " — export approve is blocked until gates pass." : null}
+              {qaVerdict === "pass"
+                ? " — Gate A/B + lint only; PDF cross-check, arithmetic advisory, and Playwright/axe are not run yet."
+                : null}
+            </>
+          ) : null}
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -411,7 +429,7 @@ export function ProjectConsole(props: {
           </button>
           <button
             style={ghost}
-            disabled={busy}
+            disabled={busy || qaVerdict === "fail" || status === "exported"}
             onClick={() =>
               void gate(
                 "qa",
@@ -422,8 +440,42 @@ export function ProjectConsole(props: {
           >
             Approve QA &amp; export
           </button>
+          <button
+            style={ghost}
+            disabled={busy || status !== "qa_review"}
+            onClick={() =>
+              void gate(
+                "qa",
+                {
+                  type: "change_request",
+                  qa_report_id: "",
+                  actor_user_id: "operator",
+                  reason: "Operator requested changes after QA",
+                  scope: "mapping",
+                },
+                "QA change request",
+              )
+            }
+          >
+            Request QA changes
+          </button>
         </div>
       </section>
+
+      {status === "exported" || exportReady ? (
+        <section style={panel}>
+          <h2 style={h2}>9 · Export ready</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+            Static HTML microsite zip (relative links, zero external requests). Download and host on any static server.
+          </p>
+          <a
+            href={`/api/projects/${props.projectId}/export`}
+            style={{ ...primary, display: "inline-block", textDecoration: "none", textAlign: "center" }}
+          >
+            Download microsite zip
+          </a>
+        </section>
+      ) : null}
 
       {note ? (
         <p style={{ fontSize: 13, color: "var(--accent-strong)", margin: 0 }}>{note}</p>

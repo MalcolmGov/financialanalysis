@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { requireOperator } from "../../../../../lib/authz";
 import { db, schema } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
@@ -79,6 +79,27 @@ export async function GET(
     total_pages?: number | null;
   } | null;
 
+  let qaVerdict: "pass" | "fail" | null = null;
+  let exportReady = false;
+  if (run) {
+    const [qaArt] = await db()
+      .select({ meta: schema.artifacts.meta })
+      .from(schema.artifacts)
+      .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "qa_report")))
+      .orderBy(desc(schema.artifacts.createdAt))
+      .limit(1);
+    const v = (qaArt?.meta as { verdict?: string } | null)?.verdict;
+    if (v === "pass" || v === "fail") qaVerdict = v;
+
+    const [expArt] = await db()
+      .select({ meta: schema.artifacts.meta })
+      .from(schema.artifacts)
+      .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "export_bundle")))
+      .orderBy(desc(schema.artifacts.createdAt))
+      .limit(1);
+    exportReady = !!(expArt?.meta as { zipPath?: string } | null)?.zipPath;
+  }
+
   return Response.json({
     status: project.status,
     documentId: project.currentDocumentId,
@@ -92,6 +113,8 @@ export async function GET(
           totalPages: progress?.total_pages ?? pageCount,
         }
       : null,
+    qaVerdict,
+    exportReady,
     events: events.map((e) => ({
       id: Number(e.id),
       type: e.type,
