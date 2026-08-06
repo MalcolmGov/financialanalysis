@@ -652,19 +652,30 @@ export async function lockBlueprint(
 ): Promise<void> {
   "use step";
   console.log(`[run ${runId}] locking blueprint ${blueprintVersionId}`);
-  await setProjectStatus(runId, projectId, "locked");
+  // Console sends actor_user_id: "operator"; resumeGate also attaches
+  // actor.id (real users.id UUID). locked_by is a uuid column — never write
+  // the placeholder string.
+  const actorIdRaw =
+    (decision as { actor?: { id?: string } }).actor?.id ?? decision.actor_user_id;
+  const lockedBy =
+    typeof actorIdRaw === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actorIdRaw)
+      ? actorIdRaw
+      : null;
+
   if (!env.MOCK_BLOB) {
     const { db, schema } = await loadDb();
     await db()
       .update(schema.blueprintVersions)
-      .set({ status: "locked", lockedAt: new Date(), lockedBy: decision.actor_user_id })
+      .set({ status: "locked", lockedAt: new Date(), lockedBy })
       .where(eq(schema.blueprintVersions.id, blueprintVersionId));
     await db()
       .update(schema.projects)
       .set({ currentBlueprintId: blueprintVersionId })
       .where(eq(schema.projects.id, projectId));
   }
-  await recordEvent(runId, "blueprint.locked", { blueprintVersionId });
+  await setProjectStatus(runId, projectId, "locked");
+  await recordEvent(runId, "blueprint.locked", { blueprintVersionId, lockedBy });
 }
 
 /**
