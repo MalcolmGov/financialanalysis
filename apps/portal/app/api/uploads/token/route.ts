@@ -26,7 +26,9 @@ export async function POST(request: Request): Promise<Response> {
         return {
           allowedContentTypes: ["application/pdf"],
           maximumSizeInBytes: UPLOAD_LIMITS.max_bytes,
-          addRandomSuffix: false,
+          // Re-uploads of the same filename (start-over / retry) must not 409.
+          addRandomSuffix: true,
+          allowOverwrite: true,
         };
       },
       onUploadCompleted: async () => {

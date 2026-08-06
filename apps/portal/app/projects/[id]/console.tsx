@@ -131,7 +131,9 @@ export function ProjectConsole(props: {
           setNote("That file is not a PDF.");
           return;
         }
-        const blob = await upload(`projects/${props.projectId}/source/${file.name}`, file, {
+        const safeName = file.name.replace(/[^\w.\-()+ ]+/g, "_");
+        const pathname = `projects/${props.projectId}/source/${Date.now()}-${safeName}`;
+        const blob = await upload(pathname, file, {
           access: "public",
           handleUploadUrl: "/api/uploads/token",
           contentType: "application/pdf",
