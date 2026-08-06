@@ -91,7 +91,59 @@ export function ProjectConsole(props: {
   const [forceRegen, setForceRegen] = useState(false);
   const [dna, setDna] = useState<DnaSummary | null>(null);
   const [dnaError, setDnaError] = useState<string | null>(null);
+  const [prototype, setPrototype] = useState<{
+    versionId: string;
+    versionNumber: number;
+    refinementMode: string;
+    promptText: string | null;
+    previewUrl: string;
+    sizeBytes: number | null;
+  } | null>(null);
+  const [prototypeError, setPrototypeError] = useState<string | null>(null);
+  const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (status !== "in_review" && status !== "blueprint_proposed") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${props.projectId}/prototype`);
+        const data = (await res.json().catch(() => ({}))) as {
+          versionId?: string;
+          versionNumber?: number;
+          refinementMode?: string;
+          promptText?: string | null;
+          previewUrl?: string;
+          sizeBytes?: number | null;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok || !data.previewUrl || !data.versionId) {
+          setPrototype(null);
+          setPrototypeError(data.error ?? res.statusText);
+          return;
+        }
+        setPrototype({
+          versionId: data.versionId,
+          versionNumber: data.versionNumber ?? 1,
+          refinementMode: data.refinementMode ?? "initial",
+          promptText: data.promptText ?? null,
+          previewUrl: data.previewUrl,
+          sizeBytes: data.sizeBytes ?? null,
+        });
+        setPrototypeError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setPrototype(null);
+          setPrototypeError((err as Error).message);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, props.projectId, events.length]);
 
   useEffect(() => {
     if (status !== "dna_review") return;
@@ -691,6 +743,101 @@ export function ProjectConsole(props: {
         </section>
       ) : null}
 
+      {status === "in_review" || status === "blueprint_proposed" ? (
+        <section style={panel}>
+          <h2 style={h2}>5 · Prototype preview</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
+            Interactive HTML generated from the approved DNA. Compare it to the source PDF look-and-feel,
+            then refine or approve.
+          </p>
+          {prototypeError ? (
+            <p style={{ color: "#b91c1c", fontSize: 13, margin: 0 }}>
+              Could not load prototype: {prototypeError}
+            </p>
+          ) : null}
+          {!prototype && !prototypeError ? (
+            <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>Loading prototype…</p>
+          ) : null}
+          {prototype ? (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 12,
+                  alignItems: "center",
+                  fontSize: 13,
+                }}
+              >
+                <span>
+                  v{prototype.versionNumber} · {prototype.refinementMode}
+                  {prototype.sizeBytes != null
+                    ? ` · ${Math.round(prototype.sizeBytes / 1024)} KB`
+                    : ""}
+                </span>
+                <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                  {(
+                    [
+                      [390, "Phone"],
+                      [768, "Tablet"],
+                      [1280, "Desktop"],
+                      ["full", "Full"],
+                    ] as const
+                  ).map(([w, label]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      style={{
+                        ...ghost,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        background: previewWidth === w ? "var(--accent)" : "transparent",
+                        color: previewWidth === w ? "#fff" : "var(--ink-2)",
+                      }}
+                      onClick={() => setPreviewWidth(w)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <a
+                  href={prototype.previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 12, color: "var(--accent-strong)" }}
+                >
+                  Open in new tab
+                </a>
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  overflow: "auto",
+                  border: "1px solid var(--rule)",
+                  borderRadius: 8,
+                  background: "#111",
+                }}
+              >
+                <iframe
+                  title={`Prototype v${prototype.versionNumber}`}
+                  src={prototype.previewUrl}
+                  sandbox="allow-scripts"
+                  style={{
+                    display: "block",
+                    width: previewWidth === "full" ? "100%" : previewWidth,
+                    maxWidth: "100%",
+                    height: 720,
+                    margin: "0 auto",
+                    border: 0,
+                    background: "#fff",
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
       {status === "in_review" ? (
         <section style={panel}>
           <h2 style={h2}>5 · Refine prototype</h2>
@@ -797,7 +944,7 @@ export function ProjectConsole(props: {
             Approve design DNA
           </button>
           <button
-            style={ghost}
+            style={status === "in_review" ? primary : ghost}
             disabled={busy}
             onClick={() =>
               void gate(
