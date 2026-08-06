@@ -18,6 +18,11 @@ dependencies = [
     # Docling is the extraction engine; heavy (pulls torch). Imported lazily so
     # the API and unit tests run without it installed.
     "docling>=2.15",
+    # Declared directly (docling only pulls it transitively) so the
+    # [tool.uv.sources] CPU-only index override below actually applies — uv
+    # silently ignores a source override for a package that never appears as
+    # a direct dependency. Range mirrors docling's own constraint.
+    "torch>=2.2.2,<3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +34,19 @@ dev = [
 [tool.uv]
 # Allow running the API + tests without the heavy docling/torch stack.
 # `uv sync --no-install-package docling` for a light dev env.
+
+[tool.uv.sources]
+# Deployment (Railway, CPU-only) must not resolve the default CUDA-bundled
+# torch wheel on Linux (pulls the full CUDA toolkit — cublas/cudnn/cufft/etc,
+# multiple GB, useless without a GPU). Pin torch (and its CUDA-only extra,
+# torchvision) to PyTorch's official CPU-only index on every platform.
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -7,8 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir uv
 
 WORKDIR /app
-COPY pyproject.toml ./
-RUN uv sync --no-dev
+COPY pyproject.toml uv.lock ./
+# --frozen: install exactly what's locked (torch resolves from the CPU-only
+# PyTorch index per [tool.uv.sources] in pyproject.toml — never re-resolve
+# without the lock, or torch's Linux wheel drags in the full CUDA toolkit).
+RUN uv sync --frozen --no-dev
 
 COPY app ./app
 
