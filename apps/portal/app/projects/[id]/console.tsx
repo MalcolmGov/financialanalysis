@@ -350,7 +350,7 @@ export function ProjectConsole(props: {
   }, [documentId, props.orgId, props.projectId, refreshEvents]);
 
   const gate = useCallback(
-    async (path: string, body: object, label: string) => {
+    async (path: string, body: object, label: string): Promise<boolean> => {
       setBusy(true);
       try {
         const res = await fetch(`/api/runs/${props.projectId}/${path}`, {
@@ -361,6 +361,7 @@ export function ProjectConsole(props: {
         const data = await res.json().catch(() => ({}));
         setNote(res.ok ? `${label} sent.` : `Failed: ${data.error ?? res.statusText}`);
         void refreshEvents();
+        return res.ok;
       } finally {
         setBusy(false);
       }
@@ -827,7 +828,7 @@ export function ProjectConsole(props: {
                   ))}
                 </div>
                 <a
-                  href={prototype.previewUrl}
+                  href={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
                   target="_blank"
                   rel="noreferrer"
                   style={{ fontSize: 12, color: "var(--accent-strong)" }}
@@ -845,8 +846,9 @@ export function ProjectConsole(props: {
                 }}
               >
                 <iframe
+                  key={prototype.versionId}
                   title={`Prototype v${prototype.versionNumber}`}
-                  src={prototype.previewUrl}
+                  src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
                   sandbox="allow-scripts"
                   style={{
                     display: "block",
@@ -915,6 +917,7 @@ export function ProjectConsole(props: {
               onClick={() => {
                 const prompt = refinePrompt.trim();
                 if (!prompt) return;
+                const fromVersion = prototype?.versionNumber ?? 0;
                 void gate(
                   "review",
                   {
@@ -925,7 +928,14 @@ export function ProjectConsole(props: {
                     actor_user_id: "operator",
                   },
                   forceRegen ? "Full regen" : "Refine",
-                ).then(() => setRefinePrompt(""));
+                ).then((ok) => {
+                  if (!ok) return;
+                  // Keep the prompt visible — clearing it looked like a revert.
+                  // Preview label bumps to vN · patch when the step finishes (~30–90s).
+                  setNote(
+                    `Refine accepted from v${fromVersion}. Patching now — wait for the preview version to bump (do not click Start over).`,
+                  );
+                });
               }}
             >
               {forceRegen ? "Rebuild prototype" : "Send refine"}
