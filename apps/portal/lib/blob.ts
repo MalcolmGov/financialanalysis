@@ -38,10 +38,15 @@ export async function putPrivate(
     return { blob_path: path, sha256: digest, bytes: buf.byteLength };
   }
   const { put } = await import("@vercel/blob");
+  // Deterministic pathnames are intentional (ArtifactRefs / preview URLs).
+  // Workflow steps retry after partial success, so overwrite must be allowed —
+  // otherwise the second put fails with "blob already exists" after a long
+  // Claude generation (seen on generatePrototypeArtifact).
   const res = await put(path, buf, {
     access: "public", // Store is private; access is mediated by the /api/blob proxy route.
     contentType,
     addRandomSuffix: false,
+    allowOverwrite: true,
     token: env.BLOB_READ_WRITE_TOKEN,
   });
   return { blob_path: res.pathname, sha256: digest, bytes: buf.byteLength };
