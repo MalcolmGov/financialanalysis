@@ -26,6 +26,32 @@ type ExtractionProgress = {
   error?: string | null;
 };
 
+type DnaSummary = {
+  dnaId: string | null;
+  revision: number;
+  confidence: number | null;
+  flags: { path: string; reason: string; confidence: number }[];
+  theme: { mode?: string; rationale?: string };
+  toneWords: string[];
+  type: {
+    heading: string | null;
+    body: string | null;
+    headingTreatment: { color?: string; case?: string; weight?: number } | null;
+    webBasePx: number | null;
+    ratio: number | null;
+  };
+  roles: { role: string; hex: string; name: string }[];
+  measured: { hex: string; name: string }[];
+  tableStyle: {
+    headerBg: string | null;
+    headerText: string | null;
+    shading: string | null;
+    grid: string | null;
+  };
+  componentIds: string[];
+  blobPath: string;
+};
+
 /** Docling on CPU is slow; warm-up + ~25–40s/page is a realistic operator guide. */
 function estimateExtractionSeconds(pageCount: number | null): number {
   const pages = Math.max(1, pageCount ?? 10);
@@ -63,7 +89,36 @@ export function ProjectConsole(props: {
   const [exportReady, setExportReady] = useState(false);
   const [refinePrompt, setRefinePrompt] = useState("");
   const [forceRegen, setForceRegen] = useState(false);
+  const [dna, setDna] = useState<DnaSummary | null>(null);
+  const [dnaError, setDnaError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (status !== "dna_review") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${props.projectId}/dna`);
+        const data = (await res.json().catch(() => ({}))) as DnaSummary & { error?: string };
+        if (cancelled) return;
+        if (!res.ok) {
+          setDna(null);
+          setDnaError(data.error ?? res.statusText);
+          return;
+        }
+        setDna(data);
+        setDnaError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setDna(null);
+          setDnaError((err as Error).message);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, props.projectId]);
 
   const refreshEvents = useCallback(async () => {
     try {
@@ -408,20 +463,140 @@ export function ProjectConsole(props: {
 
       {status === "dna_review" ? (
         <section style={panel}>
-          <h2 style={h2}>3 · Design DNA ready for approval</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            Extraction finished. Review the measured design DNA, then approve to generate the first
-            prototype. This is a required human gate — the pipeline is waiting on you.
+          <h2 style={h2}>3 · Review design DNA</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
+            This is the measured visual identity from the PDF (palette, type, table treatment). Approve
+            only if it looks faithful — the prototype and microsite are constrained by it.
           </p>
+          {dnaError ? (
+            <p style={{ color: "#b91c1c", fontSize: 13, margin: 0 }}>Could not load DNA: {dnaError}</p>
+          ) : null}
+          {!dna && !dnaError ? (
+            <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>Loading measured DNA…</p>
+          ) : null}
+          {dna ? (
+            <div style={{ display: "grid", gap: 16 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 13 }}>
+                <div>
+                  <div style={statLabel}>Confidence</div>
+                  <div style={statValue}>
+                    {dna.confidence != null ? `${Math.round(dna.confidence * 100)}%` : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div style={statLabel}>Theme</div>
+                  <div style={statValue}>{dna.theme.mode ?? "—"}</div>
+                </div>
+                <div>
+                  <div style={statLabel}>Revision</div>
+                  <div style={statValue}>v{dna.revision}</div>
+                </div>
+              </div>
+              {dna.theme.rationale ? (
+                <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>{dna.theme.rationale}</p>
+              ) : null}
+              <div>
+                <div style={{ ...statLabel, marginBottom: 8 }}>Palette roles</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {dna.roles.map((r) => (
+                    <div key={r.role} style={{ width: 88, fontSize: 11 }}>
+                      <div
+                        title={r.hex}
+                        style={{
+                          height: 40,
+                          borderRadius: 6,
+                          background: r.hex,
+                          border: "1px solid var(--rule)",
+                          marginBottom: 4,
+                        }}
+                      />
+                      <div style={{ color: "var(--ink)", fontWeight: 600 }}>{r.role}</div>
+                      <div style={{ color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>
+                        {r.hex}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                <div>
+                  <span style={{ color: "var(--ink-2)" }}>Heading face · </span>
+                  {dna.type.heading ?? "—"}
+                </div>
+                <div>
+                  <span style={{ color: "var(--ink-2)" }}>Body face · </span>
+                  {dna.type.body ?? "—"}
+                </div>
+                {dna.type.headingTreatment ? (
+                  <div>
+                    <span style={{ color: "var(--ink-2)" }}>Heading treatment · </span>
+                    {dna.type.headingTreatment.case ?? "?"} / weight{" "}
+                    {dna.type.headingTreatment.weight ?? "?"} / {dna.type.headingTreatment.color ?? "?"}
+                  </div>
+                ) : null}
+                {dna.tableStyle.headerBg ? (
+                  <div>
+                    <span style={{ color: "var(--ink-2)" }}>Table header · </span>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: 12,
+                        height: 12,
+                        borderRadius: 2,
+                        background: dna.tableStyle.headerBg,
+                        border: "1px solid var(--rule)",
+                        verticalAlign: "middle",
+                        marginRight: 6,
+                      }}
+                    />
+                    {dna.tableStyle.headerBg} on {dna.tableStyle.headerText ?? "—"}
+                    {dna.tableStyle.grid ? ` · ${dna.tableStyle.grid}` : ""}
+                  </div>
+                ) : null}
+                {dna.toneWords.length ? (
+                  <div>
+                    <span style={{ color: "var(--ink-2)" }}>Tone · </span>
+                    {dna.toneWords.join(", ")}
+                  </div>
+                ) : null}
+                {dna.componentIds.length ? (
+                  <div>
+                    <span style={{ color: "var(--ink-2)" }}>Components · </span>
+                    {dna.componentIds.join(", ")}
+                  </div>
+                ) : null}
+              </div>
+              {dna.flags.length ? (
+                <div>
+                  <div style={{ ...statLabel, marginBottom: 6 }}>Confidence flags</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--ink-2)" }}>
+                    {dna.flags.slice(0, 8).map((f) => (
+                      <li key={`${f.path}-${f.reason}`}>
+                        {f.path}: {f.reason} ({Math.round(f.confidence * 100)}%)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <a
+                href={`/api/blob/${dna.blobPath}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 12, color: "var(--accent-strong)" }}
+              >
+                Open full DNA JSON
+              </a>
+            </div>
+          ) : null}
           <button
-            style={primary}
-            disabled={busy}
+            style={{ ...primary, marginTop: 8 }}
+            disabled={busy || (!dna && !dnaError)}
             onClick={() =>
               void gate(
                 "dna",
                 {
                   schema_version: "dna-correction/1",
-                  dna_id: "",
+                  dna_id: dna?.dnaId ?? "",
                   edits: [],
                   approve: true,
                   approved_by: "operator",
