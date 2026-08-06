@@ -323,29 +323,53 @@ export function ProjectConsole(props: {
 
       <section style={panel}>
         <h2 style={h2}>1 · Upload the results PDF</h2>
-        <label
+        <div
           style={{
-            display: "block",
-            padding: "24px",
+            display: "grid",
+            gap: 14,
+            justifyItems: "center",
+            padding: "28px 24px",
             border: "1.5px dashed var(--rule)",
             borderRadius: 8,
             textAlign: "center",
             color: "var(--ink-2)",
-            cursor: "pointer",
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (busy) return;
+            const f = e.dataTransfer.files?.[0];
+            if (f) void onUpload(f);
           }}
         >
-          <input
-            type="file"
-            accept="application/pdf"
-            style={{ display: "none" }}
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void onUpload(f);
+          <p style={{ margin: 0, fontSize: 13, maxWidth: 360 }}>
+            Drop a PDF here, or choose a file. Private storage; 150 MB / 250 pages max.
+          </p>
+          <label
+            style={{
+              ...primary,
+              display: "inline-block",
+              cursor: busy ? "not-allowed" : "pointer",
+              opacity: busy ? 0.6 : 1,
             }}
-          />
-          Drop a PDF here, or click to choose. Private storage; 150 MB / 250 pages max.
-        </label>
+          >
+            <input
+              type="file"
+              accept="application/pdf"
+              style={{ display: "none" }}
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onUpload(f);
+                e.target.value = "";
+              }}
+            />
+            {busy ? "Uploading…" : "Choose PDF"}
+          </label>
+        </div>
         {canRun ? (
           <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
             Run pipeline
