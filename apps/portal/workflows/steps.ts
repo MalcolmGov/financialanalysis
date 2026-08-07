@@ -1079,13 +1079,20 @@ export async function buildExport(
     .limit(1);
   if (proto?.assembledHtmlBlobKey) {
     const prototypeHtml = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
-    files["index.html"] = prototypeHtml;
-    if (files["statements/index.html"]) {
-      // Soft link from the statements page back to the designed cover.
-      files["statements/index.html"] = files["statements/index.html"].replace(
-        "<body>",
-        `<body><p style="font:13px/1.4 var(--dna-font-body,system-ui);margin:0 0 16px"><a href="../index.html" style="color:var(--dna-brand,#0a6)">← ${meta.company.replace(/[<>&"]/g, "")} interactive results</a> · verified statements</p>`,
-      );
+    const hasMultiPageTree = Object.keys(files).some((p) => p.startsWith("financials/"));
+    if (hasMultiPageTree) {
+      // Prefer SitePlan multi-page IA; keep signed-off prototype as fallback entry.
+      files["prototype/index.html"] = prototypeHtml;
+      if (!files["index.html"]) files["index.html"] = prototypeHtml;
+    } else {
+      files["index.html"] = prototypeHtml;
+      if (files["statements/index.html"]) {
+        // Soft link from the statements page back to the designed cover.
+        files["statements/index.html"] = files["statements/index.html"].replace(
+          "<body>",
+          `<body><p style="font:13px/1.4 var(--dna-font-body,system-ui);margin:0 0 16px"><a href="../index.html" style="color:var(--dna-brand,#0a6)">← ${meta.company.replace(/[<>&"]/g, "")} interactive results</a> · verified statements</p>`,
+        );
+      }
     }
   } else if (!files["index.html"]) {
     const target = files["statements/index.html"]

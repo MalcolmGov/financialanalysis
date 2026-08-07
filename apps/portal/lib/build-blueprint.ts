@@ -136,12 +136,38 @@ ${STATEMENT_BASE_CSS}`;
     breakpoints: [],
     navigation: {
       model: "sticky",
-      items: [{ id: "statements", label: "Financial statements", template: "bp:tpl_statement" }],
+      items: [
+        { id: "home", label: "Home", template: "bp:tpl_home" },
+        { id: "commentary", label: "Commentary", template: "bp:tpl_prose" },
+        { id: "financials", label: "Financials", template: "bp:tpl_statement_page" },
+        { id: "administration", label: "Administration", template: "bp:tpl_prose" },
+        { id: "downloads", label: "Downloads", template: "bp:tpl_prose" },
+      ],
     },
     page_templates: [
       {
+        id: "bp:tpl_home",
+        name: "Home",
+        shell_html: `<main data-dna-component="page-shell" class="page-home"><header class="home-hero"><p class="home-kicker">Interactive results</p><h1>Results centre</h1></header><div class="home-body">{{region:main}}</div></main>`,
+        regions: [
+          { id: "main", accepts: ["bp:cmp_statement_table", "bp:cmp_prose"], min: 0, max: null },
+        ],
+      },
+      {
+        id: "bp:tpl_prose",
+        name: "Prose page",
+        shell_html: `<main data-dna-component="page-shell" class="page-prose"><div class="prose-body">{{region:main}}</div></main>`,
+        regions: [{ id: "main", accepts: ["bp:cmp_prose", "bp:cmp_statement_table"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_statement_page",
+        name: "Statement page",
+        shell_html: `<main data-dna-component="page-shell" class="page-statement">{{region:main}}</main>`,
+        regions: [{ id: "main", accepts: ["bp:cmp_statement_table"], min: 0, max: null }],
+      },
+      {
         id: "bp:tpl_statement",
-        name: "Statement",
+        name: "Statement aggregate",
         shell_html: `<main data-dna-component="page-shell">{{region:main}}</main>`,
         regions: [{ id: "main", accepts: ["bp:cmp_statement_table"], min: 0, max: null }],
       },
@@ -153,6 +179,14 @@ ${STATEMENT_BASE_CSS}`;
         html: `<section data-dna-component="statement-table" class="statement-table">{{slot:table}}</section>`,
         css: "",
         slots: { table: { type: "ref", accepts: "table", required: true } },
+        variants: [],
+      },
+      {
+        id: "bp:cmp_prose",
+        name: "Prose block",
+        html: `<section data-dna-component="prose-block" class="prose"><p>{{slot:body}}</p></section>`,
+        css: "",
+        slots: { body: { type: "text", required: false, max_chars: 500 } },
         variants: [],
       },
     ],

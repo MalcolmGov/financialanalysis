@@ -140,6 +140,48 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(html).toContain("5 053.2");
     expect(html).toContain("(490.5)");
     expect(html).toContain("1 927.7");
+    expect(html).toContain('data-cur-col="');
+  });
+
+  it("emits multi-page WW IA when blueprint has home + statement_page templates", () => {
+    const dm = mapToDocModel(extraction(), meta);
+    const bp = blueprint();
+    bp.page_templates.push(
+      {
+        id: "bp:tpl_home",
+        name: "Home",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_statement_page",
+        name: "Statement page",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_prose",
+        name: "Prose",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+    );
+    const plan = buildSitePlan(dm, bp);
+    expect(plan.model).toBe("deterministic-multipage");
+    expect(validateSitePlan(plan, bp)).toEqual([]);
+    const paths = plan.pages.map((p) => p.path);
+    expect(paths).toContain("index.html");
+    expect(paths).toContain("commentary.html");
+    expect(paths).toContain("financials/income-statement.html");
+    expect(paths).toContain("financials/balance-sheet.html");
+    expect(paths).toContain("financials/notes.html");
+    expect(paths).toContain("administration.html");
+    expect(paths).toContain("downloads.html");
+    const { files } = renderSitePlan(plan, bp, { extraction: extraction(), docModel: dm });
+    expect(files["financials/income-statement.html"]).toContain("site-nav");
+    expect(files["financials/income-statement.html"]).toContain("5 053.2");
+    expect(files["financials/income-statement.html"]).toContain("breadcrumb");
+    expect(files["financials/income-statement.html"]).toContain("page-pager");
   });
 
   it("Gate B catches a MAPPER bug (a mis-copied number) against the source extraction", () => {

@@ -6,6 +6,13 @@ import type {
   SitePlan,
   SlotDef,
 } from "@rs/contracts";
+import {
+  CHROME_CSS,
+  renderBreadcrumb,
+  renderPrevNext,
+  renderSeoHead,
+  renderStickyNav,
+} from "./chrome.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
 
 /**
@@ -173,6 +180,10 @@ export function renderSitePlan(
   const components = new Map<string, ComponentDef>(blueprint.components.map((c) => [c.id, c]));
   const templates = new Map(blueprint.page_templates.map((t) => [t.id, t]));
   const files: Record<string, string> = {};
+  const multiPage = plan.pages.length > 1;
+  const company = ctx.docModel?.meta?.company;
+  const periodLabel = ctx.docModel?.meta?.period_label;
+  const pageOrder = plan.pages.map((p) => ({ path: p.path, title: p.title }));
 
   for (const page of plan.pages) {
     const tpl = templates.get(page.template);
@@ -187,8 +198,35 @@ export function renderSitePlan(
         .join("\n");
     });
 
-    const css = ensureStatementCss(blueprint.tokens.css ?? "");
-    const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style></head><body>${shell}</body></html>`;
+    const css = ensureStatementCss(blueprint.tokens.css ?? "") + (multiPage ? `\n${CHROME_CSS}` : "");
+    const head = multiPage
+      ? renderSeoHead(
+          {
+            path: page.path,
+            title: page.title,
+            company,
+            periodLabel,
+          },
+          css,
+        )
+      : `<meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style>`;
+
+    const chromeTop = multiPage
+      ? `${renderStickyNav(plan.nav, page.path)}${renderBreadcrumb(page.path, page.title, company)}`
+      : "";
+    const chromeBottom = multiPage ? renderPrevNext(pageOrder, page.path) : "";
+
+    // Prefer injecting chrome around main; otherwise wrap body content.
+    let body = shell;
+    if (multiPage) {
+      if (/<main\b/i.test(body)) {
+        body = `${chromeTop}${body}${chromeBottom}`;
+      } else {
+        body = `${chromeTop}<main data-dna-component="page-shell">${body}</main>${chromeBottom}`;
+      }
+    }
+
+    const doc = `<!doctype html><html lang="en"><head>${head}</head><body>${body}</body></html>`;
     files[page.path] = doc;
   }
 
