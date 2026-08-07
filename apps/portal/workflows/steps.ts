@@ -382,6 +382,7 @@ export async function refinePrototype(
   const { getPrivate, putPrivate } = await import("../lib/blob");
   const { assembleAssets, runStudio } = await import("../lib/studio");
   const { ensureContentCoverage } = await import("../lib/content-coverage");
+  const { polishPrototypeHtml } = await import("../lib/polish-prototype");
   const { resolveAssetUris } = await import("../lib/brand-assets");
   const { MODELS, generateStructured } = await import("../lib/anthropic");
   const {
@@ -540,6 +541,7 @@ export async function refinePrototype(
       const fullContent = buildContentSample(docModel, extractionForAssets, { kpis });
       placeholderHtml = ensureContentCoverage(placeholderHtml, fullContent);
     }
+    placeholderHtml = polishPrototypeHtml(placeholderHtml);
     const assembledHtml = assembleAssets(placeholderHtml, assetUris);
     const lint = conformanceLint(assembledHtml, dna);
     lintReport = { passed: lint.passed, errors: lint.errors, warnings: lint.warnings };

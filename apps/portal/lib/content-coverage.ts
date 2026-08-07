@@ -72,13 +72,14 @@ const INJECT_CSS = `
 .rs-coverage-appendix{padding:3rem 1.25rem 4rem;max-width:1120px;margin:0 auto}
 .rs-coverage-appendix h2{font-family:var(--dna-font-heading,Georgia,serif);font-size:1.75rem;margin:0 0 1rem;color:var(--dna-ink,#231F20)}
 .rs-coverage-appendix h3{font-family:var(--dna-font-heading,Georgia,serif);font-size:1.15rem;margin:2rem 0 0.75rem;color:var(--dna-ink,#231F20)}
-.rs-coverage-appendix .rs-table-wrap{overflow-x:auto;border:1px solid color-mix(in srgb,var(--dna-ink,#231F20) 12%,transparent);margin-bottom:1.5rem}
+.rs-coverage-appendix .rs-table-wrap{overflow-x:auto;border:1px solid color-mix(in srgb,var(--dna-ink,#231F20) 28%,var(--dna-paper,#fff));margin-bottom:1.5rem}
 .rs-coverage-appendix table{width:100%;border-collapse:collapse;font-family:var(--dna-font-body,Georgia,serif);font-variant-numeric:tabular-nums;font-size:0.875rem}
-.rs-coverage-appendix th,.rs-coverage-appendix td{padding:0.45rem 0.65rem;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#231F20) 10%,transparent);text-align:right;vertical-align:top}
-.rs-coverage-appendix th[scope=row],.rs-coverage-appendix td:first-child,.rs-coverage-appendix th:first-child{text-align:left;font-weight:600}
-.rs-coverage-appendix thead th{background:var(--dna-table-header-bg,#839097);color:var(--dna-table-header-text,#fff);text-align:right;font-weight:600}
+.rs-coverage-appendix th,.rs-coverage-appendix td{padding:0.45rem 0.65rem;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#231F20) 18%,var(--dna-paper,#fff));text-align:right;vertical-align:top}
+.rs-coverage-appendix th[scope=row],.rs-coverage-appendix td:first-child,.rs-coverage-appendix th:first-child{text-align:left;font-weight:600;color:var(--dna-ink,#231F20)}
+.rs-coverage-appendix thead th{background:color-mix(in srgb,var(--dna-table-header-bg,#839097) 68%,var(--dna-ink,#231F20));color:var(--dna-table-header-text,#fff);text-align:right;font-weight:600}
 .rs-coverage-appendix thead th:first-child{text-align:left}
-.rs-coverage-appendix .rs-letter-miss p{max-width:42rem;line-height:1.55;margin:0 0 0.85rem;color:var(--dna-ink,#231F20)}
+.rs-coverage-appendix .rs-letter-miss{max-width:68ch;line-height:1.65}
+.rs-coverage-appendix .rs-letter-miss p{max-width:68ch;line-height:1.65;margin:0 0 1.28em;color:var(--dna-ink,#231F20)}
 `;
 
 function injectBeforeCloseBody(html: string, chunk: string): string {

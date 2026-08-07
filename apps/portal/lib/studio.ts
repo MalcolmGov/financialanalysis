@@ -1,6 +1,7 @@
 import type { DesignDNA } from "@rs/contracts";
 import { MODELS, generateLongText, type Usage } from "./anthropic";
 import { ensureContentCoverage } from "./content-coverage";
+import { polishPrototypeHtml } from "./polish-prototype";
 
 /**
  * Step 4 — the AI design studio. Generates ONE self-contained interactive HTML
@@ -90,6 +91,7 @@ NEVER use generic AI aesthetics: purple-on-white gradients, Bootstrap/shadcn def
 
 REQUIRED INTERACTIVITY & STRUCTURE:
 - Sticky masthead nav with scrollspy. Nav MUST include at least: Highlights, Review of operations (if present), Shareholder letter, Financial statements, Notes, Dividend (if present), plus any other major sections you render.
+- Nav layout: flex-wrap (or multi-row) so EVERY label is fully visible in the viewport — NEVER overflow-x scroll on nav or body. Prefer slightly compact labels / wrapping over a horizontal scrollbar that cuts items off.
 - A hero band using {{ASSET:banner}} and the KPI highlight cards.
 - A Financial statements region containing each primary statement table (P&L, financial position, changes in equity, cash flows) with the DNA's dark header + current-period shading, right-aligned tabular-nums, sticky first column, and an overflow-x wrapper.
 - A Notes region for note tables and note prose.
@@ -97,7 +99,14 @@ REQUIRED INTERACTIVITY & STRUCTURE:
 - The FULL shareholder-letter prose in a comfortable reading column (all paragraphs, in order).
 - A footer strip in the DNA's style.
 - A print stylesheet; responsive to 390px with no horizontal body scroll; WCAG AA text contrast; semantic landmarks + a skip link.
-- Prefer editorial, premium IR layout: clear hierarchy, generous measure for prose, disciplined table typography — not a sparse marketing landing page.`;
+- Prefer editorial, premium IR layout: clear hierarchy, generous measure for prose, disciplined table typography — not a sparse marketing landing page.
+- Center the main content column in the viewport: use a sensible max-width (~1040–1200px for statements/KPIs; ~68ch for letter/prose) with margin-inline:auto and responsive horizontal padding. Do not leave letter/pages stuck to the left with empty right space. Overflow-x belongs only on table wrappers, never on html/body/nav.
+
+READABILITY & CONTRAST (web, not print-cramped):
+- Prose / letter / note body copy: comfortable measure ~60–75ch (prefer ~68ch), line-height 1.55–1.7 (prefer ~1.65), paragraph margin-bottom ~1.1–1.35em. Center that column (margin-inline:auto). Do not pack dense paragraphs edge-to-edge across a wide wrap.
+- Section title rows and page meta labels (e.g. "PAGES 2 – 4", section numbers, continuation marks, footnotes): use --dna-ink or a dark ink-derived neutral (≥ ~88% --dna-ink mixed into --dna-paper). NEVER pale grey, washed #999, or low-opacity ink for meta labels or rules that frame headings.
+- Horizontal rules under section heads / kickers: at least ~28–35% --dna-ink mixed into paper so they remain visible.
+- Statement tables: thead/th text MUST meet WCAG AA against the header background. If --dna-table-header-bg is mid-grey, darken it toward --dna-ink for the header fill (keep --dna-table-header-text). First-column labels (th[scope=row] / td:first-child) must stay readable in --dna-ink. Never paint light --dna-shading onto thead cells in a way that leaves light-on-light or white-on-pale text.`
 
 function userPrompt(dna: DesignDNA, content: ContentSample, brief: string, tokenBlock: string): string {
   const tableCount = content.tables?.length ?? 1;
@@ -178,6 +187,8 @@ export async function runStudio(opts: {
 
   // Safety net: inject any tables/letter paras the model omitted.
   html = ensureContentCoverage(html, opts.content);
+  // Deterministic readability / AA contrast overrides (measure, leading, headers).
+  html = polishPrototypeHtml(html);
 
   return {
     placeholderHtml: html,
