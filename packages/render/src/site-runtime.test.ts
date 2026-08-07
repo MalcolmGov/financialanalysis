@@ -75,6 +75,9 @@ describe("home KPI segmentation", () => {
     expect(html).toContain("data-final=");
     expect(html).toContain("data-allow-number");
     expect(html).toContain("kpi-card");
+    expect(html).toContain("kpi-title");
+    expect(html).toContain("Operating Profit");
+    expect(html).toContain("kpi-delta");
     expect(html).toContain("2 712.8");
   });
 });

@@ -141,6 +141,12 @@ describe("ExcelExporter", () => {
     expect(sheet1).toContain("5 053.2");
     expect(sheet1).toContain("1 927.7");
     expect(sheet1).toContain("Revenue");
+    expect(sheet1).toContain("frozen");
+    expect(sheet1).toContain("<cols>");
+    expect(sheet1).toContain('customWidth="1"');
+    const styles = unzipEntry(xlsx, "xl/styles.xml");
+    expect(styles).toContain("cellXfs");
+    expect(styles).toContain("FF839097");
     const sheet2 = unzipEntry(xlsx, "xl/worksheets/sheet2.xml");
     expect(sheet2).toContain("Total assets");
     expect(sheet2).toContain("12 345.6");

@@ -5,6 +5,7 @@
 
 import type { FinancialDocModel, SitePlan } from "@rs/contracts";
 import { renderKpiCardsHtml, segmentHighlightKpis, type HomeKpiCard } from "./home-kpis.js";
+import { docKindLabel } from "./seo.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -64,19 +65,46 @@ export function extractHomeKpis(docModel: FinancialDocModel): HomeKpiCard[] {
   return segmentHighlightKpis(text, src);
 }
 
+/** Pull listing / ISIN chips from shareholderInfo — verbatim substrings only. */
+function listingMeta(docModel: FinancialDocModel): string {
+  const sec = docModel.sections.find((s) => s.kind === "shareholderInfo");
+  if (!sec) return "";
+  const chips: string[] = [];
+  for (const b of sec.blocks) {
+    const text = b.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const src = b.src_ref ? ` data-src="${escapeHtml(b.src_ref)}"` : "";
+    const jse = text.match(/JSE and A2X share code:\s*[A-Z0-9]+/i)?.[0];
+    const nyse = text.match(/NYSE trading symbol:\s*[A-Z0-9]+/i)?.[0];
+    const isin = text.match(/ISIN:\s*[A-Z0-9]+/i)?.[0];
+    const parts = [jse, nyse, isin].filter(Boolean) as string[];
+    if (!parts.length) continue;
+    chips.push(
+      ...parts.map(
+        (p) => `<span class="home-meta__chip" data-allow-number${src}>${escapeHtml(p)}</span>`,
+      ),
+    );
+  }
+  if (!chips.length) return "";
+  return `<div class="home-meta" data-dna-component="home-meta">${chips.join("")}</div>`;
+}
+
 function homeHero(docModel: FinancialDocModel): string {
   const company = escapeHtml(docModel.meta.company || "Results");
-  const period = escapeHtml(docModel.meta.period_label || "");
-  const kind =
-    docModel.meta.doc_kind === "annual_audited"
-      ? "Annual results"
-      : "Interim results";
+  const period = docModel.meta.period_label?.trim() || "";
+  const kind = escapeHtml(docKindLabel(docModel.meta.doc_kind));
+  const periodHtml = period
+    ? `<p class="home-period" data-allow-number>${escapeHtml(period)}</p>`
+    : "";
+  const meta = listingMeta(docModel);
   return `<header class="home-hero" data-dna-component="home-hero">
+<div class="home-hero__mast"></div>
 <div class="home-hero__inner">
-<p class="home-kicker">${escapeHtml(kind)}</p>
+<p class="home-kicker">${kind}</p>
 <h1>${company}</h1>
-${period ? `<p class="home-period" data-allow-number>${period}</p>` : ""}
+${periodHtml}
 <p class="home-lede">Interactive investor results centre — key figures, commentary, and condensed consolidated statements.</p>
+${meta}
 <p class="home-cta"><a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a></p>
 </div>
 </header>`;
@@ -156,7 +184,7 @@ function kpiBand(kpis: HomeKpiCard[]): string {
   const grid = renderKpiCardsHtml(kpis);
   if (!grid) return "";
   return `<section class="kpi-band" data-dna-component="kpi-band" aria-label="Key figures">
-<div class="section-hdr"><h2 class="section-hdr__title">Key figures</h2><p class="section-hdr__sub">Highlights at a glance</p></div>
+<div class="section-hdr"><h2 class="section-hdr__title">Financial highlights</h2><p class="section-hdr__sub">Key figures from the results announcement</p></div>
 ${grid}
 </section>`;
 }

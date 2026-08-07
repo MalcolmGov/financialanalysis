@@ -289,39 +289,50 @@ export function renderSitePlan(
   return { files };
 }
 
-/** Older blueprints only locked :root tokens — inject baseline table layout. */
+/** Older blueprints only locked :root tokens — inject baseline + IR table skin. */
 function ensureStatementCss(tokensCss: string): string {
+  // Always ensure IR statement polish is present (idempotent marker).
+  if (tokensCss.includes("/* rs-statement-ir */")) return tokensCss;
   if (tokensCss.includes(".fin-table")) {
-    // P1 row taxonomy / note-ref rules may be missing from older locked blueprints.
-    if (tokensCss.includes(".r-section") && tokensCss.includes(".note-ref")) return tokensCss;
     return `${tokensCss}
-${STATEMENT_P1_CSS}`;
+${STATEMENT_IR_CSS}`;
   }
   return `${tokensCss}
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
+body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);line-height:1.45}
 main[data-dna-component="page-shell"]{max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem) 2rem;display:grid;gap:1.5rem}
-.statement-table{overflow-x:auto}
-.fin-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
-.fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:600;text-align:left;padding:8px 10px;vertical-align:bottom}
+.statement-table{overflow-x:auto;margin:.35rem 0 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
+.fin-table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
+.fin-table thead th{position:sticky;top:0;z-index:2}
+.fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:700;text-align:left;padding:10px 12px;vertical-align:bottom;font-size:11px;letter-spacing:.03em;line-height:1.35;border-bottom:2px solid var(--dna-brand,#FCAF17)}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
-.fin-table td{padding:6px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
+.fin-table td{padding:7px 12px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 9%,transparent);vertical-align:top}
 .fin-table td.cur,.fin-table th.cur,.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
-.fin-table thead th.cur{filter:brightness(.92)}
+.fin-table thead th.cur{filter:brightness(.94)}
 .fin-table .cell-nil{text-align:right;opacity:.55}
-.fin-table .cell-noteRef{text-align:center;width:3.5em}
+.fin-table .cell-noteRef{text-align:center;width:3.75em}
 .fin-table .num{font-variant-numeric:tabular-nums}
-${STATEMENT_P1_CSS}
+${STATEMENT_IR_CSS}
 `;
 }
 
-/** Row taxonomy + note-ref presentation (appended when base .fin-table CSS already exists). */
-const STATEMENT_P1_CSS = `
-.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:12px}
-.fin-table tr.r-subtotal td{font-weight:700}
-.fin-table tr.r-total td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent)}
+/** WW-grade row taxonomy + note-ref + banding (safe to append after any .fin-table base). */
+const STATEMENT_IR_CSS = `
+/* rs-statement-ir */
+.statement-table{overflow-x:auto;margin:.35rem 0 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
+.fin-table{font-variant-numeric:tabular-nums}
+.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.03em;font-size:11px;font-weight:700;padding:10px 12px}
+.fin-table td{padding:7px 12px}
+.fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
+.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:16px;padding-bottom:6px;color:var(--dna-masthead,#0F3B2E);font-size:12.5px;letter-spacing:.02em;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important;border-top:1px solid color-mix(in srgb,var(--dna-masthead,#0F3B2E) 18%,transparent)}
+.fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important}
+.fin-table tr.r-subtotal td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff))!important}
+.fin-table tr.r-subtotal td.cur{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 78%,var(--dna-paper,#fff))!important}
+.fin-table tr.r-total td{font-weight:700;border-top:2px solid var(--dna-masthead,#0F3B2E);border-bottom:2px solid color-mix(in srgb,var(--dna-masthead,#0F3B2E) 35%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 10%,var(--dna-paper,#fff))!important;padding-top:9px;padding-bottom:9px}
+.fin-table tr.r-total td.cur{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 16%,var(--dna-shading,#F2F2F2))!important}
 .fin-table tr.r-line td.cell-num.cur{font-weight:600}
-.fin-table .note-ref{color:var(--dna-brand,#B8912A);text-decoration:none;font-weight:600;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#B8912A) 55%,transparent)}
-.fin-table .note-ref:hover{border-bottom-style:solid}
-.fin-table .cell-noteRef{text-align:center;width:3.5em}
+.fin-table td.cell-label,.fin-table td:first-child{color:var(--dna-ink,#231F20)}
+.fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 80%,transparent);padding:0 1px}
+.fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
+.fin-table .cell-noteRef{text-align:center;width:3.75em;font-size:11.5px}
 `.trim();

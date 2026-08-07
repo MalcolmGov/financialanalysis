@@ -140,9 +140,15 @@ describe("HomeComposer", () => {
     const home = composeHome(plan(), docModel());
     expect(home.kpis.length).toBeGreaterThanOrEqual(5);
     expect(home.heroHtml).toContain("home-hero");
+    expect(home.heroHtml).toContain("home-hero__mast");
     expect(home.heroHtml).toContain("DRDGOLD Limited");
     expect(home.heroHtml).toContain("home-lede");
+    expect(home.heroHtml).toContain("Condensed Consolidated Unaudited Interim Results");
     expect(home.bodyHtml).toContain('data-dna-component="kpi-band"');
+    expect(home.bodyHtml).toContain("Financial highlights");
+    expect(home.bodyHtml).toContain("kpi-title");
+    expect(home.bodyHtml).toContain("Operating Profit");
+    expect(home.bodyHtml).toContain("kpi-delta");
     expect(home.bodyHtml).toContain("data-countup");
     expect(home.bodyHtml).toContain("2 712.8");
     expect(home.bodyHtml).toContain("highlights-band");

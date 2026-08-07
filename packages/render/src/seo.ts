@@ -41,7 +41,7 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function docKindLabel(kind?: FinancialDocModel["meta"]["doc_kind"]): string {
+export function docKindLabel(kind?: FinancialDocModel["meta"]["doc_kind"]): string {
   switch (kind) {
     case "interim_reviewed":
       return "Condensed Consolidated Reviewed Interim Results";

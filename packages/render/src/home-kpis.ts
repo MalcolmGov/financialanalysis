@@ -1,11 +1,15 @@
 /**
  * Deterministic highlight → KPI card segmentation for multipage home.
  * Values must appear as verbatim substrings of the source highlights text
- * (whitespace-tolerant). No AI — P2 motion foundation; P3 can deepen editorial.
+ * (whitespace-tolerant). No AI — P2 motion foundation; P3/V2 deepen editorial.
  */
 
 export interface HomeKpiCard {
   label: string;
+  /** Short IR title for card chrome (derived from label; no invented figures). */
+  shortTitle: string;
+  /** Optional movement badge text copied from the source phrase (e.g. "▲ 72%"). */
+  delta?: string;
   /** Full display string copied from source (e.g. "R2 712.8 million"). */
   display: string;
   /** Numeric magnitude for count-up animation. */
@@ -90,6 +94,40 @@ function parseMagnitude(display: string): { countup: number; decimals: number; s
   };
 }
 
+/**
+ * Derive a short IR title + optional delta badge from a source label phrase.
+ * Titles are lexical only; delta digits must already appear in `label`.
+ */
+export function presentKpiLabel(label: string): { shortTitle: string; delta?: string } {
+  const L = normWs(label);
+  const up = (m: RegExpMatchArray | null) =>
+    m ? `${m[1]!.charAt(0).toUpperCase()}${m[1]!.slice(1)}` : null;
+
+  let m = /^(Operating profit)\s+increased by\s+(\d+%)/i.exec(L);
+  if (m) return { shortTitle: "Operating Profit", delta: `▲ ${m[2]}` };
+  m = /^(Headline earnings)\s+increased by\s+(\d+%)/i.exec(L);
+  if (m) return { shortTitle: "Headline Earnings", delta: `▲ ${m[2]}` };
+  m = /^(Gold production)\s+decreased by\s+(\d+%)/i.exec(L);
+  if (m) return { shortTitle: "Gold Production", delta: `▼ ${m[2]}` };
+  m = /^(Gold production)\s+increased by\s+(\d+%)/i.exec(L);
+  if (m) return { shortTitle: "Gold Production", delta: `▲ ${m[2]}` };
+  if (/^Interim cash dividend/i.test(L)) {
+    return { shortTitle: "Interim Cash Dividend", delta: "Declared" };
+  }
+  if (/^Capital expenditure$/i.test(L)) {
+    return { shortTitle: "Capital Expenditure", delta: "Invested" };
+  }
+  m = /All-in sustaining costs margin/i.exec(L);
+  if (m) {
+    return { shortTitle: "AISC Margin" };
+  }
+  // Generic: title-case first noun phrase before "increased/decreased/of"
+  m = /^([A-Za-z][A-Za-z\s/-]+?)(?:\s+(?:increased|decreased|of)\b|$)/i.exec(L);
+  const titled = up(m);
+  if (titled) return { shortTitle: titled };
+  return { shortTitle: L };
+}
+
 type Extractor = (src: string) => { label: string; display: string; end: number } | null;
 
 /** Ordered IR highlight extractors (DRD-style flattened cover band). */
@@ -148,6 +186,28 @@ const EXTRACTORS: Extractor[] = [
   },
 ];
 
+function toCard(
+  label: string,
+  display: string,
+  mag: NonNullable<ReturnType<typeof parseMagnitude>>,
+  fromSrc?: string,
+): HomeKpiCard {
+  const present = presentKpiLabel(label);
+  return {
+    label,
+    shortTitle: present.shortTitle,
+    delta: present.delta,
+    display,
+    countup: mag.countup,
+    decimals: mag.decimals,
+    sep: mag.sep,
+    prefix: mag.prefix,
+    suffix: mag.suffix.trim(),
+    valueText: mag.valueText,
+    fromSrc,
+  };
+}
+
 /**
  * Segment flattened highlights prose into up to 6 KPI cards.
  * Every `display` / `valueText` is a verbatim substring of `highlightsText`
@@ -176,33 +236,13 @@ export function segmentHighlightKpis(
       if (!srcCompact.includes(compact(fromFull.display))) continue;
       const mag = parseMagnitude(fromFull.display);
       if (!mag || !srcCompact.includes(compact(mag.valueText))) continue;
-      cards.push({
-        label: fromFull.label,
-        display: fromFull.display,
-        countup: mag.countup,
-        decimals: mag.decimals,
-        sep: mag.sep,
-        prefix: mag.prefix,
-        suffix: mag.suffix.trim(),
-        valueText: mag.valueText,
-        fromSrc,
-      });
+      cards.push(toCard(fromFull.label, fromFull.display, mag, fromSrc));
       continue;
     }
     if (!srcCompact.includes(compact(hit.display))) continue;
     const mag = parseMagnitude(hit.display);
     if (!mag || !srcCompact.includes(compact(mag.valueText))) continue;
-    cards.push({
-      label: hit.label,
-      display: hit.display,
-      countup: mag.countup,
-      decimals: mag.decimals,
-      sep: mag.sep,
-      prefix: mag.prefix,
-      suffix: mag.suffix.trim(),
-      valueText: mag.valueText,
-      fromSrc,
-    });
+    cards.push(toCard(hit.label, hit.display, mag, fromSrc));
     rest = rest.slice(hit.end);
   }
 
@@ -234,9 +274,11 @@ export function renderKpiCardsHtml(cards: HomeKpiCard[]): string {
       // Animate only the numeric core; prefix/suffix stay stable around it.
       const span = `<span data-countup="${c.countup}" data-decimals="${c.decimals}"${sepAttr} data-final="${escapeHtml(c.valueText)}" data-allow-number>${escapeHtml(c.valueText)}</span>`;
       const from = c.fromSrc ? ` data-kpi-from="${escapeHtml(c.fromSrc)}"` : "";
-      // Labels may include % moves copied from highlights — allow-listed; values
-      // are also allow-listed and must be verbatim substrings of the source band.
-      return `<article class="kpi-card reveal"${from}><p class="kpi-label" data-allow-number>${escapeHtml(c.label)}</p><p class="kpi-value">${prefixOutside}${span}${suffixOutside}</p></article>`;
+      const delta = c.delta
+        ? `<p class="kpi-delta" data-allow-number>${escapeHtml(c.delta)}</p>`
+        : "";
+      // Context line keeps the full source phrase for provenance / screen readers.
+      return `<article class="kpi-card reveal"${from}><div class="kpi-card__top"><p class="kpi-title">${escapeHtml(c.shortTitle)}</p>${delta}</div><p class="kpi-value">${prefixOutside}${span}${suffixOutside}</p><p class="kpi-label" data-allow-number>${escapeHtml(c.label)}</p></article>`;
     })
     .join("");
   return `<section class="kpi-grid" aria-label="Key figures" data-dna-component="kpi-grid">${items}</section>`;

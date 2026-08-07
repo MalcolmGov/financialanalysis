@@ -1,10 +1,12 @@
 import { deflateRawSync } from "node:zlib";
 import type { FinancialDocModel, FinTable, StatementType } from "@rs/contracts";
+import { classifyStatementRow } from "./row-taxonomy.js";
 
 /**
  * ExcelExporter — FinTables → multi-sheet + per-statement XLSX binaries.
  * Cell values are the FinTable `raw` strings verbatim (no invented figures,
  * no numeric reinterpretation that would drop thin-space grouping).
+ * Presentation: header fill, column widths, freeze panes, row-role bold.
  */
 
 export interface ExcelSheetSpec {
@@ -184,32 +186,134 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
   return sheets;
 }
 
+/** Style indexes in STYLES_XML: 0 default, 1 header, 2 section, 3 subtotal, 4 total, 5 number. */
+const STYLE = {
+  default: 0,
+  header: 1,
+  section: 2,
+  subtotal: 3,
+  total: 4,
+  number: 5,
+} as const;
+
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="5">
+    <font><sz val="11"/><name val="Calibri"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/></font>
+  </fonts>
+  <fills count="6">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF839097"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF0"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFF3D6"/></patternFill></fill>
+  </fills>
+  <borders count="3">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left/><right/><top/><bottom style="thin"><color rgb="FF839097"/></bottom><diagonal/></border>
+    <border><left/><right/><top style="medium"><color rgb="FF231F20"/></top><bottom style="thin"><color rgb="FF231F20"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="6">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="bottom" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+    <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="4" fillId="5" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="right"/></xf>
+  </cellXfs>
+</styleSheet>`;
+
+function inlineStrCell(ref: string, raw: string, style: number): string {
+  const text = escapeXml(raw);
+  const sAttr = style > 0 ? ` s="${style}"` : "";
+  return `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
+}
+
+function measureCols(table: FinTable): number[] {
+  const widths: number[] = [];
+  const consider = (col: number, text: string) => {
+    const len = Math.min(48, Math.max(4, text.length + 2));
+    widths[col] = Math.max(widths[col] ?? 8, len);
+  };
+  for (const headerRow of table.header_matrix) {
+    let c = 0;
+    for (const h of headerRow) {
+      consider(c, h.raw);
+      c += Math.max(1, h.col_span ?? 1);
+    }
+  }
+  for (const row of table.rows) {
+    row.cells.forEach((cell, c) => consider(c, cell.raw));
+  }
+  if (!widths.length) widths.push(12);
+  // Label column wider; numeric columns capped.
+  widths[0] = Math.max(widths[0] ?? 28, 28);
+  for (let i = 1; i < widths.length; i++) {
+    widths[i] = Math.min(widths[i] ?? 14, 18);
+  }
+  return widths;
+}
+
+function rowHasNumber(row: FinTable["rows"][number]): boolean {
+  return row.cells.some((c) => c.kind === "number" && c.raw.trim() !== "");
+}
+
 function sheetXml(table: FinTable): string {
   const rows: string[] = [];
   let r = 1;
+  const headerCount = table.header_matrix.length;
   for (const headerRow of table.header_matrix) {
     let c = 0;
     const cells: string[] = [];
     for (const h of headerRow) {
       const ref = `${colLetter(c)}${r}`;
-      const text = escapeXml(h.raw);
-      cells.push(`<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`);
+      cells.push(inlineStrCell(ref, h.raw, STYLE.header));
       c += Math.max(1, h.col_span ?? 1);
     }
-    rows.push(`<row r="${r}">${cells.join("")}</row>`);
+    rows.push(`<row r="${r}" ht="28" customHeight="1">${cells.join("")}</row>`);
     r++;
   }
   for (const row of table.rows) {
+    const label = row.cells[0]?.raw ?? "";
+    const role = classifyStatementRow(label, rowHasNumber(row));
+    const roleStyle =
+      role === "section"
+        ? STYLE.section
+        : role === "subtotal"
+          ? STYLE.subtotal
+          : role === "total"
+            ? STYLE.total
+            : STYLE.default;
     const cells = row.cells.map((cell, c) => {
       const ref = `${colLetter(c)}${r}`;
-      const text = escapeXml(cell.raw);
-      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
+      const style: number =
+        roleStyle !== STYLE.default
+          ? roleStyle
+          : cell.kind === "number" || c > 0
+            ? STYLE.number
+            : STYLE.default;
+      return inlineStrCell(ref, cell.raw, style);
     });
     rows.push(`<row r="${r}">${cells.join("")}</row>`);
     r++;
   }
+
+  const widths = measureCols(table);
+  const colsXml = `<cols>${widths
+    .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
+    .join("")}</cols>`;
+  const freezeRow = Math.max(1, headerCount);
+  const views = `<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="${freezeRow}" topLeftCell="A${freezeRow + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
+  const dim = `A1:${colLetter(Math.max(0, widths.length - 1))}${Math.max(1, r - 1)}`;
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join("")}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${views}${colsXml}<dimension ref="${dim}"/><sheetData>${rows.join("")}</sheetData><pageMargins left="0.5" right="0.5" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`;
 }
 
 function workbookXml(sheetNames: string[]): string {
@@ -220,15 +324,16 @@ function workbookXml(sheetNames: string[]): string {
     )
     .join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets}</sheets></workbook>`;
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="14000"/></bookViews><sheets>${sheets}</sheets></workbook>`;
 }
 
 function workbookRelsXml(count: number): string {
-  const rels = Array.from({ length: count }, (_, i) => {
+  const sheetRels = Array.from({ length: count }, (_, i) => {
     return `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`;
   }).join("");
+  const stylesRel = `<Relationship Id="rId${count + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`;
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheetRels}${stylesRel}</Relationships>`;
 }
 
 function contentTypesXml(count: number): string {
@@ -236,7 +341,7 @@ function contentTypesXml(count: number): string {
     return `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>`;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${overrides}</Types>`;
 }
 
 const ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -328,6 +433,7 @@ export function buildWorkbookXlsx(sheets: ExcelSheetSpec[]): Uint8Array {
     "_rels/.rels": ROOT_RELS,
     "xl/workbook.xml": workbookXml(names),
     "xl/_rels/workbook.xml.rels": workbookRelsXml(sheets.length),
+    "xl/styles.xml": STYLES_XML,
   };
   sheets.forEach((spec, i) => {
     files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(spec.table);
