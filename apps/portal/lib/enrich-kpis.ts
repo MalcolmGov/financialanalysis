@@ -1,4 +1,4 @@
-import { MODELS, generateStructured } from "./anthropic";
+import { MODELS, generateStructured, type Usage } from "./anthropic";
 
 /**
  * Split a merged "Highlights" block into KPI cards. Docling flattens the six
@@ -38,9 +38,12 @@ const SYSTEM =
 
 const norm = (s: string) => s.replace(/\s+/g, "");
 
-export async function extractKpis(highlightsText: string): Promise<{ label: string; value: string }[]> {
-  if (!highlightsText.trim()) return [];
-  const { data } = await generateStructured<{ kpis: { label: string; value: string }[] }>({
+export async function extractKpis(highlightsText: string): Promise<{
+  kpis: { label: string; value: string }[];
+  usage: Usage | null;
+}> {
+  if (!highlightsText.trim()) return { kpis: [], usage: null };
+  const { data, usage } = await generateStructured<{ kpis: { label: string; value: string }[] }>({
     model: MODELS.classify,
     system: SYSTEM,
     messages: [{ role: "user", content: `Highlights text:\n${highlightsText}\n\nSplit into KPI cards.` }],
@@ -49,5 +52,6 @@ export async function extractKpis(highlightsText: string): Promise<{ label: stri
   });
   const src = norm(highlightsText);
   // Verbatim guard: keep only cards whose value appears verbatim in the source.
-  return (data.kpis ?? []).filter((k) => k.value && src.includes(norm(k.value))).slice(0, 6);
+  const kpis = (data.kpis ?? []).filter((k) => k.value && src.includes(norm(k.value))).slice(0, 6);
+  return { kpis, usage };
 }

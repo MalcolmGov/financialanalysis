@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
+import { ShellNav } from "./shell-nav";
 import "./globals.css";
 
 const instrument = Instrument_Serif({
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="rs-brand-mark">Results Studio</span>
               <span className="rs-brand-sub">Operator</span>
             </a>
-            <span className="rs-header-meta">Verified interactive results</span>
+            <ShellNav />
           </header>
           <main className="rs-main">{children}</main>
         </div>

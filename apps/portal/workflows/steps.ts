@@ -41,6 +41,31 @@ export async function recordEvent(runId: string, type: string, payload: unknown)
   await db().insert(schema.runEvents).values({ runId, type, payload: payload as object });
 }
 
+/** Persist a model call into the cost ledger (no-ops under MOCK_BLOB). */
+async function persistModelCall(
+  runId: string,
+  step: string,
+  model: string,
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cost_usd: number;
+  },
+) {
+  const { recordModelCall } = await import("../lib/ledger");
+  await recordModelCall({
+    run_id: runId,
+    step,
+    model,
+    input_tokens: usage.input_tokens,
+    output_tokens: usage.output_tokens,
+    cache_read_tokens: usage.cache_read_tokens,
+    cache_write_tokens: 0,
+    cost_usd: usage.cost_usd,
+  });
+}
+
 export async function setProjectStatus(
   runId: string,
   projectId: string,
@@ -242,21 +267,34 @@ export async function detectDnaArtifact(
     (extractionJson.pages ?? []).map((p: { image: { blob_path: string } }) => getPrivate(p.image.blob_path)),
   );
   const signed = await signedSourceUrl(extractionJson.source.blob_path);
-  const { dna } = await detectDna({
+  const { dna, usage } = await detectDna({
     projectId,
     signedSourceUrl: signed,
     pageImages,
     pages: extractionJson.source.page_count ?? pageImages.length,
   });
+  const { MODELS } = await import("../lib/anthropic");
+  await persistModelCall(runId, "detect_dna", MODELS.vision, usage);
 
   const artifactId = `art_design_dna_${runId}`;
   const path = `runs/${runId}/dna/${artifactId}.json`;
   const put = await putPrivate(path, JSON.stringify(dna), "application/json");
   await db().insert(schema.artifacts).values({
     runId, kind: "design_dna", version: dna.revision, blobPath: put.blob_path,
-    sha256: put.sha256, bytes: put.bytes, contentType: "application/json", meta: { confidence: dna.confidence.overall },
+    sha256: put.sha256, bytes: put.bytes, contentType: "application/json",
+    meta: { confidence: dna.confidence.overall, cost_usd: usage.cost_usd, model: MODELS.vision },
   });
-  return { schema: "ArtifactRef@1", artifact_id: artifactId, kind: "design_dna", version: dna.revision, blob_path: put.blob_path, sha256: put.sha256, bytes: put.bytes, content_type: "application/json", meta: { confidence: dna.confidence.overall } };
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: artifactId,
+    kind: "design_dna",
+    version: dna.revision,
+    blob_path: put.blob_path,
+    sha256: put.sha256,
+    bytes: put.bytes,
+    content_type: "application/json",
+    meta: { confidence: dna.confidence.overall, cost_usd: usage.cost_usd },
+  };
 }
 
 /**
@@ -294,7 +332,9 @@ export async function generatePrototypeArtifact(
     currency: "ZAR",
   };
   const docModel = mapToDocModel(extractionJson, meta);
-  const kpis = await extractKpis(highlightsText(docModel));
+  const { MODELS } = await import("../lib/anthropic");
+  const { kpis, usage: kpiUsage } = await extractKpis(highlightsText(docModel));
+  if (kpiUsage) await persistModelCall(runId, "extract_kpis", MODELS.classify, kpiUsage);
   const content = buildContentSample(docModel, extractionJson, { kpis });
 
   const brandBundle = pickBrandAssets(extractionJson, projectId);
@@ -322,7 +362,9 @@ export async function generatePrototypeArtifact(
   const assetUris = await loadAssetUris(brandBundle, getPrivate);
 
   const studio = await runStudio({ dna, content, brief: "Confident, understated, premium; mirror the printed report." });
+  await persistModelCall(runId, "studio", MODELS.generate, studio.usage);
   const assembledHtml = assembleAssets(studio.placeholderHtml, assetUris);
+  const versionCostUsd = studio.usage.cost_usd + (kpiUsage?.cost_usd ?? 0);
 
   // project_id + version_number is unique — after a re-run / start-over residue,
   // allocate the next free number instead of always inserting v1.
@@ -346,7 +388,7 @@ export async function generatePrototypeArtifact(
     id: versionId, projectId, cycle: 1, versionNumber, parentVersionId: null,
     placeholderHtmlBlobKey: placeholder.blob_path, assembledHtmlBlobKey: assembled.blob_path,
     sha256: assembled.sha256, sizeBytes: assembled.bytes, refinementMode: "initial",
-    model: "claude-opus-5", costUsdMicros: Math.round(studio.usage.cost_usd * 1e6), status: "ready",
+    model: MODELS.generate, costUsdMicros: Math.round(versionCostUsd * 1e6), status: "ready",
   });
   await db().insert(schema.artifacts).values({
     runId, kind: "prototype", version: versionNumber, blobPath: assembled.blob_path, sha256: assembled.sha256,
@@ -475,16 +517,21 @@ export async function refinePrototype(
         currency: "ZAR",
       };
       const docModel = mapToDocModel(extractionJson, meta);
-      const kpis = await extractKpis(highlightsText(docModel));
+      const { kpis, usage: kpiUsage } = await extractKpis(highlightsText(docModel));
+      if (kpiUsage) {
+        await persistModelCall(runId, "extract_kpis", MODELS.classify, kpiUsage);
+        costUsd += kpiUsage.cost_usd;
+      }
       const content = buildContentSample(docModel, extractionJson, { kpis });
       const studio = await runStudio({
         dna,
         content,
         brief: `Operator refinement (full regen): ${evt.prompt}`,
       });
+      await persistModelCall(runId, "studio", MODELS.generate, studio.usage);
       placeholderHtml = studio.placeholderHtml;
       model = MODELS.generate;
-      costUsd = studio.usage.cost_usd;
+      costUsd += studio.usage.cost_usd;
     } else {
       const generatePatches = async (feedback?: string) => {
         const user = [
@@ -505,6 +552,7 @@ export async function refinePrototype(
       let lastErr: string | null = null;
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, usage } = await generatePatches(lastErr ?? undefined);
+        await persistModelCall(runId, "refine_patch", MODELS.refine, usage);
         costUsd += usage.cost_usd;
         patches = data.patches ?? [];
         try {
@@ -537,7 +585,11 @@ export async function refinePrototype(
         currency: "ZAR",
       };
       const docModel = mapToDocModel(extractionForAssets, meta);
-      const kpis = await extractKpis(highlightsText(docModel));
+      const { kpis, usage: kpiUsage } = await extractKpis(highlightsText(docModel));
+      if (kpiUsage) {
+        await persistModelCall(runId, "extract_kpis", MODELS.classify, kpiUsage);
+        costUsd += kpiUsage.cost_usd;
+      }
       const fullContent = buildContentSample(docModel, extractionForAssets, { kpis });
       placeholderHtml = ensureContentCoverage(placeholderHtml, fullContent);
     }

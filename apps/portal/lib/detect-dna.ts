@@ -1,4 +1,5 @@
 import type { DesignDNA } from "@rs/contracts";
+import type { Usage } from "./anthropic";
 import { env } from "./env";
 import { analyzeVision } from "./vision";
 import { reconcileDna } from "./reconcile";
@@ -12,7 +13,9 @@ import { reconcileDna } from "./reconcile";
 
 export interface DetectDnaResult {
   dna: DesignDNA;
+  /** Vision-pass cost only (probe is free). */
   cost_usd: number;
+  usage: Usage;
 }
 
 /** Call the worker's deterministic probe for the measured half of the DNA. */
@@ -38,5 +41,5 @@ export async function detectDna(opts: {
   const probe = await probeHalf(opts.projectId, opts.signedSourceUrl, opts.pages);
   const { vision, usage } = await analyzeVision(opts.pageImages);
   const dna = await reconcileDna(probe, vision);
-  return { dna, cost_usd: usage.cost_usd };
+  return { dna, cost_usd: usage.cost_usd, usage };
 }

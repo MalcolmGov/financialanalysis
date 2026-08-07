@@ -59,7 +59,7 @@ async function main() {
 
   // ── Content from the REAL extraction (mapper + KPI enricher) ───────────────
   const docModel = mapToDocModel(extraction, meta);
-  const kpis = await extractKpis(highlightsText(docModel));
+  const { kpis } = await extractKpis(highlightsText(docModel));
   const content = buildContentSample(docModel, extraction, { kpis });
   process.stdout.write(`  mapped ${docModel.tables.length} financial tables; ${content.kpis.length} KPIs, ${content.table.rows.length} statement rows, ${content.letter.paragraphs.length} letter paragraphs\n`);
   for (const k of content.kpis) process.stdout.write(`    KPI: "${k.label}" = ${k.value}\n`);

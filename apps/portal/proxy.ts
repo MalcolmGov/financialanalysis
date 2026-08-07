@@ -24,7 +24,8 @@ import { auth } from "./auth";
  */
 export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
-  const isProtectedPage = pathname === "/" || pathname.startsWith("/projects/");
+  const isProtectedPage =
+    pathname === "/" || pathname.startsWith("/projects/") || pathname.startsWith("/admin");
   if (isProtectedPage && !req.auth) {
     return NextResponse.redirect(new URL("/signin", req.url));
   }
