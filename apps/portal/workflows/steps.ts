@@ -1080,4 +1080,118 @@ export async function buildExport(
   };
 }
 
+/**
+ * Prototype-as-product export: zip the approved assembled HTML. No blueprint,
+ * site plan, or QA prerequisites — the signed-off prototype IS the microsite.
+ */
+export async function buildPrototypeExport(
+  runId: string,
+  projectId: string,
+  prototypeVersionId: string | null | undefined,
+  signoff: { actorUserId: string },
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] building prototype export`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "export_bundle", {
+      note: "MOCK prototype export",
+      ...signoff,
+    });
+  }
+
+  const { getPrivate, putPrivate, sha256 } = await import("../lib/blob");
+  const { zipSync, strToU8 } = await import("fflate");
+  const { randomUUID } = await import("node:crypto");
+  const { db, schema } = await loadDb();
+
+  const [proto] = prototypeVersionId
+    ? await db()
+        .select()
+        .from(schema.prototypeVersions)
+        .where(eq(schema.prototypeVersions.id, prototypeVersionId))
+        .limit(1)
+    : await db()
+        .select()
+        .from(schema.prototypeVersions)
+        .where(
+          and(
+            eq(schema.prototypeVersions.projectId, projectId),
+            eq(schema.prototypeVersions.status, "ready"),
+          ),
+        )
+        .orderBy(desc(schema.prototypeVersions.versionNumber))
+        .limit(1);
+
+  if (!proto?.assembledHtmlBlobKey) {
+    throw new Error(`no ready prototype to export for project ${projectId}`);
+  }
+
+  const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+  const html = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
+  const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+
+  const meta = {
+    schema_version: "prototype-export/1",
+    bundle_id: bundleId,
+    project_id: projectId,
+    run_id: runId,
+    company: project?.companyName ?? "Company",
+    period_label: project?.periodLabel ?? "",
+    prototype_version_id: proto.id,
+    prototype_version_number: proto.versionNumber,
+    refinement_mode: proto.refinementMode,
+    created_at: new Date().toISOString(),
+    signed_off_by: signoff.actorUserId,
+    entrypoint: "index.html",
+  };
+
+  const zipInput: Record<string, Uint8Array> = {
+    "index.html": strToU8(html),
+    "_meta/export.json": strToU8(JSON.stringify(meta, null, 2)),
+  };
+  const zipBytes = zipSync(zipInput, { level: 6 });
+  const zipBuf = Buffer.from(zipBytes);
+  const zipDigest = await sha256(zipBuf);
+  const zipPath = `runs/${runId}/exports/${bundleId}.zip`;
+  const zipPut = await putPrivate(zipPath, zipBuf, "application/zip");
+
+  const manifestPath = `runs/${runId}/exports/${bundleId}.json`;
+  const manifestBody = JSON.stringify({ ...meta, zip: { blob_path: zipPut.blob_path, sha256: zipDigest, bytes: zipBuf.byteLength } });
+  const manifestPut = await putPrivate(manifestPath, manifestBody, "application/json");
+
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "export_bundle",
+    version: 1,
+    blobPath: manifestPut.blob_path,
+    sha256: manifestPut.sha256,
+    bytes: manifestPut.bytes,
+    contentType: "application/json",
+    meta: {
+      bundleId,
+      zipPath: zipPut.blob_path,
+      zipBytes: zipBuf.byteLength,
+      entrypoint: "index.html",
+      mode: "prototype",
+      prototypeVersionId: proto.id,
+      fileCount: 1,
+    },
+  });
+
+  console.log(
+    `[run ${runId}] prototype export ${bundleId} v${proto.versionNumber} zip=${zipPut.blob_path}`,
+  );
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: bundleId,
+    kind: "export_bundle",
+    version: 1,
+    blob_path: manifestPut.blob_path,
+    sha256: manifestPut.sha256,
+    bytes: manifestPut.bytes,
+    content_type: "application/json",
+    meta: { bundleId, zipPath: zipPut.blob_path, mode: "prototype" },
+  };
+}
+
 export const _limits = UPLOAD_LIMITS;

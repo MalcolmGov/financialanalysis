@@ -3,18 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { upload } from "@vercel/blob/client";
 
-/** The nine steps, for the timeline rail. */
-const STEPS = [
-  "Upload",
-  "Extraction",
-  "Design DNA",
-  "Prototype",
-  "Review",
-  "Blueprint lock",
-  "Mapping",
-  "QA",
-  "Export",
-] as const;
+/** Prototype-as-product rail — no blueprint / mapping / QA gates. */
+const STEPS = ["Upload", "Extraction", "Design DNA", "Prototype", "Export"] as const;
 
 type EventRow = { id: number; type: string; createdAt: string };
 
@@ -871,7 +861,8 @@ export function ProjectConsole(props: {
           <h2 style={h2}>5 · Refine prototype</h2>
           <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
             Patch-first edits against the current prototype. Numbers cannot change — describe layout,
-            styling, or non-numeric copy only. Approve design when the head version looks right.
+            styling, or non-numeric copy only. When it looks right, Approve &amp; export to download
+            this HTML as the microsite.
           </p>
           <textarea
             value={refinePrompt}
@@ -940,6 +931,19 @@ export function ProjectConsole(props: {
             >
               {forceRegen ? "Rebuild prototype" : "Send refine"}
             </button>
+            <button
+              style={ghost}
+              disabled={busy}
+              onClick={() =>
+                void gate(
+                  "review",
+                  { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
+                  "Approve & export",
+                )
+              }
+            >
+              Approve &amp; export
+            </button>
           </div>
         </section>
       ) : null}
@@ -947,22 +951,13 @@ export function ProjectConsole(props: {
       <section style={panel}>
         <h2 style={h2}>Human gates</h2>
         <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
-          Four decisions are yours. Server resolves the current prototype / blueprint / QA IDs.
-          {qaVerdict ? (
-            <>
-              {" "}
-              Latest QA: <strong style={{ color: qaVerdict === "pass" ? "var(--accent-strong)" : "#b91c1c" }}>{qaVerdict}</strong>
-              {qaVerdict === "fail" ? " — export approve is blocked until gates pass." : null}
-              {qaVerdict === "pass"
-                ? " — Gate A/B + lint only; PDF cross-check, arithmetic advisory, and Playwright/axe are not run yet."
-                : null}
-            </>
-          ) : null}
+          Two decisions: approve the measured DNA, then approve the prototype to download that HTML
+          as the microsite. Refine as needed before export.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
             style={status === "dna_review" ? primary : ghost}
-            disabled={busy}
+            disabled={busy || status !== "dna_review"}
             onClick={() =>
               void gate(
                 "dna",
@@ -981,70 +976,36 @@ export function ProjectConsole(props: {
           </button>
           <button
             style={status === "in_review" ? primary : ghost}
-            disabled={busy}
+            disabled={busy || status !== "in_review"}
             onClick={() =>
               void gate(
                 "review",
                 { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
-                "Design approval",
+                "Approve & export",
               )
             }
           >
-            Approve design
-          </button>
-          <button
-            style={ghost}
-            disabled={busy}
-            onClick={() =>
-              void gate(
-                "lock",
-                { type: "confirm_lock", blueprint_version_id: "", actor_user_id: "operator" },
-                "Blueprint lock",
-              )
-            }
-          >
-            Confirm lock
-          </button>
-          <button
-            style={ghost}
-            disabled={busy || qaVerdict === "fail" || status === "exported"}
-            onClick={() =>
-              void gate(
-                "qa",
-                { type: "approve", qa_report_id: "", actor_user_id: "operator" },
-                "QA sign-off",
-              )
-            }
-          >
-            Approve QA &amp; export
-          </button>
-          <button
-            style={ghost}
-            disabled={busy || status !== "qa_review"}
-            onClick={() =>
-              void gate(
-                "qa",
-                {
-                  type: "change_request",
-                  qa_report_id: "",
-                  actor_user_id: "operator",
-                  reason: "Operator requested changes after QA",
-                  scope: "mapping",
-                },
-                "QA change request",
-              )
-            }
-          >
-            Request QA changes
+            Approve &amp; export
           </button>
         </div>
       </section>
 
+      {status === "exporting" ? (
+        <section style={panel} aria-live="polite">
+          <h2 style={h2}>5 · Packaging export</h2>
+          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+            Zipping the approved prototype HTML. Download appears when status becomes{" "}
+            <strong>EXPORTED</strong>.
+          </p>
+        </section>
+      ) : null}
+
       {status === "exported" || exportReady ? (
         <section style={panel}>
-          <h2 style={h2}>9 · Export ready</h2>
+          <h2 style={h2}>5 · Export ready</h2>
           <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            Static HTML microsite zip (relative links, zero external requests). Download and host on any static server.
+            The zip contains the approved interactive prototype as <code>index.html</code> — open it
+            locally or host on any static server.
           </p>
           <a
             href={`/api/projects/${props.projectId}/export`}
@@ -1093,15 +1054,16 @@ function stepIndexForStatus(status: string): number {
     dna_detecting: 2,
     dna_review: 2,
     prototype_generating: 3,
-    in_review: 4,
-    blueprint_extracting: 5,
-    blueprint_proposed: 5,
-    locked: 5,
-    mapping: 6,
-    qa_running: 7,
-    qa_review: 7,
-    exporting: 8,
-    exported: 8,
+    in_review: 3,
+    // Legacy mid-pipeline statuses collapse onto Prototype / Export.
+    blueprint_extracting: 3,
+    blueprint_proposed: 3,
+    locked: 3,
+    mapping: 3,
+    qa_running: 4,
+    qa_review: 4,
+    exporting: 4,
+    exported: 4,
   };
   return map[status] ?? 0;
 }
