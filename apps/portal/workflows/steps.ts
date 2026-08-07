@@ -517,7 +517,12 @@ export async function refinePrototype(
       }
     }
 
-    assertNumeralsUnchanged(parentPlaceholder, placeholderHtml);
+    // Patch refine must preserve every numeral from the parent HTML. Full regen
+    // replaces the sample with the complete document — numeral multisets will
+    // differ by design, so skip the guard there.
+    if (mode !== "regen") {
+      assertNumeralsUnchanged(parentPlaceholder, placeholderHtml);
+    }
     // Re-pack full document content and inject any tables/letter the model omitted.
     if (extractionForAssets) {
       const { buildContentSample, highlightsText } = await import("../lib/build-content");
