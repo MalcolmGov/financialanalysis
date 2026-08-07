@@ -3,7 +3,10 @@
  * Injects (or replaces) a late <style data-rs-readable> block so future gens
  * and one-off backfills share the same WCAG-minded overrides without relying
  * on the model to get measure, leading, header contrast, nav fit, or centering right.
+ * Also marks current-period columns (latest year) with data-cur-col / .cur.
  */
+
+import { markCurrentPeriodColumns } from "./current-period";
 
 const STYLE_ATTR = 'data-rs-readable="1"';
 
@@ -15,10 +18,10 @@ export const READABLE_CSS = `
   --rs-rule:color-mix(in srgb,var(--dna-ink,#231F20) 32%,var(--dna-paper,#fff));
   --rs-header-bg:color-mix(in srgb,var(--dna-table-header-bg,#839097) 68%,var(--dna-ink,#231F20));
   --rs-header-bg-emph:color-mix(in srgb,var(--dna-table-header-bg,#839097) 48%,var(--dna-ink,#231F20));
-  /* One content rail for headers + letter/prose — do not nest a narrower measure */
+  /* Page/content rail for section heads + statements; prose uses a narrower reading measure */
   --rs-content-max:min(1120px,100%);
   --rs-content:var(--rs-content-max);
-  --rs-prose:var(--rs-content-max);
+  --rs-prose:68ch;
   --rs-table-max:min(1280px,100%);
   --rs-pad:clamp(1rem,3.2vw,2rem);
   --n-muted:var(--rs-meta);
@@ -207,8 +210,7 @@ footer > .container{
   border-bottom:1px solid var(--rs-rule);
 }
 
-/* Prose / letter — SAME content rail as section headers (no nested ch measure).
-   Comfortable reading via leading + paragraph spacing, not a narrower max-width. */
+/* Prose / letter — comfortable web measure (~60–75ch), leading, paragraph rhythm */
 .prose,
 article.prose,
 [data-dna-component="letter-prose"],
@@ -224,19 +226,11 @@ article.prose,
 .letter,
 .letter-body,
 .shareholder-letter{
-  max-width:var(--rs-content-max)!important;
+  max-width:var(--rs-prose)!important;
   margin-inline:auto;
   width:100%;
   box-sizing:border-box;
-}
-.prose,
-article.prose,
-[data-dna-component="letter-prose"],
-[data-dna-component="letter-block"],
-.rs-letter-miss,
-.letter,
-.letter-body{
-  line-height:1.7;
+  line-height:1.65;
 }
 .prose p,
 article.prose p,
@@ -249,10 +243,10 @@ article.prose p,
 #overview p,
 .letter p,
 .letter-body p{
-  max-width:none!important;
+  max-width:var(--rs-prose)!important;
   width:100%;
-  line-height:1.7;
-  margin:0 0 1.35em;
+  line-height:1.65;
+  margin:0 0 1.28em;
   color:var(--dna-ink,#231F20);
   /* Never clip mid-word / ellipsis body copy */
   overflow:visible!important;
@@ -283,8 +277,8 @@ article.prose h4,
 article.prose ul,
 article.prose ol{
   margin:0 0 1.35em;
-  line-height:1.7;
-  max-width:none;
+  line-height:1.65;
+  max-width:var(--rs-prose);
   width:100%;
 }
 .prose li,
@@ -355,9 +349,21 @@ thead th:first-child,
 table[data-cur-col~="2"] thead th:nth-child(2),
 table[data-cur-col~="3"] thead th:nth-child(3),
 table[data-cur-col~="4"] thead th:nth-child(4),
-table[data-cur-col~="5"] thead th:nth-child(5){
+table[data-cur-col~="5"] thead th:nth-child(5),
+table[data-cur-col~="6"] thead th:nth-child(6),
+thead th.cur{
   background:var(--rs-header-bg-emph)!important;
   color:var(--dna-table-header-text,#fff)!important;
+}
+/* Current-period body column — soft grey from DNA table-shading */
+tbody td.cur,
+tbody th.cur,
+table[data-cur-col~="2"] tbody td:nth-child(2),
+table[data-cur-col~="3"] tbody td:nth-child(3),
+table[data-cur-col~="4"] tbody td:nth-child(4),
+table[data-cur-col~="5"] tbody td:nth-child(5),
+table[data-cur-col~="6"] tbody td:nth-child(6){
+  background:var(--dna-shading,#E9E7E4)!important;
 }
 tbody td:first-child,
 tbody th[scope="row"],
@@ -377,8 +383,8 @@ function styleTag(): string {
 }
 
 /**
- * Inject or replace the readable/contrast override stylesheet.
- * Idempotent; safe to run after ensureContentCoverage and on refine.
+ * Inject or replace the readable/contrast override stylesheet and mark
+ * current-period columns. Idempotent; safe after ensureContentCoverage / refine.
  */
 export function polishPrototypeHtml(html: string): string {
   if (!html || !html.trim()) return html;
@@ -392,5 +398,5 @@ export function polishPrototypeHtml(html: string): string {
   } else {
     out = tag + out;
   }
-  return out;
+  return markCurrentPeriodColumns(out);
 }

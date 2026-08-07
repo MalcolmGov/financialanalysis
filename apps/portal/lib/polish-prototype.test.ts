@@ -7,14 +7,12 @@ describe("polishPrototypeHtml", () => {
     const out = polishPrototypeHtml(html);
     expect(out).toContain('data-rs-readable="1"');
     expect(out).toContain("--rs-content-max");
-    expect(out).toContain("max-width:var(--rs-content-max)");
-    expect(out).toContain("line-height:1.7");
+    expect(out).toContain("--rs-prose:68ch");
+    expect(out).toContain("max-width:var(--rs-prose)!important");
+    expect(out).toContain("line-height:1.65");
     expect(out.indexOf('data-rs-readable="1"')).toBeLessThan(out.indexOf("</head>"));
     expect(out).toContain("--rs-header-bg");
     expect(READABLE_CSS).toContain("thead th");
-    // Letter/prose share the content rail — no nested 68ch column
-    expect(READABLE_CSS).not.toContain("68ch");
-    expect(READABLE_CSS).toMatch(/--rs-prose:var\(--rs-content-max\)/);
   });
 
   it("forces wrapping nav and centered content (no page overflow-x)", () => {

@@ -34,28 +34,62 @@ export function numberSpan(ref: string, verbatim: string): string {
   return `<span class="num" data-src="${escapeHtml(ref)}">${escapeHtml(verbatim)}</span>`;
 }
 
+/** Latest-year column (0-based) from FinTable header matrix, or null. */
+function findCurrentPeriodCol(table: FinTable): number | null {
+  let bestCol: number | null = null;
+  let bestYear = -1;
+  for (const row of table.header_matrix) {
+    let col = 0;
+    for (const h of row) {
+      const years = [...h.raw.matchAll(/\b((?:19|20)\d{2})\b/g)].map((m) => Number(m[1]));
+      const y = years.length ? Math.max(...years) : null;
+      if (y != null && y >= bestYear) {
+        bestYear = y;
+        bestCol = col;
+      }
+      col += Math.max(1, h.col_span ?? 1);
+    }
+  }
+  return bestCol;
+}
+
 function renderFinTable(table: FinTable): string {
+  const cur0 = findCurrentPeriodCol(table);
+  const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
+
   const head = table.header_matrix
-    .map(
-      (row) =>
-        `<tr>${row
-          .map((h) => {
-            // Header cells carry provenance too: they hold dates ("31 Dec 2025")
-            // and unit labels whose digits must be traceable + verified. Empty
-            // header slots (real tables are sparse) carry no data-src.
-            const src = h.raw.trim() !== "" ? ` data-src="${escapeHtml(h.src_ref)}"` : "";
-            return `<th${src}${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${escapeHtml(h.raw)}</th>`;
-          })
-          .join("")}</tr>`,
-    )
+    .map((row) => {
+      let col = 0;
+      const cells = row
+        .map((h) => {
+          const start = col;
+          const span = Math.max(1, h.col_span ?? 1);
+          col += span;
+          const isCur = cur0 != null && cur0 >= start && cur0 < start + span;
+          // Header cells carry provenance too: they hold dates ("31 Dec 2025")
+          // and unit labels whose digits must be traceable + verified. Empty
+          // header slots (real tables are sparse) carry no data-src.
+          const src = h.raw.trim() !== "" ? ` data-src="${escapeHtml(h.src_ref)}"` : "";
+          const cls = isCur ? ` class="cur"` : "";
+          return `<th${cls}${src}${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${escapeHtml(h.raw)}</th>`;
+        })
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
     .join("");
 
   const body = table.rows
     .map((row) => {
+      let col = 0;
       const cells = row.cells
         .map((cell) => {
+          const start = col;
+          const span = Math.max(1, (cell as { col_span?: number }).col_span ?? 1);
+          col += span;
+          const isCur = cur0 != null && cur0 >= start && cur0 < start + span;
+          const curCls = isCur ? " cur" : "";
           if (cell.kind === "number") {
-            return `<td class="cell-num">${numberSpan(cell.src_ref, cell.raw)}</td>`;
+            return `<td class="cell-num${curCls}">${numberSpan(cell.src_ref, cell.raw)}</td>`;
           }
           // Every cell with CONTENT is provenance-tagged — text row-labels
           // ("Balance at 30 June 2024"), nil markers and note refs all carry
@@ -63,14 +97,14 @@ function renderFinTable(table: FinTable): string {
           // mapper's byte-for-byte copy). Empty grid slots — real Docling tables
           // omit cells — carry no digit and need no provenance.
           const src = cell.raw.trim() !== "" ? ` data-src="${escapeHtml(cell.src_ref)}"` : "";
-          return `<td class="cell-${cell.kind}"${src}>${escapeHtml(cell.raw)}</td>`;
+          return `<td class="cell-${cell.kind}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
         })
         .join("");
       return `<tr>${cells}</tr>`;
     })
     .join("");
 
-  return `<table class="fin-table" data-table-src="${escapeHtml(table.src_table)}"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  return `<table class="fin-table"${curAttr} data-table-src="${escapeHtml(table.src_table)}"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 function renderSlot(
@@ -174,6 +208,8 @@ main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:gri
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
 .fin-table td{padding:7px 10px;border-bottom:1px solid rgba(0,0,0,.1);vertical-align:top}
 .fin-table tbody tr:nth-child(even) td{background:var(--dna-shading,#f2f2f2)}
+.fin-table td.cur,.fin-table th.cur,.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#E9E7E4)!important}
+.fin-table thead th.cur{filter:brightness(.92)}
 .fin-table .cell-nil{text-align:right;opacity:.55}
 .fin-table .cell-noteRef{text-align:center;width:3.5em;opacity:.6}
 `;

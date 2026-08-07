@@ -1,4 +1,5 @@
 import type { ContentSample, ContentTable } from "./studio";
+import { findCurrentPeriodColIndex } from "./current-period";
 
 /**
  * Deterministic safety net: if the studio HTML omitted a supplied table or
@@ -48,8 +49,13 @@ function tablePresent(html: string, table: ContentTable): boolean {
 }
 
 export function renderContentTable(table: ContentTable): string {
+  const cur0 = table.headers.length ? findCurrentPeriodColIndex(table.headers) : null;
+  const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
+  const curClass = (i: number) => (cur0 != null && i === cur0 ? ' class="cur"' : "");
   const head = table.headers.length
-    ? `<thead><tr>${table.headers.map((h) => `<th scope="col">${escapeHtml(h)}</th>`).join("")}</tr></thead>`
+    ? `<thead><tr>${table.headers
+        .map((h, i) => `<th scope="col"${curClass(i)}>${escapeHtml(h)}</th>`)
+        .join("")}</tr></thead>`
     : "";
   const body = `<tbody>${table.rows
     .map(
@@ -57,15 +63,15 @@ export function renderContentTable(table: ContentTable): string {
         `<tr>${r
           .map((c, i) =>
             i === 0
-              ? `<th scope="row">${escapeHtml(c)}</th>`
-              : `<td>${escapeHtml(c)}</td>`,
+              ? `<th scope="row"${curClass(i)}>${escapeHtml(c)}</th>`
+              : `<td${curClass(i)}>${escapeHtml(c)}</td>`,
           )
           .join("")}</tr>`,
     )
     .join("")}</tbody>`;
   return `<section class="rs-injected-table" data-dna-component="statement-table" data-table-id="${escapeHtml(table.id)}" id="${escapeHtml(table.id.replace(/[^a-zA-Z0-9_-]/g, "-"))}">
 <h3>${escapeHtml(table.caption)}</h3>
-<div class="rs-table-wrap"><table>${head}${body}</table></div>
+<div class="rs-table-wrap"><table${curAttr}>${head}${body}</table></div>
 </section>`;
 }
 
