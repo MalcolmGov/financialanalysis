@@ -1206,9 +1206,163 @@ export async function buildExport(
 }
 
 /**
+ * After DNA approve: build the multipage site draft operators review.
+ * Persists HTML pages under runs/{runId}/site-draft/vN/ plus a site_plan
+ * artifact (manifest). Gate A/B results are stored in meta for the console.
+ */
+export async function buildSiteDraftArtifact(
+  runId: string,
+  projectId: string,
+  dnaRef: ArtifactRef,
+  extraction: ArtifactRef,
+): Promise<ArtifactRef> {
+  "use step";
+  console.log(`[run ${runId}] building multipage site draft`);
+  if (env.MOCK_BLOB) {
+    return persistArtifactStub(runId, projectId, "site_plan", {
+      note: "MOCK multipage site draft",
+      mode: "multipage",
+      entrypoint: "index.html",
+    });
+  }
+
+  const { getPrivate, putPrivate } = await import("../lib/blob");
+  const { buildMultipageExport } = await import("../lib/build-multipage-export");
+  const { randomUUID } = await import("node:crypto");
+  const { db, schema } = await loadDb();
+
+  const dna = JSON.parse((await getPrivate(dnaRef.blob_path)).toString("utf8"));
+  const extractionJson = JSON.parse((await getPrivate(extraction.blob_path)).toString("utf8"));
+  const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+
+  const built = buildMultipageExport({
+    dna,
+    extraction: extractionJson,
+    projectId,
+    company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
+    periodLabel: project?.periodLabel ?? "",
+  });
+
+  const existing = await db()
+    .select({ version: schema.artifacts.version })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, runId), eq(schema.artifacts.kind, "site_plan")))
+    .orderBy(desc(schema.artifacts.version))
+    .limit(1);
+  const draftVersion = (existing[0]?.version ?? 0) + 1;
+  const prefix = `runs/${runId}/site-draft/v${draftVersion}`;
+
+  for (const path of built.paths) {
+    const body = built.files[path]!;
+    const contentType = path.endsWith(".html")
+      ? "text/html; charset=utf-8"
+      : path.endsWith(".css")
+        ? "text/css"
+        : path.endsWith(".js")
+          ? "application/javascript"
+          : path.endsWith(".json")
+            ? "application/json"
+            : "application/octet-stream";
+    await putPrivate(`${prefix}/${path}`, body, contentType);
+  }
+
+  const sitePlanPut = await putPrivate(
+    `${prefix}/_meta/site-plan.json`,
+    JSON.stringify(built.sitePlan),
+    "application/json",
+  );
+
+  const draftId = randomUUID();
+  const manifest = {
+    schema_version: "site-draft/1",
+    draft_id: draftId,
+    project_id: projectId,
+    run_id: runId,
+    version: draftVersion,
+    prefix,
+    entrypoint: built.entrypoint,
+    mode: built.mode,
+    site_plan_id: built.sitePlanId,
+    blueprint_version_id: built.blueprintVersionId,
+    pages: built.pages,
+    files: built.paths,
+    gate_a: { status: built.gateA.status },
+    gate_b: { status: built.gateB.status },
+    created_at: new Date().toISOString(),
+  };
+  const manifestPut = await putPrivate(
+    `${prefix}/_meta/draft.json`,
+    JSON.stringify(manifest, null, 2),
+    "application/json",
+  );
+
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "site_plan",
+    version: draftVersion,
+    blobPath: manifestPut.blob_path,
+    sha256: manifestPut.sha256,
+    bytes: manifestPut.bytes,
+    contentType: "application/json",
+    meta: {
+      draftId,
+      prefix,
+      entrypoint: built.entrypoint,
+      mode: "multipage",
+      sitePlanId: built.sitePlanId,
+      sitePlanBlobPath: sitePlanPut.blob_path,
+      blueprintVersionId: built.blueprintVersionId,
+      pages: built.pages,
+      files: built.paths.filter((p) => p.endsWith(".html")),
+      gateA: built.gateA.status,
+      gateB: built.gateB.status,
+      fileCount: built.paths.length,
+    },
+  });
+
+  await db().insert(schema.artifacts).values({
+    runId,
+    kind: "number_audit",
+    version: draftVersion,
+    blobPath: sitePlanPut.blob_path,
+    sha256: sitePlanPut.sha256,
+    bytes: sitePlanPut.bytes,
+    contentType: "application/json",
+    meta: {
+      draftId,
+      gateA: built.gateA.status,
+      gateB: built.gateB.status,
+      sitePlanId: built.sitePlanId,
+    },
+  });
+
+  console.log(
+    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} prefix=${prefix}`,
+  );
+  return {
+    schema: "ArtifactRef@1",
+    artifact_id: draftId,
+    kind: "site_plan",
+    version: draftVersion,
+    blob_path: manifestPut.blob_path,
+    sha256: manifestPut.sha256,
+    bytes: manifestPut.bytes,
+    content_type: "application/json",
+    meta: {
+      draftId,
+      prefix,
+      mode: "multipage",
+      gateA: built.gateA.status,
+      gateB: built.gateB.status,
+      fileCount: built.paths.length,
+    },
+  };
+}
+
+/**
  * Approve & export: deterministic multi-page Results Studio site from DNA +
- * extraction (WW-style page tree). The signed-off prototype is kept under
- * prototype/index.html for reference / masthead comparison — not as the only entry.
+ * extraction (WW-style page tree). Optional Opus prototype HTML is included
+ * under prototype/index.html when a ready version exists — never the entrypoint.
  */
 export async function buildPrototypeExport(
   runId: string,
@@ -1250,10 +1404,6 @@ export async function buildPrototypeExport(
         .orderBy(desc(schema.prototypeVersions.versionNumber))
         .limit(1);
 
-  if (!proto?.assembledHtmlBlobKey) {
-    throw new Error(`no ready prototype to export for project ${projectId}`);
-  }
-
   const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
   const runArtifacts = await db().select().from(schema.artifacts).where(eq(schema.artifacts.runId, runId));
   const dnaRow = [...runArtifacts].reverse().find((a) => a.kind === "design_dna");
@@ -1264,7 +1414,10 @@ export async function buildPrototypeExport(
 
   const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8"));
   const extraction = JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"));
-  const prototypeHtml = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
+  let prototypeHtml: string | null = null;
+  if (proto?.assembledHtmlBlobKey) {
+    prototypeHtml = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
+  }
 
   const built = buildMultipageExport({
     dna,
@@ -1273,8 +1426,8 @@ export async function buildPrototypeExport(
     company: project?.companyName ?? extraction.source?.pdf_meta?.title ?? "Company",
     periodLabel: project?.periodLabel ?? "",
     prototypeHtml,
-    sourcePrototypeVersionId: proto.id,
-    sourcePrototypeSha256: proto.sha256,
+    sourcePrototypeVersionId: proto?.id ?? "multipage-export",
+    sourcePrototypeSha256: proto?.sha256 ?? "0".repeat(64),
   });
 
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -1285,16 +1438,19 @@ export async function buildPrototypeExport(
     run_id: runId,
     company: project?.companyName ?? "Company",
     period_label: project?.periodLabel ?? "",
-    prototype_version_id: proto.id,
-    prototype_version_number: proto.versionNumber,
+    prototype_version_id: proto?.id ?? null,
+    prototype_version_number: proto?.versionNumber ?? null,
     site_plan_id: built.sitePlanId,
     blueprint_version_id: built.blueprintVersionId,
-    refinement_mode: proto.refinementMode,
+    refinement_mode: proto?.refinementMode ?? "multipage_draft",
     created_at: new Date().toISOString(),
     signed_off_by: signoff.actorUserId,
     entrypoint: built.entrypoint,
     mode: built.mode,
+    gate_a: built.gateA.status,
+    gate_b: built.gateB.status,
     files: built.paths,
+    pages: built.pages,
   };
 
   const zipInput: Record<string, Uint8Array> = {
@@ -1331,14 +1487,17 @@ export async function buildPrototypeExport(
       zipBytes: zipBuf.byteLength,
       entrypoint: "index.html",
       mode: "multipage",
-      prototypeVersionId: proto.id,
+      prototypeVersionId: proto?.id ?? null,
       fileCount: built.paths.length,
       files: built.paths.filter((p) => p.endsWith(".html")),
+      pages: built.pages,
+      gateA: built.gateA.status,
+      gateB: built.gateB.status,
     },
   });
 
   console.log(
-    `[run ${runId}] multipage export ${bundleId} v${proto.versionNumber} zip=${zipPut.blob_path} files=${built.paths.length}`,
+    `[run ${runId}] multipage export ${bundleId} zip=${zipPut.blob_path} files=${built.paths.length} gateA=${built.gateA.status} gateB=${built.gateB.status}${proto ? ` proto=v${proto.versionNumber}` : " (no opus preview)"}`,
   );
   return {
     schema: "ArtifactRef@1",

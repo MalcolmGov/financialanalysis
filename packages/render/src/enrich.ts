@@ -60,7 +60,8 @@ function exploreCards(plan: SitePlan): string {
     .filter((n) => n.href !== "index.html")
     .map((n, i) => {
       const n_ = String(i + 1).padStart(2, "0");
-      return `<a class="explore-card" href="${escapeHtml(n.href)}"><span class="explore-n">${n_}</span><span class="explore-label">${escapeHtml(n.label)}</span></a>`;
+      // Decorative card index — not a financial figure (Gate B allow-list).
+      return `<a class="explore-card" href="${escapeHtml(n.href)}"><span class="explore-n" data-allow-number>${n_}</span><span class="explore-label">${escapeHtml(n.label)}</span></a>`;
     })
     .join("");
   return `<section class="explore" aria-label="Explore the report"><h2 class="prose-h">Explore the report</h2><div class="explore-grid">${cards}</div></section>`;
@@ -84,7 +85,7 @@ function homeHero(docModel: FinancialDocModel): string {
   return `<header class="home-hero" data-dna-component="home-hero">
 <p class="home-kicker">Interactive results</p>
 <h1>${company}</h1>
-${period ? `<p class="home-period">${period}</p>` : ""}
+${period ? `<p class="home-period" data-allow-number>${period}</p>` : ""}
 <p class="home-cta"><a href="commentary.html">Read commentary</a><a href="financials/income-statement.html">View financials</a></p>
 </header>`;
 }
@@ -104,22 +105,23 @@ function downloadsHtml(docModel: FinancialDocModel): string {
 function injectInto(html: string, markerClass: string, content: string): string {
   const re = new RegExp(`(<[^>]*class="[^"]*\\b${markerClass}\\b[^"]*"[^>]*>)([\\s\\S]*?)(</(?:div|main|section)>)`, "i");
   if (re.test(html)) {
-    return html.replace(re, `$1${content}$3`);
+    // Function replacer — prose may contain `$1` / `$&` (e.g. FX rates).
+    return html.replace(re, (_m, open: string, _inner: string, close: string) => `${open}${content}${close}`);
   }
   // Fallback: insert before closing </main>
   if (/<\/main>/i.test(html)) {
-    return html.replace(/<\/main>/i, `${content}</main>`);
+    return html.replace(/<\/main>/i, () => `${content}</main>`);
   }
   return html;
 }
 
 function replaceHomeHero(html: string, hero: string): string {
   if (/class="[^"]*\bhome-hero\b/.test(html)) {
-    return html.replace(/<header class="home-hero"[\s\S]*?<\/header>/i, hero);
+    return html.replace(/<header class="home-hero"[\s\S]*?<\/header>/i, () => hero);
   }
   return html.replace(
     /(<main[^>]*class="[^"]*\bpage-home\b[^"]*"[^>]*>)/i,
-    `$1${hero}`,
+    (_m, open: string) => `${open}${hero}`,
   );
 }
 
@@ -150,7 +152,7 @@ function anchorNotes(
       if (n == null) return full;
       const id = `note-${n}`;
       if (/\sid="/.test(attrs)) return full;
-      return `<section id="${id}"${attrs}><h2 class="note-title">Note ${n}</h2>${inner}</section>`;
+      return `<section id="${id}"${attrs}><h2 class="note-title" data-allow-number>Note ${n}</h2>${inner}</section>`;
     },
   );
 }
@@ -211,10 +213,8 @@ export function enrichMultiPageFiles(
   if (out["financials/notes.html"]) {
     let html = out["financials/notes.html"];
     if (!/<h1[\s>]/i.test(html)) {
-      html = html.replace(
-        /(<main[^>]*>)/i,
-        `$1${pageTitleBanner("Notes to the financial statements")}`,
-      );
+      const banner = pageTitleBanner("Notes to the financial statements");
+      html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${banner}`);
     }
     out["financials/notes.html"] = anchorNotes(html, docModel);
   }
@@ -224,10 +224,8 @@ export function enrichMultiPageFiles(
     if (!page.path.startsWith("financials/") || page.path.endsWith("notes.html")) continue;
     const html = out[page.path];
     if (!html || /page-title-banner/.test(html)) continue;
-    out[page.path] = html.replace(
-      /(<main[^>]*>)/i,
-      `$1${pageTitleBanner(page.title)}`,
-    );
+    const banner = pageTitleBanner(page.title);
+    out[page.path] = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${banner}`);
   }
 
   return out;

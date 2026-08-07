@@ -42,7 +42,12 @@ async function main() {
   const htmlPaths = built.paths.filter((p) => p.endsWith(".html"));
   process.stdout.write(`Wrote ${built.paths.length} files → ${outDir}\n`);
   process.stdout.write(`Zip → ${zipPath}\n`);
-  process.stdout.write(`HTML pages:\n${htmlPaths.map((p) => `  - ${p}`).join("\n")}\n`);
+  process.stdout.write(`Entrypoint: ${built.entrypoint}\n`);
+  process.stdout.write(`Gate A: ${built.gateA.status} · Gate B: ${built.gateB.status}\n`);
+  process.stdout.write(`HTML pages:\n${built.pages.map((p) => `  - ${p.path} (${p.title})`).join("\n")}\n`);
+  if (htmlPaths.some((p) => p.startsWith("prototype/"))) {
+    process.stdout.write("Note: prototype/ present (optional preview only)\n");
+  }
 
   const income = built.files["financials/income-statement.html"] ?? "";
   const checks = [
@@ -53,11 +58,28 @@ async function main() {
     ["cur shading", income.includes("data-cur-col") || income.includes('class="cur')],
     ["notes", !!built.files["financials/notes.html"]],
     ["downloads", !!built.files["downloads.html"]],
+    ["no prototype entrypoint", !built.files["prototype/index.html"] || built.entrypoint === "index.html"],
+    ["gate A", built.gateA.status === "pass"],
+    ["gate B", built.gateB.status === "pass"],
   ] as const;
   for (const [name, ok] of checks) {
     process.stdout.write(`${ok ? "✓" : "✗"} ${name}\n`);
   }
-  if (checks.some(([, ok]) => !ok)) process.exit(1);
+  if (checks.some(([, ok]) => !ok)) {
+    if (built.gateB.status !== "pass") {
+      const byReason = new Map<string, number>();
+      for (const f of built.gateB.failures) {
+        byReason.set(f.reason, (byReason.get(f.reason) ?? 0) + 1);
+      }
+      process.stdout.write(`Gate B detail: ${JSON.stringify(Object.fromEntries(byReason))}\n`);
+      for (const f of built.gateB.failures.slice(0, 12)) {
+        process.stdout.write(
+          `  [${f.reason}] ${f.page} tok=${JSON.stringify(f.token).slice(0, 100)} src=${f.data_src}\n`,
+        );
+      }
+    }
+    process.exit(1);
+  }
 }
 
 main().catch((e) => {

@@ -1,4 +1,4 @@
-import type { ExtractionResult, FinancialDocModel } from "@rs/contracts";
+import type { BlockNode, ExtractionResult, FinancialDocModel } from "@rs/contracts";
 
 /**
  * Reference resolution. A numeric slot only ever holds an `ext:`/`doc:` ref;
@@ -13,22 +13,44 @@ export interface ResolveContext {
 
 const CELL_REF = /^ext:(.+):r(\d+)c(\d+)$/;
 
-/** Resolve an `ext:table:rNcM` cell ref to its verbatim string, or null. */
-export function resolveCell(ref: string, ctx: ResolveContext): string | null {
-  const m = CELL_REF.exec(ref);
-  if (!m) return null;
-  const [, tableId, rs, cs] = m;
-  const table = ctx.extraction.tables[tableId];
-  if (!table) return null;
-  const r = Number(rs);
-  const c = Number(cs);
-  const cell = table.cells.find((x) => x.r === r && x.c === c);
-  return cell ? cell.text : null;
+function findBlock(id: string, nodes: BlockNode[]): BlockNode | null {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const child = findBlock(id, n.children);
+    if (child) return child;
+  }
+  return null;
 }
 
-/** True if the ref points at a resolvable source cell. */
+/**
+ * Resolve an `ext:` ref to its verbatim string, or null.
+ * Supports table cells (`ext:tableId:rNcM`) and extraction body/furniture
+ * blocks (`ext:blk-0003`) used by multipage prose enrichment.
+ */
+export function resolveCell(ref: string, ctx: ResolveContext): string | null {
+  const m = CELL_REF.exec(ref);
+  if (m) {
+    const [, tableId, rs, cs] = m;
+    const table = ctx.extraction.tables[tableId];
+    if (!table) return null;
+    const r = Number(rs);
+    const c = Number(cs);
+    const cell = table.cells.find((x) => x.r === r && x.c === c);
+    return cell ? cell.text : null;
+  }
+  if (ref.startsWith("ext:")) {
+    const id = ref.slice("ext:".length);
+    if (!id || id.includes(":")) return null;
+    const block =
+      findBlock(id, ctx.extraction.body) ?? findBlock(id, ctx.extraction.furniture);
+    return block?.text ?? null;
+  }
+  return null;
+}
+
+/** True if the ref points at a resolvable source cell or block. */
 export function refResolves(ref: string, ctx: ResolveContext): boolean {
-  if (ref.startsWith("ext:") && CELL_REF.test(ref)) {
+  if (ref.startsWith("ext:")) {
     return resolveCell(ref, ctx) !== null;
   }
   if (ref.startsWith("doc:")) {

@@ -11,18 +11,27 @@ export async function POST(
   try {
     const evt = ReviewGateEvent.parse(await request.json());
 
+    // Multipage is the product — approve does not require an Opus prototype.
+    // When a ready prototype exists, attach its id so export can optionally
+    // nest it under prototype/ as a legacy preview artifact.
     if (evt.type === "approve" && !evt.prototype_version_id && !env.MOCK_BLOB) {
       const id = await latestPrototypeVersionId(projectId);
-      if (!id) {
-        return Response.json({ error: "no ready prototype version for this project" }, { status: 409 });
-      }
-      return await resumeGate("review", projectId, { ...evt, prototype_version_id: id });
+      return await resumeGate("review", projectId, {
+        ...evt,
+        prototype_version_id: id ?? "",
+      });
     }
 
     if (evt.type === "refine" && !evt.base_version_id && !env.MOCK_BLOB) {
       const id = await latestPrototypeVersionId(projectId);
       if (!id) {
-        return Response.json({ error: "no ready prototype version to refine" }, { status: 409 });
+        return Response.json(
+          {
+            error:
+              "optional Opus preview is not available on this run — refine is preview-only; approve the multipage site draft instead",
+          },
+          { status: 409 },
+        );
       }
       return await resumeGate("review", projectId, { ...evt, base_version_id: id });
     }

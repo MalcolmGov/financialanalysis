@@ -10,8 +10,8 @@ import {
 import { eq } from "drizzle-orm";
 import {
   buildPrototypeExport,
+  buildSiteDraftArtifact,
   detectDnaArtifact,
-  generatePrototypeArtifact,
   persistExtractionResult,
   recordEvent,
   refinePrototype,
@@ -20,12 +20,13 @@ import {
 } from "./steps";
 
 /**
- * resultsPipeline — prototype-as-product path.
+ * resultsPipeline — multipage-as-product path (P0).
  *
- * Upload → extract → DNA approve → generate prototype → refine* → approve &
- * export a deterministic multi-page Results Studio site (DNA-styled HTML tree
- * from extraction). The signed-off prototype is kept under prototype/ as
- * reference. Blueprint lock / QA remain available in steps.ts for the full path.
+ * Upload → extract → DNA approve → build multipage site draft → human review
+ * on the page tree → approve & export zip (entrypoint index.html). Opus
+ * single-file generation is no longer on the critical path; if a prototype
+ * version exists it may be bundled under prototype/ as optional preview only.
+ * Blueprint lock / QA / generatePrototypeArtifact remain in steps.ts.
  */
 export async function resultsPipeline(input: PipelineInput) {
   "use workflow";
@@ -46,8 +47,9 @@ export async function resultsPipeline(input: PipelineInput) {
   await emit(runId, "awaiting.dna");
   await dnaHook;
 
+  // Status key reused (contracts): means "building reviewed site draft".
   await setProjectStatus(runId, projectId, "prototype_generating");
-  await generatePrototypeArtifact(runId, projectId, dna, extraction, 1);
+  await buildSiteDraftArtifact(runId, projectId, dna, extraction);
 
   await setProjectStatus(runId, projectId, "in_review", cycle);
   using reviewHook = createHook<ReviewGateEvent>({
@@ -57,6 +59,7 @@ export async function resultsPipeline(input: PipelineInput) {
 
   for await (const evt of reviewHook) {
     if (evt.type === "refine") {
+      // Optional Opus preview refine — only meaningful when a prototype exists.
       await refinePrototype(runId, projectId, cycle, evt);
       continue;
     }

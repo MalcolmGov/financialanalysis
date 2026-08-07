@@ -93,6 +93,43 @@ export async function latestQaVerdict(
   return verdict === "pass" || verdict === "fail" ? verdict : null;
 }
 
+/** Latest multipage site-draft artifact meta for a project (P0 review surface). */
+export async function latestSiteDraftMeta(projectId: string): Promise<{
+  prefix: string;
+  version: number;
+  gateA: string | null;
+  gateB: string | null;
+  pages: Array<{ path: string; title: string }>;
+} | null> {
+  const [run] = await db()
+    .select({ id: schema.pipelineRuns.id })
+    .from(schema.pipelineRuns)
+    .where(eq(schema.pipelineRuns.projectId, projectId))
+    .orderBy(desc(schema.pipelineRuns.createdAt))
+    .limit(1);
+  if (!run) return null;
+  const [art] = await db()
+    .select({ version: schema.artifacts.version, meta: schema.artifacts.meta })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "site_plan")))
+    .orderBy(desc(schema.artifacts.version), desc(schema.artifacts.createdAt))
+    .limit(1);
+  const meta = art?.meta as {
+    prefix?: string;
+    gateA?: string;
+    gateB?: string;
+    pages?: Array<{ path: string; title: string }>;
+  } | null;
+  if (!art || !meta?.prefix) return null;
+  return {
+    prefix: meta.prefix,
+    version: art.version,
+    gateA: meta.gateA ?? null,
+    gateB: meta.gateB ?? null,
+    pages: meta.pages ?? [],
+  };
+}
+
 export async function latestExportZipPath(projectId: string): Promise<string | null> {
   const [run] = await db()
     .select({ id: schema.pipelineRuns.id })

@@ -3,19 +3,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { upload } from "@vercel/blob/client";
 
-/** Prototype-as-product rail — no blueprint / mapping / QA gates. */
-const STEPS = ["Upload", "Extraction", "Design DNA", "Prototype", "Export"] as const;
+/** Multipage-as-product rail — Opus shell is optional preview only. */
+const STEPS = ["Upload", "Extraction", "Design DNA", "Site", "Export"] as const;
 
 type EventRow = { id: number; type: string; createdAt: string };
 
 type BusyWaitKind = "extracting" | "dna_detecting" | "prototype_generating";
 
+type SitePage = { path: string; title: string; previewUrl: string };
+
+type SiteDraft = {
+  draftId: string;
+  version: number;
+  entrypoint: string;
+  pages: SitePage[];
+  gateA: string | null;
+  gateB: string | null;
+  fileCount: number;
+};
+
 /** Soft typical durations for operator wait copy (not hard SLAs). */
 const BUSY_ETA_SECONDS: Record<BusyWaitKind, number> = {
   extracting: Math.round(2.5 * 60),
   dna_detecting: Math.round(1.5 * 60),
-  /** Shell-gen + deterministic table inject — typically ~3–6 min. */
-  prototype_generating: Math.round(4.5 * 60),
+  /** Deterministic SitePlan render — typically under a minute. */
+  prototype_generating: 45,
 }
 
 type ExtractionProgress = {
@@ -154,30 +166,30 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "dna_review":
       return {
         title: "Approve design DNA",
-        hint: "Confirm the measured identity looks faithful before prototype generation.",
+        hint: "Confirm the measured identity looks faithful before the multipage site draft is built.",
       };
     case "prototype_generating":
       return {
-        title: "Generating prototype",
-        hint: "Building the IR layout shell from approved DNA, then injecting full statements. Usually 3–6 minutes.",
+        title: "Building site draft",
+        hint: "Rendering the deterministic multi-page IR site (home, commentary, statements, notes, admin, downloads). Usually under a minute.",
         waiting: true,
       };
     case "in_review":
     case "blueprint_proposed":
       return {
-        title: "Review & refine prototype",
-        hint: "Compare to the source look-and-feel, refine if needed, then approve & export.",
+        title: "Review multipage site",
+        hint: "Walk the page tree beside the source PDF, then approve & export the multipage zip.",
       };
     case "exporting":
       return {
         title: "Packaging export",
-        hint: "Building the multi-page Results Studio site and zipping it. Download appears when status is exported.",
+        hint: "Zipping the multi-page Results Studio site. Download appears when status is exported.",
         waiting: true,
       };
     case "exported":
       return {
         title: "Download microsite",
-        hint: "The zip is a multi-page static site — open index.html locally to navigate pages.",
+        hint: "Open index.html in the zip — that is the product entrypoint (not prototype/).",
       };
     default:
       return {
@@ -222,6 +234,9 @@ export function ProjectConsole(props: {
   const [forceRegen, setForceRegen] = useState(false);
   const [dna, setDna] = useState<DnaSummary | null>(null);
   const [dnaError, setDnaError] = useState<string | null>(null);
+  const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
+  const [siteError, setSiteError] = useState<string | null>(null);
+  const [selectedPagePath, setSelectedPagePath] = useState<string>("index.html");
   const [prototype, setPrototype] = useState<{
     versionId: string;
     versionNumber: number;
@@ -233,7 +248,7 @@ export function ProjectConsole(props: {
   const [prototypeError, setPrototypeError] = useState<string | null>(null);
   const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
   /** Mobile compare tabs — desktop shows both panes. */
-  const [compareTab, setCompareTab] = useState<"prototype" | "source">("prototype");
+  const [compareTab, setCompareTab] = useState<"site" | "source">("site");
   const [now, setNow] = useState(() => Date.now());
   /** Client timestamp when we observed entering a busy wait status. */
   const [clientBusyStartedAt, setClientBusyStartedAt] = useState<number | null>(null);
@@ -241,22 +256,25 @@ export function ProjectConsole(props: {
   const [statusUpdatedAt, setStatusUpdatedAt] = useState<string | null>(null);
   const prevStatusRef = useRef(props.initialStatus);
 
-  const showPrototypePreview =
+  const showSiteReview =
     status === "in_review" ||
     status === "blueprint_proposed" ||
     status === "exported" ||
     exportReady;
 
+  const selectedPage =
+    siteDraft?.pages.find((p) => p.path === selectedPagePath) ?? siteDraft?.pages[0] ?? null;
+
   useEffect(() => {
-    // Wider stage for side-by-side Source PDF | Prototype compare.
+    // Wider stage for side-by-side Source PDF | multipage compare.
     document.documentElement.style.setProperty(
       "--max",
-      showPrototypePreview ? "1560px" : "1240px",
+      showSiteReview ? "1560px" : "1240px",
     );
     return () => {
       document.documentElement.style.removeProperty("--max");
     };
-  }, [showPrototypePreview]);
+  }, [showSiteReview]);
 
   useEffect(() => {
     if (status === prevStatusRef.current) return;
@@ -270,7 +288,56 @@ export function ProjectConsole(props: {
   }, [status]);
 
   useEffect(() => {
-    if (!showPrototypePreview) return;
+    if (!showSiteReview) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${props.projectId}/site`);
+        const data = (await res.json().catch(() => ({}))) as {
+          draftId?: string;
+          version?: number;
+          entrypoint?: string;
+          pages?: SitePage[];
+          gateA?: string | null;
+          gateB?: string | null;
+          fileCount?: number;
+          sourcePdfUrl?: string | null;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (data.sourcePdfUrl) setSourcePdfUrl(data.sourcePdfUrl);
+        if (!res.ok || !data.pages?.length) {
+          setSiteDraft(null);
+          setSiteError(data.error ?? res.statusText);
+          return;
+        }
+        setSiteDraft({
+          draftId: data.draftId ?? "draft",
+          version: data.version ?? 1,
+          entrypoint: data.entrypoint ?? "index.html",
+          pages: data.pages,
+          gateA: data.gateA ?? null,
+          gateB: data.gateB ?? null,
+          fileCount: data.fileCount ?? data.pages.length,
+        });
+        setSelectedPagePath((prev) =>
+          data.pages!.some((p) => p.path === prev) ? prev : (data.entrypoint ?? data.pages![0]!.path),
+        );
+        setSiteError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setSiteDraft(null);
+          setSiteError((err as Error).message);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSiteReview, props.projectId, events.length]);
+
+  useEffect(() => {
+    if (!showSiteReview) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -289,7 +356,7 @@ export function ProjectConsole(props: {
         if (data.sourcePdfUrl) setSourcePdfUrl(data.sourcePdfUrl);
         if (!res.ok || !data.previewUrl || !data.versionId) {
           setPrototype(null);
-          setPrototypeError(data.error ?? res.statusText);
+          setPrototypeError(data.error ?? null);
           return;
         }
         setPrototype({
@@ -301,17 +368,17 @@ export function ProjectConsole(props: {
           sizeBytes: data.sizeBytes ?? null,
         });
         setPrototypeError(null);
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setPrototype(null);
-          setPrototypeError((err as Error).message);
+          setPrototypeError(null);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [showPrototypePreview, props.projectId, events.length]);
+  }, [showSiteReview, props.projectId, events.length]);
 
   useEffect(() => {
     if (status !== "dna_review") return;
@@ -474,7 +541,10 @@ export function ProjectConsole(props: {
       setExportReady(false);
       setDna(null);
       setDnaError(null);
+      setSiteDraft(null);
+      setSiteError(null);
       setPrototype(null);
+      setPrototypeError(null);
       setNote(
         data.documentId
           ? "Ready to run again with the current PDF, or upload a new one first."
@@ -733,10 +803,10 @@ export function ProjectConsole(props: {
               <button
                 type="button"
                 className="rs-btn rs-btn--primary"
-                disabled={busy}
+                disabled={busy || !siteDraft}
                 onClick={() => void approveExport()}
               >
-                Approve &amp; export
+                Approve &amp; export site
               </button>
             ) : null}
             {status === "exported" || exportReady ? (
@@ -894,7 +964,7 @@ export function ProjectConsole(props: {
           <h2 className="rs-section-title">Review design DNA</h2>
           <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
             Measured visual identity from the PDF (palette, type, table treatment). Approve only if
-            it looks faithful — the prototype is constrained by it.
+            it looks faithful — the multipage site draft is styled from these tokens.
           </p>
           {dnaError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
@@ -1050,77 +1120,91 @@ export function ProjectConsole(props: {
 
       {status === "prototype_generating" && waitStats ? (
         <BusyWaitSheet
-          title="Generating prototype"
+          title="Building multipage site draft"
           body={
             <>
-              Building the DNA layout shell (opus), then injecting full financial tables. Usually{" "}
-              <strong>3–6 minutes</strong> — leave this tab open. When it finishes, status becomes{" "}
-              <strong>in review</strong> and you can refine or approve.
+              Rendering the deterministic IR page tree from approved DNA and extraction (SitePlan →
+              HTML). Usually <strong>under a minute</strong>. When it finishes, status becomes{" "}
+              <strong>in review</strong> so you can walk the pages and approve.
             </>
           }
           elapsedSec={waitStats.elapsedSec}
           remainingLabel={formatSoftRemaining(waitStats.remainingSec, waitStats.overdue)}
           overdue={waitStats.overdue}
           pct={waitStats.pct}
-          third={{ label: "Typical", value: "3–6 min", compact: true }}
+          third={{ label: "Typical", value: "~45s", compact: true }}
           footer={
             waitStats.overdue
-              ? "Still working — long runs and a single automatic retry can exceed the typical window."
-              : "Nothing to click right now — waiting on generation."
+              ? "Still working — large extractions can overrun the usual window."
+              : "Nothing to click right now — waiting on the site draft."
           }
         />
       ) : null}
 
-      {showPrototypePreview ? (
+      {showSiteReview ? (
         <section className="rs-sheet rs-fade-up-delay">
-          <h2 className="rs-section-title">Prototype preview</h2>
+          <h2 className="rs-section-title">Multipage site draft</h2>
           <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
-            Source PDF beside the generated HTML so you can compare look-and-feel before
-            refine or approve.
+            This page tree is the product you sign off. Compare each page to the source PDF, then
+            Approve &amp; export. Entrypoint is <code>index.html</code>.
           </p>
-          {prototypeError ? (
+          {siteError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
-              Could not load prototype: {prototypeError}
+              Could not load site draft: {siteError}
             </p>
           ) : null}
-          {!prototype && !prototypeError ? (
+          {!siteDraft && !siteError ? (
             <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
-              Loading prototype…
+              Loading multipage draft…
             </p>
           ) : null}
-          {prototype || sourcePdfUrl ? (
+          {siteDraft ? (
             <>
               <div className="rs-preview-toolbar">
                 <span>
-                  {prototype
-                    ? `v${prototype.versionNumber} · ${prototype.refinementMode}${
-                        prototype.sizeBytes != null
-                          ? ` · ${Math.round(prototype.sizeBytes / 1024)} KB`
-                          : ""
-                      }`
-                    : "Source document"}
-                </span>
-                {prototype ? (
-                  <div className="rs-viewport" role="group" aria-label="Preview width">
-                    {(
-                      [
-                        [390, "Phone"],
-                        [768, "Tablet"],
-                        [1280, "Desktop"],
-                        ["full", "Full"],
-                      ] as const
-                    ).map(([w, label]) => (
-                      <button
-                        key={label}
-                        type="button"
-                        aria-pressed={previewWidth === w}
-                        onClick={() => setPreviewWidth(w)}
+                  Draft v{siteDraft.version} · {siteDraft.fileCount} files · entry{" "}
+                  <code>{siteDraft.entrypoint}</code>
+                  {siteDraft.gateA || siteDraft.gateB ? (
+                    <>
+                      {" "}
+                      · Gate A{" "}
+                      <span
+                        style={{
+                          color: siteDraft.gateA === "pass" ? "var(--signal)" : "var(--danger)",
+                        }}
                       >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                        {siteDraft.gateA ?? "—"}
+                      </span>
+                      {" · "}Gate B{" "}
+                      <span
+                        style={{
+                          color: siteDraft.gateB === "pass" ? "var(--signal)" : "var(--danger)",
+                        }}
+                      >
+                        {siteDraft.gateB ?? "—"}
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+                <div className="rs-viewport" role="group" aria-label="Preview width">
+                  {(
+                    [
+                      [390, "Phone"],
+                      [768, "Tablet"],
+                      [1280, "Desktop"],
+                      ["full", "Full"],
+                    ] as const
+                  ).map(([w, label]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={previewWidth === w}
+                      onClick={() => setPreviewWidth(w)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <div className="rs-preview-links">
                   {sourcePdfUrl ? (
                     <a
@@ -1133,159 +1217,231 @@ export function ProjectConsole(props: {
                       PDF in new tab
                     </a>
                   ) : null}
-                  {prototype ? (
+                  {selectedPage ? (
                     <a
-                      href={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
+                      href={selectedPage.previewUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="rs-tiny"
                       style={{ color: "var(--signal)" }}
                     >
-                      Prototype in new tab
+                      Page in new tab
                     </a>
                   ) : null}
                 </div>
               </div>
-              <div
-                className="rs-compare-tabs"
-                role="tablist"
-                aria-label="Compare panes"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={compareTab === "prototype"}
-                  onClick={() => setCompareTab("prototype")}
-                >
-                  Prototype
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={compareTab === "source"}
-                  onClick={() => setCompareTab("source")}
-                >
-                  Source PDF
-                </button>
-              </div>
-              <div
-                className={`rs-compare rs-compare--${compareTab}`}
-                data-active-tab={compareTab}
-              >
-                <div className="rs-compare__pane rs-compare__pane--source">
-                  <div className="rs-compare__label">Source PDF</div>
-                  <div className="rs-compare__body">
-                    {sourcePdfUrl ? (
-                      <iframe
-                        title="Source PDF"
-                        src={`${sourcePdfUrl}#view=FitH`}
-                      />
-                    ) : (
-                      <p className="rs-muted rs-compare__empty">
-                        No source PDF on this project yet.
-                      </p>
-                    )}
+
+              <div className="rs-site-layout">
+                <nav className="rs-page-tree" aria-label="Site pages">
+                  <div className="rs-page-tree__label">Pages</div>
+                  <ul>
+                    {siteDraft.pages.map((p) => (
+                      <li key={p.path}>
+                        <button
+                          type="button"
+                          className={
+                            selectedPage?.path === p.path ? "rs-page-tree__item is-active" : "rs-page-tree__item"
+                          }
+                          onClick={() => setSelectedPagePath(p.path)}
+                        >
+                          <span className="rs-page-tree__title">{p.title}</span>
+                          <span className="rs-page-tree__path">{p.path}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+
+                <div className="rs-site-preview">
+                  <div
+                    className="rs-compare-tabs"
+                    role="tablist"
+                    aria-label="Compare panes"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={compareTab === "site"}
+                      onClick={() => setCompareTab("site")}
+                    >
+                      Site page
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={compareTab === "source"}
+                      onClick={() => setCompareTab("source")}
+                    >
+                      Source PDF
+                    </button>
                   </div>
-                </div>
-                <div className="rs-compare__pane rs-compare__pane--prototype">
-                  <div className="rs-compare__label">Prototype</div>
-                  <div className="rs-compare__body rs-preview-frame">
-                    {prototype ? (
-                      <iframe
-                        key={prototype.versionId}
-                        title={`Prototype v${prototype.versionNumber}`}
-                        src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
-                        sandbox="allow-scripts"
-                        style={{
-                          width: previewWidth === "full" ? "100%" : previewWidth,
-                        }}
-                      />
-                    ) : (
-                      <p className="rs-muted rs-compare__empty">
-                        {prototypeError
-                          ? "Prototype unavailable."
-                          : "Waiting for prototype…"}
-                      </p>
-                    )}
+                  <div
+                    className={`rs-compare rs-compare--${compareTab === "site" ? "prototype" : "source"}`}
+                    data-active-tab={compareTab === "site" ? "prototype" : "source"}
+                  >
+                    <div className="rs-compare__pane rs-compare__pane--source">
+                      <div className="rs-compare__label">Source PDF</div>
+                      <div className="rs-compare__body">
+                        {sourcePdfUrl ? (
+                          <iframe title="Source PDF" src={`${sourcePdfUrl}#view=FitH`} />
+                        ) : (
+                          <p className="rs-muted rs-compare__empty">
+                            No source PDF on this project yet.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rs-compare__pane rs-compare__pane--prototype">
+                      <div className="rs-compare__label">
+                        {selectedPage ? selectedPage.title : "Site page"}
+                      </div>
+                      <div className="rs-compare__body rs-preview-frame">
+                        {selectedPage ? (
+                          <iframe
+                            key={selectedPage.path}
+                            title={selectedPage.title}
+                            src={selectedPage.previewUrl}
+                            sandbox="allow-scripts"
+                            style={{
+                              width: previewWidth === "full" ? "100%" : previewWidth,
+                            }}
+                          />
+                        ) : (
+                          <p className="rs-muted rs-compare__empty">Select a page.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </>
           ) : null}
+
+          {status === "in_review" ? (
+            <div className="rs-row" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="rs-btn rs-btn--primary"
+                disabled={busy || !siteDraft}
+                onClick={() => void approveExport()}
+              >
+                Approve &amp; export multipage site
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
-      {status === "in_review" ? (
-        <section className="rs-sheet">
-          <h2 className="rs-section-title">Refine prototype</h2>
-          <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
-            Patch-first edits against the current prototype. Numbers cannot change — describe
-            layout, styling, or non-numeric copy only. When it looks right, Approve &amp; export.
+      {showSiteReview ? (
+        <details className="rs-sheet rs-optional-preview">
+          <summary>
+            Optional Opus design preview
+            {prototype ? ` · v${prototype.versionNumber}` : " · not on this run"}
+          </summary>
+          <p className="rs-muted" style={{ fontSize: 14, marginTop: 12 }}>
+            Single-file shell is preview-only and is not the export entrypoint. Prefer signing off
+            the multipage page tree above.
           </p>
-          <textarea
-            value={refinePrompt}
-            onChange={(e) => setRefinePrompt(e.target.value)}
-            placeholder="e.g. Make the masthead tighter and move KPIs into a single horizontal band."
-            rows={3}
-            disabled={busy}
-            className="rs-field"
-          />
-          <label className="rs-check">
-            <input
-              type="checkbox"
-              checked={forceRegen}
-              disabled={busy}
-              onChange={(e) => setForceRegen(e.target.checked)}
-            />
-            Force full regen (slow / expensive — only if patch cannot express the change)
-          </label>
-          <div className="rs-row">
-            <button
-              type="button"
-              className="rs-btn rs-btn--primary"
-              disabled={busy || !refinePrompt.trim()}
-              onClick={() => {
-                const prompt = refinePrompt.trim();
-                if (!prompt) return;
-                const fromVersion = prototype?.versionNumber ?? 0;
-                void gate(
-                  "review",
-                  {
-                    type: "refine",
-                    prompt,
-                    base_version_id: "",
-                    force_mode: forceRegen ? "regen" : null,
-                    actor_user_id: "operator",
-                  },
-                  forceRegen ? "Full regen" : "Refine",
-                ).then((ok) => {
-                  if (!ok) return;
-                  setNote(
-                    `Refine accepted from v${fromVersion}. Patching now — wait for the preview version to bump (do not click Start over).`,
-                  );
-                });
-              }}
-            >
-              {forceRegen ? "Rebuild prototype" : "Send refine"}
-            </button>
-            <button
-              type="button"
-              className="rs-btn rs-btn--ghost"
-              disabled={busy}
-              onClick={() => void approveExport()}
-            >
-              Approve &amp; export
-            </button>
-          </div>
-        </section>
+          {prototype ? (
+            <>
+              <div className="rs-preview-toolbar">
+                <span>
+                  v{prototype.versionNumber} · {prototype.refinementMode}
+                  {prototype.sizeBytes != null
+                    ? ` · ${Math.round(prototype.sizeBytes / 1024)} KB`
+                    : ""}
+                </span>
+                <a
+                  href={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rs-tiny"
+                  style={{ color: "var(--signal)" }}
+                >
+                  Open in new tab
+                </a>
+              </div>
+              <div className="rs-preview-frame">
+                <iframe
+                  key={prototype.versionId}
+                  title={`Optional prototype v${prototype.versionNumber}`}
+                  src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
+                  sandbox="allow-scripts"
+                  style={{ width: "100%" }}
+                />
+              </div>
+              {status === "in_review" ? (
+                <div style={{ marginTop: 16 }}>
+                  <p className="rs-muted" style={{ fontSize: 13 }}>
+                    Advanced: patch the optional preview (numbers cannot change). This does not
+                    replace multipage sign-off.
+                  </p>
+                  <textarea
+                    value={refinePrompt}
+                    onChange={(e) => setRefinePrompt(e.target.value)}
+                    placeholder="e.g. Tighten the masthead on the optional preview."
+                    rows={2}
+                    disabled={busy}
+                    className="rs-field"
+                  />
+                  <label className="rs-check">
+                    <input
+                      type="checkbox"
+                      checked={forceRegen}
+                      disabled={busy}
+                      onChange={(e) => setForceRegen(e.target.checked)}
+                    />
+                    Force full regen (slow / expensive)
+                  </label>
+                  <div className="rs-row">
+                    <button
+                      type="button"
+                      className="rs-btn rs-btn--ghost"
+                      disabled={busy || !refinePrompt.trim()}
+                      onClick={() => {
+                        const prompt = refinePrompt.trim();
+                        if (!prompt) return;
+                        const fromVersion = prototype.versionNumber;
+                        void gate(
+                          "review",
+                          {
+                            type: "refine",
+                            prompt,
+                            base_version_id: "",
+                            force_mode: forceRegen ? "regen" : null,
+                            actor_user_id: "operator",
+                          },
+                          forceRegen ? "Full regen" : "Refine preview",
+                        ).then((ok) => {
+                          if (!ok) return;
+                          setNote(
+                            `Optional preview refine accepted from v${fromVersion}. Wait for version bump.`,
+                          );
+                        });
+                      }}
+                    >
+                      {forceRegen ? "Rebuild optional preview" : "Refine optional preview"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0 0" }}>
+              {prototypeError
+                ? "No Opus preview on this run (expected for multipage-first pipelines)."
+                : "Checking for optional preview…"}
+            </p>
+          )}
+        </details>
       ) : null}
 
       {status === "exporting" ? (
         <section className="rs-sheet" aria-live="polite">
-          <h2 className="rs-section-title">Packaging export</h2>
+          <h2 className="rs-section-title">Packaging multipage export</h2>
           <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
-            Building the multi-page Results Studio site (home, commentary, statements, notes,
-            administration, downloads). Download appears when status becomes{" "}
+            Zipping the multi-page site (home, commentary, statements, notes, administration,
+            downloads). Entrypoint is <code>index.html</code>. Download appears when status becomes{" "}
             <strong>exported</strong>.
           </p>
         </section>
@@ -1295,14 +1451,22 @@ export function ProjectConsole(props: {
         <section className="rs-sheet">
           <h2 className="rs-section-title">Export ready</h2>
           <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
-            Download the zip, unzip it, and open <code>index.html</code> in a browser to navigate
-            the multi-page site (sticky Financials nav, breadcrumbs, previous/next).
+            Download the zip, unzip it, and open <code>index.html</code> — the multipage IR site
+            (sticky Financials nav, breadcrumbs, previous/next).{" "}
+            <code>prototype/</code> is optional legacy preview only when present.
             {exportInfo?.fileCount ? (
               <>
                 {" "}
                 Bundle has <strong>{exportInfo.fileCount}</strong> file
                 {exportInfo.fileCount === 1 ? "" : "s"}
-                {exportInfo.mode ? <> · mode <code>{exportInfo.mode}</code></> : null}.
+                {exportInfo.mode ? <> · mode <code>{exportInfo.mode}</code></> : null}
+                {exportInfo.entrypoint ? (
+                  <>
+                    {" "}
+                    · entry <code>{exportInfo.entrypoint}</code>
+                  </>
+                ) : null}
+                .
               </>
             ) : null}
           </p>
@@ -1416,7 +1580,7 @@ function stepIndexForStatus(status: string): number {
     dna_review: 2,
     prototype_generating: 3,
     in_review: 3,
-    // Legacy mid-pipeline statuses collapse onto Prototype / Export.
+    // Legacy mid-pipeline statuses collapse onto Site / Export.
     blueprint_extracting: 3,
     blueprint_proposed: 3,
     locked: 3,
