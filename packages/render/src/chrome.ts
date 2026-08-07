@@ -28,6 +28,8 @@ export interface PageChrome {
   company?: string;
   periodLabel?: string;
   description?: string;
+  /** Optional precomposed head meta (from SeoComposer). */
+  seoHeadHtml?: string;
 }
 
 const FINANCIALS_PREFIX = "financials/";
@@ -67,6 +69,9 @@ function hrefFrom(fromPath: string, toPath: string): string {
 }
 
 export function renderSeoHead(page: PageChrome, css: string): string {
+  if (page.seoHeadHtml) {
+    return `${page.seoHeadHtml}\n<style>${css}</style>`;
+  }
   const company = page.company?.trim() || "";
   const title = company ? `${escapeHtml(page.title)} · ${escapeHtml(company)}` : escapeHtml(page.title);
   const desc =
@@ -77,6 +82,7 @@ export function renderSeoHead(page: PageChrome, css: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title>
 <meta name="description" content="${escapeHtml(desc)}">
+<meta property="og:type" content="website">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${escapeHtml(desc)}">
 <meta name="robots" content="index,follow">
@@ -246,19 +252,49 @@ mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#B8912A) 28%,transpa
 .page-hero__sub{margin:0;font-size:.95rem;color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff));max-width:40rem}
 .page-title-banner{max-width:1120px;margin:0 auto;padding:1.25rem clamp(1rem,3vw,2rem) .5rem}
 .page-title-banner h1{margin:0;font-family:var(--dna-font-heading,Georgia,serif);font-size:clamp(1.35rem,2.4vw,1.85rem);font-weight:600;color:var(--dna-ink,#231F20)}
-.home-hero{max-width:1120px;margin:0 auto;padding:2.25rem clamp(1rem,3vw,2rem) 1.25rem}
-.home-kicker{margin:0 0 .35rem;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dna-brand,#B8912A);font-weight:700}
-.home-hero h1{margin:0 0 .5rem;font-family:var(--dna-font-heading,Georgia,serif);font-size:clamp(1.75rem,3.5vw,2.6rem);line-height:1.15}
-.home-period{margin:0 0 1rem;color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff));max-width:36rem}
-.home-cta{display:flex;flex-wrap:wrap;gap:.75rem}
-.home-cta a{color:var(--dna-brand,#B8912A);font-size:.9rem}
-.home-body,.prose-body,.page-statement{max-width:1120px;margin:0 auto;padding:1rem clamp(1rem,3vw,2rem) 1.25rem;display:grid;gap:1.25rem}
+.home-hero{max-width:none;margin:0;padding:0;background:linear-gradient(165deg,color-mix(in srgb,var(--dna-shading,#F2F2F2) 70%,var(--dna-paper,#fff)) 0%,var(--dna-paper,#fff) 55%,color-mix(in srgb,var(--dna-brand,#B8912A) 8%,var(--dna-paper,#fff)) 100%);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent)}
+.home-hero__inner{max-width:1120px;margin:0 auto;padding:2.75rem clamp(1rem,3vw,2rem) 2rem}
+.home-kicker{margin:0 0 .45rem;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dna-brand,#B8912A);font-weight:700}
+.home-hero h1{margin:0 0 .55rem;font-family:var(--dna-font-heading,Georgia,serif);font-size:clamp(2rem,4.2vw,3rem);line-height:1.12;letter-spacing:-.02em}
+.home-period{margin:0 0 .85rem;font-size:1.05rem;color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff));max-width:40rem}
+.home-lede{margin:0 0 1.35rem;max-width:38rem;font-size:1.02rem;line-height:1.55;color:color-mix(in srgb,var(--dna-ink,#111) 78%,var(--dna-paper,#fff))}
+.home-cta{display:flex;flex-wrap:wrap;gap:.75rem 1rem;align-items:center}
+.home-cta__primary{display:inline-block;padding:.65rem 1.15rem;background:var(--dna-brand,#B8912A);color:var(--dna-paper,#fff)!important;text-decoration:none;font-size:.88rem;font-weight:600;letter-spacing:.02em}
+.home-cta__secondary{color:var(--dna-brand,#B8912A);font-size:.9rem;text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--dna-brand,#B8912A) 45%,transparent)}
+.home-body,.prose-body,.page-statement{max-width:1120px;margin:0 auto;padding:1.5rem clamp(1rem,3vw,2rem) 1.5rem;display:grid;gap:2rem}
+.section-hdr{margin:0 0 1rem}
+.section-hdr__title{margin:0 0 .25rem;font-family:var(--dna-font-heading,Georgia,serif);font-size:clamp(1.35rem,2.2vw,1.75rem);font-weight:700;color:var(--dna-ink,#231F20)}
+.section-hdr__sub{margin:0;font-size:.9rem;color:color-mix(in srgb,var(--dna-ink,#111) 58%,var(--dna-paper,#fff))}
+.kpi-band .kpi-grid{margin:0}
 .highlights .prose-p,.prose-p{margin:.35rem 0;line-height:1.55}
-.explore-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.75rem}
-.explore-card{display:flex;gap:.65rem;align-items:baseline;padding:.85rem 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 16%,transparent);color:inherit;text-decoration:none}
-.explore-card.reveal{/* reveal opacity owned by .reveal */}
-.explore-n{font-size:.72rem;letter-spacing:.06em;color:var(--dna-brand,#B8912A)}
-.explore-label{font-family:var(--dna-font-heading,Georgia,serif)}
+.highlights-band .highlight-list{list-style:none;margin:0;padding:0;display:grid;gap:.65rem}
+.highlight-item{padding:.85rem 1rem;border-left:3px solid var(--dna-brand,#B8912A);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 45%,var(--dna-paper,#fff));font-size:.95rem;line-height:1.5}
+.explore-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(16.5rem,1fr));gap:1rem}
+.explore-card{display:flex;gap:.85rem;align-items:flex-start;padding:1.15rem 1.2rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 14%,transparent);background:linear-gradient(180deg,var(--dna-paper,#fff),color-mix(in srgb,var(--dna-shading,#F2F2F2) 35%,var(--dna-paper,#fff)));color:inherit;text-decoration:none;min-height:9.5rem;transition:border-color .2s ease,transform .2s ease}
+.explore-card:hover{border-color:var(--dna-brand,#B8912A);transform:translateY(-2px)}
+.explore-n{font-size:.72rem;letter-spacing:.08em;color:var(--dna-brand,#B8912A);font-weight:700;flex-shrink:0;padding-top:.15rem}
+.explore-card__body{display:flex;flex-direction:column;gap:.4rem;min-width:0}
+.explore-label{font-family:var(--dna-font-heading,Georgia,serif);font-size:1.15rem;font-weight:700;line-height:1.25}
+.explore-desc{font-size:.88rem;line-height:1.45;color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff))}
+.explore-cta{margin-top:auto;padding-top:.35rem;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;color:var(--dna-brand,#B8912A);font-weight:600}
+.commentary-toc{display:flex;flex-wrap:wrap;align-items:baseline;gap:.65rem 1.25rem;padding:.85rem 0 1.25rem;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);margin-bottom:.25rem}
+.commentary-toc__label{margin:0;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff));font-weight:700}
+.commentary-toc__links{display:flex;flex-wrap:wrap;gap:.5rem 1rem}
+.commentary-toc__link{color:var(--dna-brand,#B8912A);text-decoration:none;font-size:.92rem}
+.commentary-toc__link:hover{text-decoration:underline}
+.commentary-section{scroll-margin-top:5rem;padding:1.5rem 0 1.75rem;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent)}
+.commentary-section:last-of-type{border-bottom:0}
+.commentary-section__hdr{margin:0 0 1.15rem;max-width:40rem}
+.commentary-section__eyebrow{margin:0 0 .35rem;font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--dna-brand,#B8912A);font-weight:700}
+.commentary-section__title{margin:0;font-family:var(--dna-font-heading,Georgia,serif);font-size:clamp(1.4rem,2.4vw,1.85rem);font-weight:700;line-height:1.2}
+.commentary-section__doc-title{margin:0 0 .85rem;font-family:var(--dna-font-heading,Georgia,serif);font-size:1.1rem}
+.commentary-dek{margin:0 0 1rem;font-size:1.05rem;line-height:1.5;color:color-mix(in srgb,var(--dna-ink,#111) 75%,var(--dna-paper,#fff))}
+.prose-rail{max-width:42rem}
+.prose-rail .prose-p,.prose-rail .prose-subh,.prose-rail .prose-signoff{max-width:42rem}
+.prose-subh{margin:1.35rem 0 .55rem;font-family:var(--dna-font-heading,Georgia,serif);font-size:1.15rem;font-weight:700;line-height:1.3}
+.prose-ul{margin:.5rem 0 1rem;padding-left:1.2rem}
+.prose-li{margin:.35rem 0;line-height:1.55}
+.prose-signoff{margin:1.5rem 0 .35rem;font-weight:600}
 .download-list{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}
 .download-list li{padding:.85rem 0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent)}
 .dl-label{display:block;font-weight:600}

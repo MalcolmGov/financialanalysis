@@ -1,6 +1,7 @@
 import type { FinancialDocModel, SitePlan } from "@rs/contracts";
 import { renderBreadcrumb } from "./chrome.js";
-import { renderKpiCardsHtml, segmentHighlightKpis } from "./home-kpis.js";
+import { composeCommentaryBody } from "./commentary-composer.js";
+import { composeHome } from "./home-composer.js";
 import { noteAnchorId, noteNumberFromTitle } from "./notes-linker.js";
 
 /**
@@ -55,61 +56,6 @@ function wrapLooseListItems(html: string): string {
   return html.replace(/(?:<li class="prose-li"[^>]*>[\s\S]*?<\/li>\n?)+/g, (block) => {
     return `<ul class="prose-ul">${block}</ul>`;
   });
-}
-
-function exploreCards(plan: SitePlan): string {
-  const cards = plan.nav
-    .filter((n) => n.href !== "index.html")
-    .map((n, i) => {
-      const n_ = String(i + 1).padStart(2, "0");
-      // Decorative card index — not a financial figure (Gate B allow-list).
-      return `<a class="explore-card reveal" href="${escapeHtml(n.href)}"><span class="explore-n" data-allow-number>${n_}</span><span class="explore-label">${escapeHtml(n.label)}</span></a>`;
-    })
-    .join("");
-  return `<section class="explore" aria-label="Explore the report"><h2 class="prose-h">Explore the report</h2><div class="explore-grid">${cards}</div></section>`;
-}
-
-/** Flatten highlights blocks into plain text for KPI segmentation. */
-function highlightsPlain(docModel: FinancialDocModel): { text: string; src?: string } {
-  const hi = docModel.sections.find((s) => s.kind === "highlights");
-  if (!hi) return { text: "" };
-  const parts: string[] = [];
-  let src: string | undefined;
-  for (const b of hi.blocks) {
-    if (b.kind === "table" || b.kind === "heading") continue;
-    const t = b.text?.trim();
-    if (!t) continue;
-    parts.push(t);
-    if (!src && b.src_ref) src = b.src_ref;
-  }
-  return { text: parts.join(" "), src };
-}
-
-function highlightsHtml(docModel: FinancialDocModel): string {
-  const hi = docModel.sections.find((s) => s.kind === "highlights");
-  if (!hi) return "";
-  const { text, src } = highlightsPlain(docModel);
-  const kpis = segmentHighlightKpis(text, src);
-  const kpiHtml = renderKpiCardsHtml(kpis);
-  const body = wrapLooseListItems(
-    sectionBlocksHtml(
-      docModel.sections.filter((s) => s.kind === "highlights"),
-      ["highlights"],
-    ),
-  );
-  // KPI cards (motion) + provenance-preserving prose highlights underneath.
-  return `${kpiHtml}<section class="highlights reveal" aria-label="Highlights">${body || "<p class=\"prose-p\">Highlights from the interim results.</p>"}</section>`;
-}
-
-function homeHero(docModel: FinancialDocModel): string {
-  const company = escapeHtml(docModel.meta.company || "Results");
-  const period = escapeHtml(docModel.meta.period_label || "");
-  return `<header class="home-hero" data-dna-component="home-hero">
-<p class="home-kicker">Interactive results</p>
-<h1>${company}</h1>
-${period ? `<p class="home-period" data-allow-number>${period}</p>` : ""}
-<p class="home-cta"><a href="commentary.html">Read commentary</a><a href="financials/income-statement.html">View financials</a></p>
-</header>`;
 }
 
 function downloadsHtml(docModel: FinancialDocModel): string {
@@ -296,16 +242,14 @@ export function enrichMultiPageFiles(
   const periodLabel = docModel.meta.period_label;
 
   if (out["index.html"]) {
-    let html = replaceHomeHero(out["index.html"], homeHero(docModel));
-    const body = `${highlightsHtml(docModel)}${exploreCards(plan)}`;
-    html = injectInto(html, "home-body", body);
+    const home = composeHome(plan, docModel);
+    let html = replaceHomeHero(out["index.html"], home.heroHtml);
+    html = injectInto(html, "home-body", home.bodyHtml);
     out["index.html"] = html;
   }
 
   if (out["commentary.html"]) {
-    const prose = wrapLooseListItems(
-      sectionBlocksHtml(docModel.sections, ["letter", "reviewOfOperations", "dividendDeclaration"]),
-    );
+    const prose = composeCommentaryBody(docModel);
     const content =
       pageHero({
         path: "commentary.html",
@@ -313,8 +257,7 @@ export function enrichMultiPageFiles(
         company,
         periodLabel,
         eyebrow: "Shareholder letter & operations",
-      }) +
-      (prose || `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter.</p>`);
+      }) + prose;
     out["commentary.html"] = injectInto(out["commentary.html"], "prose-body", content);
   }
 

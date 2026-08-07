@@ -79,6 +79,16 @@ async function main() {
     ["selection tooltip", home.includes("share-tooltip") && home.includes("sel-share-mark")],
     ["KPI count-up", home.includes("data-countup") && home.includes("kpi-card")],
     ["reveal hooks", home.includes("class=\"kpi-card reveal\"") || home.includes("kpi-card reveal")],
+    // P3 — editorial home / commentary / SEO
+    ["home hero lede", home.includes("home-lede") && home.includes("home-cta__primary")],
+    ["home explore desc", home.includes("explore-desc") && home.includes("Explore the report")],
+    ["home highlights band", home.includes("highlights-band") || home.includes('data-dna-component="highlights"')],
+    ["home KPI band", home.includes('data-dna-component="kpi-band"') || home.includes("kpi-band")],
+    ["commentary sections", (built.files["commentary.html"] ?? "").includes("commentary-section") && (built.files["commentary.html"] ?? "").includes('id="letter"')],
+    ["commentary toc", (built.files["commentary.html"] ?? "").includes("commentary-toc") || (built.files["commentary.html"] ?? "").includes("commentary-section")],
+    ["SEO JSON-LD Report", home.includes("application/ld+json") && home.includes('"@type":"Report"')],
+    ["SEO OG tags", home.includes('property="og:type"') && home.includes('property="og:site_name"')],
+    ["SEO canonical", home.includes('rel="canonical"')],
     ["gate A", built.gateA.status === "pass"],
     ["gate B", built.gateB.status === "pass"],
   ] as const;

@@ -11,11 +11,11 @@ import {
   renderBreadcrumb,
   renderPrevNext,
   renderSelectionTooltip,
-  renderSeoHead,
   renderShareBar,
   renderStickyNav,
 } from "./chrome.js";
 import { enrichMultiPageFiles } from "./enrich.js";
+import { extractHomeKpis } from "./home-composer.js";
 import { linkNoteRefHtml, notesBaseHref } from "./notes-linker.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
 import {
@@ -23,6 +23,7 @@ import {
   rowHasNumeric,
   rowRoleClass,
 } from "./row-taxonomy.js";
+import { composeSeoHead } from "./seo.js";
 import { SITE_RUNTIME_JS, siteRuntimeHref } from "./site-runtime.js";
 
 /**
@@ -210,6 +211,9 @@ export function renderSitePlan(
   const multiPage = plan.pages.length > 1 || plan.model === "deterministic-multipage";
   const company = ctx.docModel?.meta?.company;
   const periodLabel = ctx.docModel?.meta?.period_label;
+  const docKind = ctx.docModel?.meta?.doc_kind;
+  const currency = ctx.docModel?.meta?.currency;
+  const homeKpis = ctx.docModel ? extractHomeKpis(ctx.docModel) : [];
   // Exclude legacy aggregate from prev/next so WW IA pages chain cleanly.
   const pageOrder = plan.pages
     .filter((p) => !p.path.startsWith("statements/"))
@@ -238,12 +242,15 @@ export function renderSitePlan(
 
     const css = ensureStatementCss(blueprint.tokens.css ?? "") + (multiPage ? `\n${CHROME_CSS}` : "");
     const head = multiPage
-      ? renderSeoHead(
+      ? composeSeoHead(
           {
             path: page.path,
             title: page.title,
             company,
             periodLabel,
+            docKind,
+            currency,
+            kpis: homeKpis,
           },
           css,
         )
