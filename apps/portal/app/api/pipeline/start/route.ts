@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { start } from "workflow/api";
 import type { PipelineInput } from "@rs/contracts";
 import { resultsPipeline } from "../../../../workflows/pipeline";
@@ -32,6 +32,12 @@ export async function POST(request: Request): Promise<Response> {
   };
 
   if (!env.MOCK_BLOB) {
+    // Fresh cycle ⇒ unique DNA/review hook tokens (avoids HookConflictError with
+    // abandoned WDK runs that still hold dna:{project}:cN).
+    await db()
+      .update(schema.projects)
+      .set({ cycle: sql`${schema.projects.cycle} + 1`, updatedAt: new Date() })
+      .where(eq(schema.projects.id, projectId));
     await db()
       .insert(schema.pipelineRuns)
       .values({ id: runId, projectId, documentId, status: "running" });

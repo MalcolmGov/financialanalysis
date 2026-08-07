@@ -16,6 +16,7 @@ export async function parkProjectForFreshStart(projectId: string): Promise<{
     .select({
       id: schema.projects.id,
       currentDocumentId: schema.projects.currentDocumentId,
+      cycle: schema.projects.cycle,
     })
     .from(schema.projects)
     .where(eq(schema.projects.id, projectId))
@@ -43,13 +44,16 @@ export async function parkProjectForFreshStart(projectId: string): Promise<{
     .where(eq(schema.prototypeVersions.projectId, projectId));
 
   const nextStatus = project.currentDocumentId ? "uploaded" : "created";
+  // Bump cycle so DNA/review hook tokens don't collide with abandoned WDK runs
+  // that still hold dna:{projectId}:c{N} in the workflow world.
+  const nextCycle = Math.max(1, (project.cycle ?? 1) + 1);
   await db()
     .update(schema.projects)
     .set({
       status: nextStatus,
       pipelineRunId: null,
       currentBlueprintId: null,
-      cycle: 1,
+      cycle: nextCycle,
       updatedAt: new Date(),
     })
     .where(eq(schema.projects.id, projectId));

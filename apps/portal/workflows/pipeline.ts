@@ -7,6 +7,7 @@ import {
   type ProgressEvent,
   type ReviewGateEvent,
 } from "@rs/contracts";
+import { eq } from "drizzle-orm";
 import {
   buildPrototypeExport,
   detectDnaArtifact,
@@ -29,6 +30,7 @@ export async function resultsPipeline(input: PipelineInput) {
   "use workflow";
 
   const { project_id: projectId, run_id: runId } = input;
+  const cycle = await loadProjectCycle(projectId);
 
   await setProjectStatus(runId, projectId, "extracting");
   const extraction = await runExtraction(input);
@@ -38,7 +40,7 @@ export async function resultsPipeline(input: PipelineInput) {
 
   await setProjectStatus(runId, projectId, "dna_review");
   using dnaHook = createHook<{ approve: boolean }>({
-    token: hookTokens.dna(projectId, 1),
+    token: hookTokens.dna(projectId, cycle),
   });
   await emit(runId, "awaiting.dna");
   await dnaHook;
@@ -46,7 +48,6 @@ export async function resultsPipeline(input: PipelineInput) {
   await setProjectStatus(runId, projectId, "prototype_generating");
   await generatePrototypeArtifact(runId, projectId, dna, extraction, 1);
 
-  const cycle = 1;
   await setProjectStatus(runId, projectId, "in_review", cycle);
   using reviewHook = createHook<ReviewGateEvent>({
     token: hookTokens.review(projectId, cycle),
@@ -76,6 +77,18 @@ export async function resultsPipeline(input: PipelineInput) {
   }
 
   return { status: "cancelled" as const };
+}
+
+async function loadProjectCycle(projectId: string): Promise<number> {
+  "use step";
+  const { getDb, schema } = await import("../lib/db/workflow-db");
+  const db = await getDb();
+  const [row] = await db
+    .select({ cycle: schema.projects.cycle })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+  return row?.cycle ?? 1;
 }
 
 async function emit(runId: string, type: ProgressEvent["type"], detail?: string) {
