@@ -18,6 +18,8 @@ export const READABLE_CSS = `
   --rs-rule:color-mix(in srgb,var(--dna-ink,#231F20) 32%,var(--dna-paper,#fff));
   --rs-header-bg:color-mix(in srgb,var(--dna-table-header-bg,#839097) 68%,var(--dna-ink,#231F20));
   --rs-header-bg-emph:color-mix(in srgb,var(--dna-table-header-bg,#839097) 48%,var(--dna-ink,#231F20));
+  /* Soft current-period column fill — DNA table-shading when set, else light ink tint */
+  --rs-period-shade:var(--dna-shading,var(--dna-table-shading,color-mix(in srgb,var(--dna-ink,#231F20) 8%,var(--dna-paper,#fff))));
   /* Page/content rail for section heads + statements; prose uses a narrower reading measure */
   --rs-content-max:min(1120px,100%);
   --rs-content:var(--rs-content-max);
@@ -346,24 +348,31 @@ thead th:first-child,
   text-align:left;
 }
 /* Current-period shading must never replace thead with light paper fill */
-table[data-cur-col~="2"] thead th:nth-child(2),
-table[data-cur-col~="3"] thead th:nth-child(3),
-table[data-cur-col~="4"] thead th:nth-child(4),
-table[data-cur-col~="5"] thead th:nth-child(5),
-table[data-cur-col~="6"] thead th:nth-child(6),
-thead th.cur{
+thead th.cur,
+table[data-cur-col] thead th.cur{
   background:var(--rs-header-bg-emph)!important;
   color:var(--dna-table-header-text,#fff)!important;
 }
-/* Current-period body column — soft grey from DNA table-shading */
+/* Current-period body + any non-thead sub-header cells — soft grey column fill */
 tbody td.cur,
 tbody th.cur,
+table[data-cur-col] tbody td.cur,
+table[data-cur-col] tbody th.cur{
+  background:var(--rs-period-shade)!important;
+}
+/* nth-child fallback when .cur not applied (simple single-header tables) */
 table[data-cur-col~="2"] tbody td:nth-child(2),
 table[data-cur-col~="3"] tbody td:nth-child(3),
 table[data-cur-col~="4"] tbody td:nth-child(4),
 table[data-cur-col~="5"] tbody td:nth-child(5),
-table[data-cur-col~="6"] tbody td:nth-child(6){
-  background:var(--dna-shading,#E9E7E4)!important;
+table[data-cur-col~="6"] tbody td:nth-child(6),
+table[data-cur-col~="7"] tbody td:nth-child(7),
+table[data-cur-col~="8"] tbody td:nth-child(8),
+table[data-cur-col~="9"] tbody td:nth-child(9),
+table[data-cur-col~="10"] tbody td:nth-child(10),
+table[data-cur-col~="11"] tbody td:nth-child(11),
+table[data-cur-col~="12"] tbody td:nth-child(12){
+  background:var(--rs-period-shade)!important;
 }
 tbody td:first-child,
 tbody th[scope="row"],

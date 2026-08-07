@@ -115,6 +115,12 @@ export async function GET(
 
   let qaVerdict: "pass" | "fail" | null = null;
   let exportReady = false;
+  let exportInfo: {
+    mode?: string;
+    fileCount?: number;
+    files?: string[];
+    entrypoint?: string;
+  } | null = null;
   if (run) {
     const [qaArt] = await db()
       .select({ meta: schema.artifacts.meta })
@@ -131,7 +137,22 @@ export async function GET(
       .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "export_bundle")))
       .orderBy(desc(schema.artifacts.createdAt))
       .limit(1);
-    exportReady = !!(expArt?.meta as { zipPath?: string } | null)?.zipPath;
+    const expMeta = expArt?.meta as {
+      zipPath?: string;
+      mode?: string;
+      fileCount?: number;
+      files?: string[];
+      entrypoint?: string;
+    } | null;
+    exportReady = !!expMeta?.zipPath;
+    if (expMeta?.zipPath) {
+      exportInfo = {
+        mode: expMeta.mode,
+        fileCount: expMeta.fileCount,
+        files: expMeta.files,
+        entrypoint: expMeta.entrypoint ?? "index.html",
+      };
+    }
   }
 
   return Response.json({
@@ -156,6 +177,7 @@ export async function GET(
         : null,
     qaVerdict,
     exportReady,
+    exportInfo,
     events: events.map((e) => ({
       id: Number(e.id),
       type: e.type,

@@ -150,7 +150,11 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
         titleByTableId.set(b.table_ref, sec.title?.text ?? sec.statement_type ?? b.table_ref);
         if (sec.statement_type) {
           (byStatement[sec.statement_type] ??= []).push(b.table_ref);
-        } else if (sec.kind === "note" || isNoteTitle(sec.title?.text ?? "")) {
+        } else if (
+          sec.kind === "note" ||
+          sec.kind === "segments" ||
+          isNoteTitle(sec.title?.text ?? "")
+        ) {
           noteTables.push(b.table_ref);
         }
       }
@@ -165,7 +169,7 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
     const st = statementTypeForTitle(title);
     if (st) {
       (byStatement[st] ??= []).push(t.id);
-    } else if (isNoteTitle(title) || t.table_type === "note") {
+    } else if (isNoteTitle(title) || t.table_type === "note" || t.table_type === "wide") {
       noteTables.push(t.id);
     } else if (t.table_type === "statement" || t.must_appear) {
       otherFinancial.push(t.id);

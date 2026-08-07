@@ -70,8 +70,9 @@ describe("ensureContentCoverage", () => {
 
   it("renders a DNA-friendly table", () => {
     const html = renderContentTable(sample.tables![0]!);
-    expect(html).toContain("<table>");
-    expect(html).toContain("5 053.2");
+    expect(html).toContain("<table");
+    expect(html).toContain('data-cur-col="2"');
+    expect(html).toContain('class="cur">5 053.2');
     expect(html).toContain("statement-table");
   });
 

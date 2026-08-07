@@ -1206,8 +1206,9 @@ export async function buildExport(
 }
 
 /**
- * Prototype-as-product export: zip the approved assembled HTML. No blueprint,
- * site plan, or QA prerequisites — the signed-off prototype IS the microsite.
+ * Approve & export: deterministic multi-page Results Studio site from DNA +
+ * extraction (WW-style page tree). The signed-off prototype is kept under
+ * prototype/index.html for reference / masthead comparison — not as the only entry.
  */
 export async function buildPrototypeExport(
   runId: string,
@@ -1216,10 +1217,11 @@ export async function buildPrototypeExport(
   signoff: { actorUserId: string },
 ): Promise<ArtifactRef> {
   "use step";
-  console.log(`[run ${runId}] building prototype export`);
+  console.log(`[run ${runId}] building multipage export`);
   if (env.MOCK_BLOB) {
     return persistArtifactStub(runId, projectId, "export_bundle", {
-      note: "MOCK prototype export",
+      note: "MOCK multipage export",
+      mode: "multipage",
       ...signoff,
     });
   }
@@ -1227,6 +1229,7 @@ export async function buildPrototypeExport(
   const { getPrivate, putPrivate, sha256 } = await import("../lib/blob");
   const { zipSync, strToU8 } = await import("fflate");
   const { randomUUID } = await import("node:crypto");
+  const { buildMultipageExport } = await import("../lib/build-multipage-export");
   const { db, schema } = await loadDb();
 
   const [proto] = prototypeVersionId
@@ -1252,11 +1255,31 @@ export async function buildPrototypeExport(
   }
 
   const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
-  const html = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
-  const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  const runArtifacts = await db().select().from(schema.artifacts).where(eq(schema.artifacts.runId, runId));
+  const dnaRow = [...runArtifacts].reverse().find((a) => a.kind === "design_dna");
+  const extractionRow = [...runArtifacts].reverse().find((a) => a.kind === "extraction_result");
+  if (!dnaRow || !extractionRow) {
+    throw new Error(`multipage export missing design_dna or extraction_result for run ${runId}`);
+  }
 
+  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8"));
+  const extraction = JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"));
+  const prototypeHtml = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
+
+  const built = buildMultipageExport({
+    dna,
+    extraction,
+    projectId,
+    company: project?.companyName ?? extraction.source?.pdf_meta?.title ?? "Company",
+    periodLabel: project?.periodLabel ?? "",
+    prototypeHtml,
+    sourcePrototypeVersionId: proto.id,
+    sourcePrototypeSha256: proto.sha256,
+  });
+
+  const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const meta = {
-    schema_version: "prototype-export/1",
+    schema_version: "multipage-export/1",
     bundle_id: bundleId,
     project_id: projectId,
     run_id: runId,
@@ -1264,16 +1287,23 @@ export async function buildPrototypeExport(
     period_label: project?.periodLabel ?? "",
     prototype_version_id: proto.id,
     prototype_version_number: proto.versionNumber,
+    site_plan_id: built.sitePlanId,
+    blueprint_version_id: built.blueprintVersionId,
     refinement_mode: proto.refinementMode,
     created_at: new Date().toISOString(),
     signed_off_by: signoff.actorUserId,
-    entrypoint: "index.html",
+    entrypoint: built.entrypoint,
+    mode: built.mode,
+    files: built.paths,
   };
 
   const zipInput: Record<string, Uint8Array> = {
-    "index.html": strToU8(html),
     "_meta/export.json": strToU8(JSON.stringify(meta, null, 2)),
   };
+  for (const path of built.paths) {
+    zipInput[path] = strToU8(built.files[path]!);
+  }
+
   const zipBytes = zipSync(zipInput, { level: 6 });
   const zipBuf = Buffer.from(zipBytes);
   const zipDigest = await sha256(zipBuf);
@@ -1281,7 +1311,10 @@ export async function buildPrototypeExport(
   const zipPut = await putPrivate(zipPath, zipBuf, "application/zip");
 
   const manifestPath = `runs/${runId}/exports/${bundleId}.json`;
-  const manifestBody = JSON.stringify({ ...meta, zip: { blob_path: zipPut.blob_path, sha256: zipDigest, bytes: zipBuf.byteLength } });
+  const manifestBody = JSON.stringify({
+    ...meta,
+    zip: { blob_path: zipPut.blob_path, sha256: zipDigest, bytes: zipBuf.byteLength },
+  });
   const manifestPut = await putPrivate(manifestPath, manifestBody, "application/json");
 
   await db().insert(schema.artifacts).values({
@@ -1297,14 +1330,15 @@ export async function buildPrototypeExport(
       zipPath: zipPut.blob_path,
       zipBytes: zipBuf.byteLength,
       entrypoint: "index.html",
-      mode: "prototype",
+      mode: "multipage",
       prototypeVersionId: proto.id,
-      fileCount: 1,
+      fileCount: built.paths.length,
+      files: built.paths.filter((p) => p.endsWith(".html")),
     },
   });
 
   console.log(
-    `[run ${runId}] prototype export ${bundleId} v${proto.versionNumber} zip=${zipPut.blob_path}`,
+    `[run ${runId}] multipage export ${bundleId} v${proto.versionNumber} zip=${zipPut.blob_path} files=${built.paths.length}`,
   );
   return {
     schema: "ArtifactRef@1",
@@ -1315,7 +1349,7 @@ export async function buildPrototypeExport(
     sha256: manifestPut.sha256,
     bytes: manifestPut.bytes,
     content_type: "application/json",
-    meta: { bundleId, zipPath: zipPut.blob_path, mode: "prototype" },
+    meta: { bundleId, zipPath: zipPut.blob_path, mode: "multipage", fileCount: built.paths.length },
   };
 }
 

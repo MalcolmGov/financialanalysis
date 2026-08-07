@@ -5,7 +5,7 @@ import type {
   FinancialDocModel,
   FinTable,
 } from "@rs/contracts";
-import { classifySectionTitle, classifyTable, headerRows } from "./classify.js";
+import { classifySectionTitle, classifyTable, headerRows, noteNumberOf } from "./classify.js";
 
 /**
  * ExtractionResult → FinancialDocModel. Numbers are NEVER re-interpreted: each
@@ -242,15 +242,21 @@ export function mapToDocModel(
     const mustAppear = true;
     tables.push(buildFinTable(table, docId, mustAppear));
     const title = extractionTableTitle(table, extId);
+    const titleCls = classifySectionTitle(title);
+    const noteNum = noteNumberOf(title);
     const sectionKind =
-      cls.table_type === "sensitivity" || /segment/i.test(title)
-        ? ("segments" as const)
-        : cls.is_financial
-          ? ("statement" as const)
-          : ("other" as const);
+      noteNum != null || titleCls.kind === "note"
+        ? ("note" as const)
+        : cls.table_type === "sensitivity" || /segment/i.test(title) || titleCls.kind === "segments"
+          ? ("segments" as const)
+          : titleCls.statement_type || cls.is_financial
+            ? ("statement" as const)
+            : ("other" as const);
     sections.push({
       id: `doc:sec_tbl_${i}`,
       kind: sectionKind,
+      statement_type: titleCls.statement_type,
+      note_number: noteNum ?? undefined,
       title: { text: title, src_ref: `ext:${extId}:r0c0` },
       blocks: [{ kind: "table", table_ref: docId }],
       items: [],

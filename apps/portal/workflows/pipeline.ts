@@ -23,8 +23,9 @@ import {
  * resultsPipeline — prototype-as-product path.
  *
  * Upload → extract → DNA approve → generate prototype → refine* → approve &
- * export the signed-off HTML. Blueprint lock / mapping / QA remain in steps.ts
- * but are not on this operator path.
+ * export a deterministic multi-page Results Studio site (DNA-styled HTML tree
+ * from extraction). The signed-off prototype is kept under prototype/ as
+ * reference. Blueprint lock / QA remain available in steps.ts for the full path.
  */
 export async function resultsPipeline(input: PipelineInput) {
   "use workflow";

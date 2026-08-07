@@ -171,13 +171,13 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "exporting":
       return {
         title: "Packaging export",
-        hint: "Zipping the approved prototype. Download appears when status is exported.",
+        hint: "Building the multi-page Results Studio site and zipping it. Download appears when status is exported.",
         waiting: true,
       };
     case "exported":
       return {
         title: "Download microsite",
-        hint: "The zip contains index.html — open locally or host on any static server.",
+        hint: "The zip is a multi-page static site — open index.html locally to navigate pages.",
       };
     default:
       return {
@@ -208,6 +208,12 @@ export function ProjectConsole(props: {
   const [runStartedAt, setRunStartedAt] = useState<string | null>(props.initialRunStartedAt);
   const [extraction, setExtraction] = useState<ExtractionProgress | null>(null);
   const [exportReady, setExportReady] = useState(false);
+  const [exportInfo, setExportInfo] = useState<{
+    mode?: string;
+    fileCount?: number;
+    files?: string[];
+    entrypoint?: string;
+  } | null>(null);
   const [refinePrompt, setRefinePrompt] = useState("");
   const [forceRegen, setForceRegen] = useState(false);
   const [dna, setDna] = useState<DnaSummary | null>(null);
@@ -329,6 +335,12 @@ export function ProjectConsole(props: {
         statusUpdatedAt?: string | null;
         extraction?: ExtractionProgress | null;
         exportReady?: boolean;
+        exportInfo?: {
+          mode?: string;
+          fileCount?: number;
+          files?: string[];
+          entrypoint?: string;
+        } | null;
       };
       setEvents(data.events);
       if (data.status) setStatus(data.status);
@@ -355,6 +367,7 @@ export function ProjectConsole(props: {
         setNote((prev) => (prev?.startsWith("Extraction failed:") ? null : prev));
       }
       if (typeof data.exportReady === "boolean") setExportReady(data.exportReady);
+      if (data.exportInfo !== undefined) setExportInfo(data.exportInfo ?? null);
     } catch {
       /* ignore poll errors */
     }
@@ -1178,7 +1191,8 @@ export function ProjectConsole(props: {
         <section className="rs-sheet" aria-live="polite">
           <h2 className="rs-section-title">Packaging export</h2>
           <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
-            Zipping the approved prototype HTML. Download appears when status becomes{" "}
+            Building the multi-page Results Studio site (home, commentary, statements, notes,
+            administration, downloads). Download appears when status becomes{" "}
             <strong>exported</strong>.
           </p>
         </section>
@@ -1188,9 +1202,29 @@ export function ProjectConsole(props: {
         <section className="rs-sheet">
           <h2 className="rs-section-title">Export ready</h2>
           <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
-            The zip contains the approved interactive prototype as <code>index.html</code> — open
-            it locally or host on any static server.
+            Download the zip, unzip it, and open <code>index.html</code> in a browser to navigate
+            the multi-page site (sticky Financials nav, breadcrumbs, previous/next).
+            {exportInfo?.fileCount ? (
+              <>
+                {" "}
+                Bundle has <strong>{exportInfo.fileCount}</strong> file
+                {exportInfo.fileCount === 1 ? "" : "s"}
+                {exportInfo.mode ? <> · mode <code>{exportInfo.mode}</code></> : null}.
+              </>
+            ) : null}
           </p>
+          {exportInfo?.files?.length ? (
+            <details style={{ fontSize: 13 }}>
+              <summary>Files in export</summary>
+              <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                {exportInfo.files.map((f) => (
+                  <li key={f}>
+                    <code>{f}</code>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           <a
             href={`/api/projects/${props.projectId}/export`}
             className="rs-btn rs-btn--primary"

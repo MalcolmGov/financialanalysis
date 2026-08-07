@@ -83,12 +83,12 @@ async function main() {
     sha256: assembled.sha256,
     sizeBytes: assembled.bytes,
     promptText:
-      "Style polish: current-period column shading (data-cur-col/.cur); prose measure; AA contrast; wrapping nav",
+      "Style polish: shade latest-year column groups (incl. colspan segment tables) with DNA --dna-shading / .cur",
     refinementMode: "patch",
     patchJson: [{ search: "</head>", replace: "<!-- rs-readable polish --></head>" }],
     lintReport: null,
     audit: {
-      polish: "rs-readable-layout+current-period",
+      polish: "current-period-column-groups",
       parent_version: parent.versionNumber,
     },
     model: "deterministic-polish",

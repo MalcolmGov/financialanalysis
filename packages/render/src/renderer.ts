@@ -8,11 +8,14 @@ import type {
 } from "@rs/contracts";
 import {
   CHROME_CSS,
+  CHROME_SCRIPT,
   renderBreadcrumb,
   renderPrevNext,
   renderSeoHead,
+  renderShareBar,
   renderStickyNav,
 } from "./chrome.js";
+import { enrichMultiPageFiles } from "./enrich.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
 
 /**
@@ -180,10 +183,13 @@ export function renderSitePlan(
   const components = new Map<string, ComponentDef>(blueprint.components.map((c) => [c.id, c]));
   const templates = new Map(blueprint.page_templates.map((t) => [t.id, t]));
   const files: Record<string, string> = {};
-  const multiPage = plan.pages.length > 1;
+  const multiPage = plan.pages.length > 1 || plan.model === "deterministic-multipage";
   const company = ctx.docModel?.meta?.company;
   const periodLabel = ctx.docModel?.meta?.period_label;
-  const pageOrder = plan.pages.map((p) => ({ path: p.path, title: p.title }));
+  // Exclude legacy aggregate from prev/next so WW IA pages chain cleanly.
+  const pageOrder = plan.pages
+    .filter((p) => !p.path.startsWith("statements/"))
+    .map((p) => ({ path: p.path, title: p.title }));
 
   for (const page of plan.pages) {
     const tpl = templates.get(page.template);
@@ -212,17 +218,18 @@ export function renderSitePlan(
       : `<meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style>`;
 
     const chromeTop = multiPage
-      ? `${renderStickyNav(plan.nav, page.path)}${renderBreadcrumb(page.path, page.title, company)}`
+      ? `${renderStickyNav(plan.nav, page.path)}${renderShareBar()}${renderBreadcrumb(page.path, page.title, company)}`
       : "";
     const chromeBottom = multiPage ? renderPrevNext(pageOrder, page.path) : "";
+    const chromeScript = multiPage ? `<script>${CHROME_SCRIPT}</script>` : "";
 
     // Prefer injecting chrome around main; otherwise wrap body content.
     let body = shell;
     if (multiPage) {
       if (/<main\b/i.test(body)) {
-        body = `${chromeTop}${body}${chromeBottom}`;
+        body = `${chromeTop}${body}${chromeBottom}${chromeScript}`;
       } else {
-        body = `${chromeTop}<main data-dna-component="page-shell">${body}</main>${chromeBottom}`;
+        body = `${chromeTop}<main data-dna-component="page-shell">${body}</main>${chromeBottom}${chromeScript}`;
       }
     }
 
@@ -230,6 +237,9 @@ export function renderSitePlan(
     files[page.path] = doc;
   }
 
+  if (multiPage && ctx.docModel) {
+    return { files: enrichMultiPageFiles(files, plan, ctx.docModel) };
+  }
   return { files };
 }
 
@@ -250,5 +260,6 @@ main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:gri
 .fin-table thead th.cur{filter:brightness(.92)}
 .fin-table .cell-nil{text-align:right;opacity:.55}
 .fin-table .cell-noteRef{text-align:center;width:3.5em;opacity:.6}
+.fin-table .num{font-variant-numeric:tabular-nums}
 `;
 }

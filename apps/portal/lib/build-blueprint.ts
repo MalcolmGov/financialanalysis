@@ -46,6 +46,8 @@ main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:gri
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
 .fin-table td{padding:7px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
 .fin-table tbody tr:nth-child(even) td{background:var(--dna-shading,var(--dna-table-shading,#f2f2f2))}
+.fin-table td.cur,.fin-table th.cur{background:var(--dna-shading,var(--dna-table-shading,#E9E7E4))!important}
+.fin-table thead th.cur{filter:brightness(.92)}
 .fin-table .num{font-variant-numeric:tabular-nums}
 .fin-table .cell-nil{color:color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);text-align:right}
 .fin-table .cell-noteRef{text-align:center;width:3.5em;color:color-mix(in srgb,var(--dna-ink,#111) 55%,transparent)}
