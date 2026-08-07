@@ -1,4 +1,6 @@
-import type { BrandAssetBundle, ExtractionFigure, ExtractionResult } from "@rs/contracts";
+import type { BrandAssetBundle, ExtractionResult } from "@rs/contracts";
+
+type ExtractionFigure = ExtractionResult["figures"][string];
 
 const DEFAULT_EMBED_BUDGET = 1_500_000;
 const EARLY_PAGES = 2;
