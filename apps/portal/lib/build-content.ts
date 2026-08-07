@@ -156,3 +156,53 @@ export function buildContentSample(
     ...(dividend && dividend.length ? { dividend } : {}),
   };
 }
+
+/** Truncate a paragraph for the LLM brief (layout context only). */
+function briefPara(p: string, max = 220): string {
+  const t = p.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+/**
+ * Slim ContentSample for Opus shell generation: KPIs + chart + table/section
+ * captions and ids only. Full rows stay out of the prompt — ensureContentCoverage
+ * injects them after generation from the full ContentSample.
+ */
+export function buildStudioBrief(content: ContentSample): ContentSample {
+  const tables = (content.tables ?? []).map((t) => ({
+    id: t.id,
+    caption: t.caption,
+    headers: t.headers.slice(0, 6),
+    rows: [] as string[][],
+    table_type: t.table_type,
+    must_appear: t.must_appear,
+    page: t.page,
+  }));
+
+  return {
+    company: content.company,
+    period: content.period,
+    kpis: content.kpis,
+    table: {
+      caption: content.table.caption,
+      headers: content.table.headers,
+      rows: [],
+    },
+    tables,
+    chart: content.chart,
+    letter: {
+      heading: content.letter.heading,
+      paragraphs: content.letter.paragraphs.slice(0, 3).map((p) => briefPara(p)),
+    },
+    sections: (content.sections ?? []).map((s) => ({
+      id: s.id,
+      kind: s.kind,
+      heading: s.heading,
+      paragraphs: s.paragraphs.slice(0, 2).map((p) => briefPara(p, 160)),
+    })),
+    ...(content.dividend?.length
+      ? { dividend: content.dividend.slice(0, 4).map((d) => briefPara(d, 120)) }
+      : {}),
+  };
+}

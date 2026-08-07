@@ -74,4 +74,17 @@ describe("ensureContentCoverage", () => {
     expect(html).toContain("5 053.2");
     expect(html).toContain("statement-table");
   });
+
+  it("injects into #financial-statements when the shell leaves it empty", () => {
+    const shell = `<!doctype html><html><head></head><body>
+<nav><a href="#financial-statements">Statements</a></nav>
+<section id="financial-statements"><h2>Financial statements</h2></section>
+</body></html>`;
+    const out = ensureContentCoverage(shell, sample);
+    expect(out).toMatch(/id=["']financial-statements["'][\s\S]*5 053\.2/);
+    expect(out).toContain("2 309.1");
+    // Tables land in the shell anchor; letter (no letter anchor) may use appendix.
+    expect(out).toMatch(/id=["']financial-statements["'][\s\S]*2 309\.1[\s\S]*<\/section>/);
+    expect(out).toContain("Vision 2028");
+  });
 });

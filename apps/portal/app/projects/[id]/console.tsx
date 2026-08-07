@@ -14,8 +14,9 @@ type BusyWaitKind = "extracting" | "dna_detecting" | "prototype_generating";
 const BUSY_ETA_SECONDS: Record<BusyWaitKind, number> = {
   extracting: Math.round(2.5 * 60),
   dna_detecting: Math.round(1.5 * 60),
-  prototype_generating: 6 * 60,
-};
+  /** Shell-gen + deterministic table inject — typically ~3–6 min. */
+  prototype_generating: Math.round(4.5 * 60),
+}
 
 type ExtractionProgress = {
   jobId: string;
@@ -158,7 +159,7 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "prototype_generating":
       return {
         title: "Generating prototype",
-        hint: "Building interactive HTML from approved DNA and extracted content. Usually 3–8 minutes.",
+        hint: "Building the IR layout shell from approved DNA, then injecting full statements. Usually 3–6 minutes.",
         waiting: true,
       };
     case "in_review":
@@ -1019,17 +1020,16 @@ export function ProjectConsole(props: {
           title="Generating prototype"
           body={
             <>
-              Building the first interactive HTML prototype from the approved DNA and extracted
-              content. Usually <strong>3–8 minutes</strong> (opus studio) — leave this tab open.
-              When it finishes, status becomes <strong>in review</strong> and you can refine or
-              approve.
+              Building the DNA layout shell (opus), then injecting full financial tables. Usually{" "}
+              <strong>3–6 minutes</strong> — leave this tab open. When it finishes, status becomes{" "}
+              <strong>in review</strong> and you can refine or approve.
             </>
           }
           elapsedSec={waitStats.elapsedSec}
           remainingLabel={formatSoftRemaining(waitStats.remainingSec, waitStats.overdue)}
           overdue={waitStats.overdue}
           pct={waitStats.pct}
-          third={{ label: "Typical", value: "3–8 min", compact: true }}
+          third={{ label: "Typical", value: "3–6 min", compact: true }}
           footer={
             waitStats.overdue
               ? "Still working — long runs and a single automatic retry can exceed the typical window."
