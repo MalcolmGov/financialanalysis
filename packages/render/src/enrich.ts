@@ -1,8 +1,23 @@
 import type { FinancialDocModel, SitePlan } from "@rs/contracts";
 import { renderBreadcrumb } from "./chrome.js";
 import { composeCommentaryBody } from "./commentary-composer.js";
+import {
+  assetHrefFromPage,
+  SOURCE_PDF_HREF,
+  statementExcelSlugForPage,
+  WORKBOOK_HREF,
+  type ExcelExportResult,
+} from "./excel-exporter.js";
 import { composeHome } from "./home-composer.js";
 import { noteAnchorId, noteNumberFromTitle } from "./notes-linker.js";
+
+/** Optional binary download wiring (Excel always; PDF when bundled). */
+export interface DownloadEnrichOptions {
+  excel?: Pick<ExcelExportResult, "workbookHref" | "statementFiles" | "workbookSheetNames">;
+  /** When true, downloads.html links to assets/source.pdf. */
+  pdfBundled?: boolean;
+  pdfHref?: string;
+}
 
 /**
  * Fill WW-style prose pages after the deterministic table render.
@@ -58,16 +73,48 @@ function wrapLooseListItems(html: string): string {
   });
 }
 
-function downloadsHtml(docModel: FinancialDocModel): string {
+function downloadsHtml(
+  docModel: FinancialDocModel,
+  opts: DownloadEnrichOptions = {},
+): string {
   const company = escapeHtml(docModel.meta.company || "Results");
+  const pdfHref = opts.pdfHref ?? SOURCE_PDF_HREF;
+  const workbookHref = opts.excel?.workbookHref ?? WORKBOOK_HREF;
+  const sheetNote = opts.excel?.workbookSheetNames?.length
+    ? `<span class="dl-note" data-allow-number>${opts.excel.workbookSheetNames.length} sheets — income, financial position, equity, cash flows, and notes when present. Values match the HTML tables.</span>`
+    : `<span class="dl-note">Multi-sheet workbook built from the statement tables. Values match the HTML tables.</span>`;
+
+  const pdfItem = opts.pdfBundled
+    ? `<li><a class="dl-link" href="${escapeHtml(pdfHref)}"><span class="dl-label">Full results PDF</span><span class="dl-note">Source interim results booklet bundled under assets/ for offline use.</span></a></li>`
+    : `<li><span class="dl-label">Full results PDF</span><span class="dl-note">Source PDF was not available at export time (offline JSON fixtures omit binary uploads). Re-export from the portal after upload to bundle assets/source.pdf.</span></li>`;
+
+  const statementItems = (opts.excel?.statementFiles ?? [])
+    .map(
+      (f) =>
+        `<li><a class="dl-link" href="${escapeHtml(f.href)}"><span class="dl-label">${escapeHtml(f.label)} (Excel)</span><span class="dl-note">Single-sheet workbook for this statement.</span></a></li>`,
+    )
+    .join("\n");
+
   return `<section class="downloads" data-dna-component="downloads">
 <h2 class="prose-h">Downloads</h2>
 <p class="prose-p">Source PDF and spreadsheet exports for ${company}.</p>
 <ul class="download-list">
-<li><span class="dl-label">Full results PDF</span><span class="dl-note">Open the source document from your project upload (not bundled in this static zip).</span></li>
-<li><span class="dl-label">Excel workbook</span><span class="dl-note">Coming soon — statement tables are available as HTML on the Financials pages.</span></li>
+${pdfItem}
+<li><a class="dl-link" href="${escapeHtml(workbookHref)}"><span class="dl-label">Financial statements (Excel)</span>${sheetNote}</a></li>
+${statementItems}
 </ul>
 </section>`;
+}
+
+function xlsToolbarHtml(pagePath: string, excel?: DownloadEnrichOptions["excel"]): string {
+  const slug = statementExcelSlugForPage(pagePath);
+  if (!slug || !excel) return "";
+  const file = excel.statementFiles.find((f) => f.slug === slug);
+  const href = file
+    ? assetHrefFromPage(pagePath, file.href)
+    : assetHrefFromPage(pagePath, `assets/excel/${slug}.xlsx`);
+  const workbook = assetHrefFromPage(pagePath, excel.workbookHref);
+  return `<div class="xls-toolbar" data-dna-component="xls-toolbar"><span class="xls-toolbar__label">Excel</span><a class="xls-download" href="${escapeHtml(href)}">Download this statement</a><a class="xls-download xls-download--secondary" href="${escapeHtml(workbook)}">Full workbook</a></div>`;
 }
 
 function injectInto(html: string, markerClass: string, content: string): string {
@@ -236,6 +283,7 @@ export function enrichMultiPageFiles(
   files: Record<string, string>,
   plan: SitePlan,
   docModel: FinancialDocModel,
+  downloadOpts: DownloadEnrichOptions = {},
 ): Record<string, string> {
   const out = { ...files };
   const company = docModel.meta.company;
@@ -294,7 +342,7 @@ export function enrichMultiPageFiles(
         company,
         periodLabel,
         eyebrow: "Source documents",
-      }) + downloadsHtml(docModel),
+      }) + downloadsHtml(docModel, downloadOpts),
     );
   }
 
@@ -316,11 +364,24 @@ export function enrichMultiPageFiles(
     out["financials/notes.html"] = html;
   }
 
-  // Statement page heroes (eyebrow, H1, period)
+  // Statement page heroes (eyebrow, H1, period) + Excel toolbar
   for (const page of plan.pages) {
-    if (!page.path.startsWith("financials/") || page.path.endsWith("notes.html")) continue;
+    if (!page.path.startsWith("financials/")) continue;
     let html = out[page.path];
     if (!html) continue;
+    if (page.path.endsWith("notes.html")) {
+      // Notes hero already injected above; add toolbar after hero when excel present.
+      if (
+        downloadOpts.excel &&
+        /page-hero/.test(html) &&
+        !/data-dna-component="xls-toolbar"/.test(html)
+      ) {
+        const bar = xlsToolbarHtml(page.path, downloadOpts.excel);
+        html = html.replace(/<\/header>/i, (m) => `${m}${bar}`);
+        out[page.path] = html;
+      }
+      continue;
+    }
     html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
     html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
     const hero = pageHero({
@@ -329,8 +390,62 @@ export function enrichMultiPageFiles(
       company,
       periodLabel,
     });
-    out[page.path] = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    const bar = xlsToolbarHtml(page.path, downloadOpts.excel);
+    out[page.path] = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${bar}`);
   }
 
+  return out;
+}
+
+/**
+ * Re-apply downloads page + statement Excel toolbars after binaries are known
+ * (PDF bundled flag / excel manifest). Safe to call on already-enriched HTML.
+ */
+export function applyDownloadArtifacts(
+  files: Record<string, string>,
+  plan: SitePlan,
+  docModel: FinancialDocModel,
+  downloadOpts: DownloadEnrichOptions,
+): Record<string, string> {
+  const out = { ...files };
+  if (out["downloads.html"]) {
+    // Replace downloads section body if present; else inject via enrich path.
+    if (/data-dna-component="downloads"/.test(out["downloads.html"])) {
+      out["downloads.html"] = out["downloads.html"].replace(
+        /<section class="downloads"[\s\S]*?<\/section>/i,
+        () => downloadsHtml(docModel, downloadOpts),
+      );
+    } else {
+      out["downloads.html"] = injectInto(
+        out["downloads.html"],
+        "prose-body",
+        pageHero({
+          path: "downloads.html",
+          title: "Downloads",
+          company: docModel.meta.company,
+          periodLabel: docModel.meta.period_label,
+          eyebrow: "Source documents",
+        }) + downloadsHtml(docModel, downloadOpts),
+      );
+    }
+  }
+
+  for (const page of plan.pages) {
+    if (!page.path.startsWith("financials/")) continue;
+    let html = out[page.path];
+    if (!html || !downloadOpts.excel) continue;
+    const bar = xlsToolbarHtml(page.path, downloadOpts.excel);
+    if (!bar) continue;
+    // Match the element (not CHROME_CSS rules that also contain "xls-toolbar").
+    if (/data-dna-component="xls-toolbar"/.test(html)) {
+      html = html.replace(
+        /<div class="xls-toolbar"[^>]*data-dna-component="xls-toolbar"[\s\S]*?<\/div>/i,
+        () => bar,
+      );
+    } else if (/<\/header>/i.test(html) && /page-hero/.test(html)) {
+      html = html.replace(/<\/header>/i, (m) => `${m}${bar}`);
+    }
+    out[page.path] = html;
+  }
   return out;
 }

@@ -297,8 +297,15 @@ mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#B8912A) 28%,transpa
 .prose-signoff{margin:1.5rem 0 .35rem;font-weight:600}
 .download-list{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}
 .download-list li{padding:.85rem 0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent)}
+.dl-link{display:block;color:inherit;text-decoration:none}
+.dl-link:hover .dl-label{color:var(--dna-brand,#B8912A)}
 .dl-label{display:block;font-weight:600}
 .dl-note{display:block;margin-top:.25rem;font-size:.9rem;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff))}
+.xls-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem 1rem;max-width:1120px;margin:0 auto;padding:.75rem clamp(1rem,3vw,2rem) 0;font-family:var(--dna-font-body,system-ui,sans-serif)}
+.xls-toolbar__label{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--dna-brand,#B8912A)}
+.xls-download{font-size:.85rem;color:var(--dna-ink,#231F20);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--dna-brand,#B8912A) 55%,transparent)}
+.xls-download:hover{color:var(--dna-brand,#B8912A)}
+.xls-download--secondary{border-bottom-color:color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff))}
 .note-block{margin:1.5rem 0 1rem;padding-top:.5rem;scroll-margin-top:5rem}
 .note-title{font-family:var(--dna-font-heading,Georgia,serif);font-size:1.1rem;margin:0 0 .65rem}
 .note-block .prose-p{margin:.4rem 0;line-height:1.55}

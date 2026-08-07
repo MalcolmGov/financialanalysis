@@ -1235,12 +1235,29 @@ export async function buildSiteDraftArtifact(
   const extractionJson = JSON.parse((await getPrivate(extraction.blob_path)).toString("utf8"));
   const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
 
+  let sourcePdfBytes: Buffer | null = null;
+  if (project?.currentDocumentId) {
+    const [doc] = await db()
+      .select({ blobPath: schema.documents.blobPath })
+      .from(schema.documents)
+      .where(eq(schema.documents.id, project.currentDocumentId))
+      .limit(1);
+    if (doc?.blobPath) {
+      try {
+        sourcePdfBytes = await getPrivate(doc.blobPath);
+      } catch (err) {
+        console.warn(`[run ${runId}] site draft: source PDF unavailable (${doc.blobPath}):`, err);
+      }
+    }
+  }
+
   const built = buildMultipageExport({
     dna,
     extraction: extractionJson,
     projectId,
     company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
     periodLabel: project?.periodLabel ?? "",
+    sourcePdfBytes,
   });
 
   const existing = await db()
@@ -1252,7 +1269,7 @@ export async function buildSiteDraftArtifact(
   const draftVersion = (existing[0]?.version ?? 0) + 1;
   const prefix = `runs/${runId}/site-draft/v${draftVersion}`;
 
-  for (const path of built.paths) {
+  for (const path of Object.keys(built.files).sort()) {
     const body = built.files[path]!;
     const contentType = path.endsWith(".html")
       ? "text/html; charset=utf-8"
@@ -1263,6 +1280,15 @@ export async function buildSiteDraftArtifact(
           : path.endsWith(".json")
             ? "application/json"
             : "application/octet-stream";
+    await putPrivate(`${prefix}/${path}`, body, contentType);
+  }
+  for (const path of Object.keys(built.binaries).sort()) {
+    const body = built.binaries[path]!;
+    const contentType = path.endsWith(".pdf")
+      ? "application/pdf"
+      : path.endsWith(".xlsx")
+        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        : "application/octet-stream";
     await putPrivate(`${prefix}/${path}`, body, contentType);
   }
 
@@ -1337,7 +1363,7 @@ export async function buildSiteDraftArtifact(
   });
 
   console.log(
-    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} prefix=${prefix}`,
+    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} excelSheets=${built.excelSheetNames.length} pdf=${built.pdfBundled} prefix=${prefix}`,
   );
   return {
     schema: "ArtifactRef@1",
@@ -1419,6 +1445,33 @@ export async function buildPrototypeExport(
     prototypeHtml = (await getPrivate(proto.assembledHtmlBlobKey)).toString("utf8");
   }
 
+  let sourcePdfBytes: Buffer | null = null;
+  if (project?.currentDocumentId) {
+    const [doc] = await db()
+      .select({ blobPath: schema.documents.blobPath })
+      .from(schema.documents)
+      .where(eq(schema.documents.id, project.currentDocumentId))
+      .limit(1);
+    if (doc?.blobPath) {
+      try {
+        sourcePdfBytes = await getPrivate(doc.blobPath);
+      } catch (err) {
+        console.warn(`[run ${runId}] export: source PDF unavailable (${doc.blobPath}):`, err);
+      }
+    }
+  }
+  // Fallback: extraction.source.blob_path when documents row is missing.
+  if (!sourcePdfBytes && extraction.source?.blob_path) {
+    try {
+      sourcePdfBytes = await getPrivate(extraction.source.blob_path);
+    } catch (err) {
+      console.warn(
+        `[run ${runId}] export: extraction source PDF unavailable (${extraction.source.blob_path}):`,
+        err,
+      );
+    }
+  }
+
   const built = buildMultipageExport({
     dna,
     extraction,
@@ -1428,6 +1481,7 @@ export async function buildPrototypeExport(
     prototypeHtml,
     sourcePrototypeVersionId: proto?.id ?? "multipage-export",
     sourcePrototypeSha256: proto?.sha256 ?? "0".repeat(64),
+    sourcePdfBytes,
   });
 
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -1451,13 +1505,18 @@ export async function buildPrototypeExport(
     gate_b: built.gateB.status,
     files: built.paths,
     pages: built.pages,
+    excel_sheets: built.excelSheetNames,
+    pdf_bundled: built.pdfBundled,
   };
 
   const zipInput: Record<string, Uint8Array> = {
     "_meta/export.json": strToU8(JSON.stringify(meta, null, 2)),
   };
-  for (const path of built.paths) {
+  for (const path of Object.keys(built.files)) {
     zipInput[path] = strToU8(built.files[path]!);
+  }
+  for (const path of Object.keys(built.binaries)) {
+    zipInput[path] = built.binaries[path]!;
   }
 
   const zipBytes = zipSync(zipInput, { level: 6 });
@@ -1497,7 +1556,7 @@ export async function buildPrototypeExport(
   });
 
   console.log(
-    `[run ${runId}] multipage export ${bundleId} zip=${zipPut.blob_path} files=${built.paths.length} gateA=${built.gateA.status} gateB=${built.gateB.status}${proto ? ` proto=v${proto.versionNumber}` : " (no opus preview)"}`,
+    `[run ${runId}] multipage export ${bundleId} zip=${zipPut.blob_path} files=${built.paths.length} gateA=${built.gateA.status} gateB=${built.gateB.status} excelSheets=${built.excelSheetNames.length} pdf=${built.pdfBundled}${proto ? ` proto=v${proto.versionNumber}` : " (no opus preview)"}`,
   );
   return {
     schema: "ArtifactRef@1",

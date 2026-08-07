@@ -234,12 +234,18 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   });
   nav.push({ label: "Administration", href: "administration.html" });
 
+  const statementTableIds = docModel.tables
+    .filter((t) => t.table_type === "statement" || t.must_appear)
+    .map((t) => t.id);
   pages.push({
     path: "downloads.html",
     template: proseTpl,
     title: "Downloads",
     regions: { main: [] },
-    downloads: [{ kind: "pdf", tables: docModel.tables.map((t) => t.id) }],
+    downloads: [
+      { kind: "pdf", tables: docModel.tables.map((t) => t.id) },
+      { kind: "xlsx", tables: statementTableIds },
+    ],
   });
   nav.push({ label: "Downloads", href: "downloads.html" });
 

@@ -3,6 +3,7 @@ export * from "./resolve.js";
 export * from "./renderer.js";
 export * from "./chrome.js";
 export * from "./enrich.js";
+export * from "./excel-exporter.js";
 export * from "./notes-linker.js";
 export * from "./row-taxonomy.js";
 export * from "./site-runtime.js";

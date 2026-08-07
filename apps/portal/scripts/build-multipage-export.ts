@@ -2,11 +2,14 @@
  * Offline multipage export from a local extraction (+ optional DNA) JSON.
  *
  *   pnpm --filter portal exec tsx scripts/build-multipage-export.ts \
- *     /tmp/drd-extraction.json [/tmp/drd-dna.json] [/tmp/drd-multipage]
+ *     /tmp/drd-extraction.json [/tmp/drd-dna.json] [/tmp/drd-multipage] [/tmp/drd-source.pdf]
+ *
+ * Source PDF is optional. When omitted (JSON-only fixtures), Excel still ships
+ * under assets/excel/; downloads.html notes that PDF was not bundled.
  */
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
-import { zipSync, strToU8 } from "fflate";
+import { zipSync, strToU8, unzipSync, strFromU8 } from "fflate";
 import type { DesignDNA, ExtractionResult } from "@rs/contracts";
 import { buildMultipageExport } from "../lib/build-multipage-export";
 
@@ -14,9 +17,17 @@ async function main() {
   const extractionPath = process.argv[2] ?? "/tmp/drd-extraction.json";
   const dnaPath = process.argv[3] ?? "/tmp/drd-dna.json";
   const outDir = process.argv[4] ?? "/tmp/drd-multipage";
+  const pdfPath = process.argv[5] ?? "/tmp/drd-source.pdf";
 
   const extraction = JSON.parse(await fs.readFile(extractionPath, "utf8")) as ExtractionResult;
   const dna = JSON.parse(await fs.readFile(dnaPath, "utf8")) as DesignDNA;
+
+  let sourcePdfBytes: Buffer | null = null;
+  try {
+    sourcePdfBytes = await fs.readFile(pdfPath);
+  } catch {
+    process.stdout.write(`Note: no source PDF at ${pdfPath} — Excel only in this smoke\n`);
+  }
 
   const built = buildMultipageExport({
     dna,
@@ -24,18 +35,25 @@ async function main() {
     projectId: extraction.project_id || "offline",
     company: "DRDGOLD Limited",
     periodLabel: "HY1 FY2026 — six months ended 31 December 2025",
+    sourcePdfBytes,
   });
 
   await fs.rm(outDir, { recursive: true, force: true });
   await fs.mkdir(outDir, { recursive: true });
-  for (const path of built.paths) {
+  for (const path of Object.keys(built.files)) {
     const dest = join(outDir, path);
     await fs.mkdir(join(dest, ".."), { recursive: true });
     await fs.writeFile(dest, built.files[path]!);
   }
+  for (const path of Object.keys(built.binaries)) {
+    const dest = join(outDir, path);
+    await fs.mkdir(join(dest, ".."), { recursive: true });
+    await fs.writeFile(dest, built.binaries[path]!);
+  }
 
   const zipInput: Record<string, Uint8Array> = {};
-  for (const path of built.paths) zipInput[path] = strToU8(built.files[path]!);
+  for (const path of Object.keys(built.files)) zipInput[path] = strToU8(built.files[path]!);
+  for (const path of Object.keys(built.binaries)) zipInput[path] = built.binaries[path]!;
   const zipPath = `${outDir}.zip`;
   await fs.writeFile(zipPath, zipSync(zipInput, { level: 6 }));
 
@@ -44,6 +62,8 @@ async function main() {
   process.stdout.write(`Zip → ${zipPath}\n`);
   process.stdout.write(`Entrypoint: ${built.entrypoint}\n`);
   process.stdout.write(`Gate A: ${built.gateA.status} · Gate B: ${built.gateB.status}\n`);
+  process.stdout.write(`Excel sheets: ${built.excelSheetNames.join(", ") || "(none)"}\n`);
+  process.stdout.write(`PDF bundled: ${built.pdfBundled}\n`);
   process.stdout.write(`HTML pages:\n${built.pages.map((p) => `  - ${p.path} (${p.title})`).join("\n")}\n`);
   if (htmlPaths.some((p) => p.startsWith("prototype/"))) {
     process.stdout.write("Note: prototype/ present (optional preview only)\n");
@@ -54,7 +74,26 @@ async function main() {
   const cf = built.files["financials/cash-flows.html"] ?? "";
   const notes = built.files["financials/notes.html"] ?? "";
   const home = built.files["index.html"] ?? "";
+  const downloads = built.files["downloads.html"] ?? "";
   const siteJs = built.files["assets/site.js"] ?? "";
+  const workbook = built.binaries["assets/excel/financial-statements.xlsx"];
+  const zipEntries = unzipSync(new Uint8Array(await fs.readFile(zipPath)));
+  const zipPaths = Object.keys(zipEntries).sort();
+
+  // Spot-check workbook XML contains a known IS total from HTML.
+  let workbookHasRevenue = false;
+  if (workbook) {
+    try {
+      const inner = unzipSync(workbook);
+      const sheetXml = strFromU8(inner["xl/worksheets/sheet1.xml"] ?? new Uint8Array());
+      workbookHasRevenue =
+        sheetXml.includes("5 053.2") ||
+        Object.values(inner).some((u8) => strFromU8(u8).includes("5 053.2"));
+    } catch {
+      workbookHasRevenue = false;
+    }
+  }
+
   const checks = [
     ["index.html", !!built.files["index.html"]],
     ["commentary.html", !!built.files["commentary.html"]],
@@ -89,6 +128,23 @@ async function main() {
     ["SEO JSON-LD Report", home.includes("application/ld+json") && home.includes('"@type":"Report"')],
     ["SEO OG tags", home.includes('property="og:type"') && home.includes('property="og:site_name"')],
     ["SEO canonical", home.includes('rel="canonical"')],
+    // P4 — Excel + PDF downloads
+    ["xlsx workbook binary", !!workbook && workbook.byteLength > 100],
+    ["xlsx per-statement", !!built.binaries["assets/excel/income-statement.xlsx"] && !!built.binaries["assets/excel/balance-sheet.xlsx"]],
+    ["xlsx sheet names", built.excelSheetNames.length >= 4],
+    ["xlsx values match", workbookHasRevenue],
+    ["downloads xlsx link", downloads.includes('href="assets/excel/financial-statements.xlsx"') && !downloads.includes("Coming soon")],
+    [
+      "xls-toolbar",
+      income.includes('data-dna-component="xls-toolbar"') && income.includes("income-statement.xlsx"),
+    ],
+    [
+      "pdf in zip or documented skip",
+      built.pdfBundled
+        ? zipPaths.includes("assets/source.pdf") && downloads.includes('href="assets/source.pdf"')
+        : downloads.includes("not available at export time") || downloads.includes("not bundled"),
+    ],
+    ["zip has excel", zipPaths.includes("assets/excel/financial-statements.xlsx")],
     ["gate A", built.gateA.status === "pass"],
     ["gate B", built.gateB.status === "pass"],
   ] as const;

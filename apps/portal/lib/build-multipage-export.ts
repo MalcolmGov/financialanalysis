@@ -2,7 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Blueprint, DesignDNA, ExtractionResult, SitePlan } from "@rs/contracts";
 import { Blueprint as BlueprintSchema } from "@rs/contracts";
 import { buildSitePlan, mapToDocModel } from "@rs/mapper";
-import { gateA, gateB, renderSitePlan, type GateAResult, type GateBResult } from "@rs/render";
+import {
+  applyDownloadArtifacts,
+  exportExcelFromDocModel,
+  gateA,
+  gateB,
+  renderSitePlan,
+  SOURCE_PDF_HREF,
+  type GateAResult,
+  type GateBResult,
+} from "@rs/render";
 import { buildBlueprintV1 } from "./build-blueprint";
 
 export interface MultipageExportInput {
@@ -15,6 +24,11 @@ export interface MultipageExportInput {
   prototypeHtml?: string | null;
   sourcePrototypeVersionId?: string;
   sourcePrototypeSha256?: string;
+  /**
+   * Source PDF bytes to bundle at assets/source.pdf.
+   * Offline JSON-only smokes may omit this — downloads page notes the skip.
+   */
+  sourcePdfBytes?: Uint8Array | Buffer | null;
 }
 
 export interface MultipagePageMeta {
@@ -23,7 +37,10 @@ export interface MultipagePageMeta {
 }
 
 export interface MultipageExportResult {
+  /** Text files (HTML/CSS/JS/JSON). */
   files: Record<string, string>;
+  /** Binary artifacts (XLSX, PDF) for the zip. */
+  binaries: Record<string, Uint8Array>;
   paths: string[];
   pages: MultipagePageMeta[];
   sitePlan: SitePlan;
@@ -33,6 +50,8 @@ export interface MultipageExportResult {
   mode: "multipage";
   gateA: GateAResult;
   gateB: GateBResult;
+  excelSheetNames: string[];
+  pdfBundled: boolean;
 }
 
 function sha256Hex(body: string | Buffer): string {
@@ -43,6 +62,7 @@ function sha256Hex(body: string | Buffer): string {
  * Deterministic WW-style multi-page site from DNA tokens + extraction/docmodel.
  * Numbers come only from extraction via the SitePlan renderer.
  * Gate A/B run on the rendered tree so operators sign off a provenance-safe draft.
+ * P4: ExcelExporter + optional source PDF under assets/.
  */
 export function buildMultipageExport(input: MultipageExportInput): MultipageExportResult {
   const blueprintVersionId = randomUUID();
@@ -68,6 +88,28 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   const ctx = { extraction: input.extraction, docModel };
   const a = gateA(sitePlan, ctx);
   const { files } = renderSitePlan(sitePlan, blueprint, ctx);
+
+  const excel = exportExcelFromDocModel(docModel);
+  const binaries: Record<string, Uint8Array> = { ...excel.files };
+
+  let pdfBundled = false;
+  if (input.sourcePdfBytes && input.sourcePdfBytes.byteLength > 0) {
+    binaries[SOURCE_PDF_HREF] = Uint8Array.from(input.sourcePdfBytes);
+    pdfBundled = true;
+  }
+
+  const enriched = applyDownloadArtifacts(files, sitePlan, docModel, {
+    excel: {
+      workbookHref: excel.workbookHref,
+      statementFiles: excel.statementFiles,
+      workbookSheetNames: excel.workbookSheetNames,
+    },
+    pdfBundled,
+    pdfHref: SOURCE_PDF_HREF,
+  });
+  Object.assign(files, enriched);
+
+  // Gate B after downloads/toolbar injection (sheet counts use data-allow-number).
   const b = gateB(files, ctx);
 
   if (input.prototypeHtml) {
@@ -84,9 +126,10 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     .filter((p) => p.path.endsWith(".html"))
     .map((p) => ({ path: p.path, title: p.title }));
 
-  const paths = Object.keys(files).sort();
+  const paths = [...Object.keys(files), ...Object.keys(binaries)].sort();
   return {
     files,
+    binaries,
     paths,
     pages,
     sitePlan,
@@ -96,5 +139,7 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     mode: "multipage",
     gateA: a,
     gateB: b,
+    excelSheetNames: excel.workbookSheetNames,
+    pdfBundled,
   };
 }
