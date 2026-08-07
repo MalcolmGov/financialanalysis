@@ -48,6 +48,11 @@ function estimateExtractionSeconds(pageCount: number | null): number {
   return Math.min(45 * 60, Math.max(2 * 60, 75 + pages * 30));
 }
 
+/** Opus studio HTML generation — typically several minutes; retries can push longer. */
+function estimatePrototypeSeconds(): number {
+  return 6 * 60;
+}
+
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   const m = Math.floor(s / 60);
@@ -98,7 +103,7 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "prototype_generating":
       return {
         title: "Generating prototype",
-        hint: "Building interactive HTML from approved DNA and extracted content.",
+        hint: "Building interactive HTML from approved DNA and extracted content. Usually 3–8 minutes.",
         waiting: true,
       };
     case "in_review":
@@ -282,20 +287,21 @@ export function ProjectConsole(props: {
   }, [props.projectId]);
 
   const extracting = status === "extracting";
+  const generating = status === "prototype_generating";
 
   useEffect(() => {
-    const ms = extracting ? 2000 : 4000;
+    const ms = extracting || generating ? 2000 : 4000;
     const id = window.setInterval(() => {
       void refreshEvents();
     }, ms);
     return () => window.clearInterval(id);
-  }, [refreshEvents, extracting]);
+  }, [refreshEvents, extracting, generating]);
 
   useEffect(() => {
-    if (!extracting) return;
+    if (!extracting && !generating) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [extracting]);
+  }, [extracting, generating]);
 
   const onUpload = useCallback(
     async (file: File) => {
@@ -444,6 +450,16 @@ export function ProjectConsole(props: {
     const pct = pctFromPages ?? pctFromTime;
     return { estimate, elapsedSec, remainingSec, pct, pagesDone, totalPages, overdue: elapsedSec > estimate };
   }, [pageCount, runStartedAt, now, extraction]);
+
+  const protoWaitStats = useMemo(() => {
+    const estimate = estimatePrototypeSeconds();
+    const gateAt = events.find((e) => e.type === "gate.dna")?.createdAt;
+    const started = gateAt ? Date.parse(gateAt) : runStartedAt ? Date.parse(runStartedAt) : now;
+    const elapsedSec = Math.max(0, Math.floor((now - started) / 1000));
+    const remainingSec = Math.max(0, estimate - elapsedSec);
+    const pct = Math.min(0.95, elapsedSec / estimate);
+    return { estimate, elapsedSec, remainingSec, pct, overdue: elapsedSec > estimate };
+  }, [events, runStartedAt, now]);
 
   const currentStepIndex = stepIndexForStatus(status);
   const canRun =
@@ -901,11 +917,42 @@ export function ProjectConsole(props: {
           <h2 className="rs-section-title">Generating prototype</h2>
           <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
             Building the first interactive HTML prototype from the approved DNA and extracted
-            content. This usually takes several minutes — leave this tab open. When it finishes,
-            status becomes <strong>in review</strong> and you can refine or approve.
+            content. Usually <strong>3–8 minutes</strong> (opus studio) — leave this tab open.
+            When it finishes, status becomes <strong>in review</strong> and you can refine or
+            approve.
           </p>
-          <p style={{ color: "var(--signal)", fontSize: 14, margin: 0 }}>
-            Nothing to click right now — waiting on generation.
+          <div className="rs-stat-row">
+            <div>
+              <div className="rs-stat-label">Elapsed</div>
+              <div className="rs-stat-value">{formatDuration(protoWaitStats.elapsedSec)}</div>
+            </div>
+            <div>
+              <div className="rs-stat-label">
+                {protoWaitStats.overdue ? "Past typical" : "Est. remaining"}
+              </div>
+              <div className="rs-stat-value">
+                {protoWaitStats.overdue
+                  ? `+${formatDuration(protoWaitStats.elapsedSec - protoWaitStats.estimate)}`
+                  : formatDuration(protoWaitStats.remainingSec)}
+              </div>
+            </div>
+            <div>
+              <div className="rs-stat-label">Typical</div>
+              <div className="rs-stat-value" style={{ fontSize: "1.15rem" }}>
+                3–8 min
+              </div>
+            </div>
+          </div>
+          <div className="rs-progress rs-progress--live">
+            <div
+              className="rs-progress__bar"
+              style={{ width: `${Math.round(protoWaitStats.pct * 100)}%` }}
+            />
+          </div>
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            {protoWaitStats.overdue
+              ? "Still working — long runs and a single automatic retry can exceed the typical window."
+              : "Nothing to click right now — waiting on generation."}
           </p>
         </section>
       ) : null}
