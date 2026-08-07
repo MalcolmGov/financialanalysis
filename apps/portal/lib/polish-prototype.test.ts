@@ -6,11 +6,15 @@ describe("polishPrototypeHtml", () => {
     const html = `<!doctype html><html><head><style>:root{--dna-ink:#231F20}</style></head><body><p class="pg">Pages 2 – 4</p></body></html>`;
     const out = polishPrototypeHtml(html);
     expect(out).toContain('data-rs-readable="1"');
-    expect(out).toContain("max-width:var(--rs-prose)");
-    expect(out).toContain("line-height:1.65");
+    expect(out).toContain("--rs-content-max");
+    expect(out).toContain("max-width:var(--rs-content-max)");
+    expect(out).toContain("line-height:1.7");
     expect(out.indexOf('data-rs-readable="1"')).toBeLessThan(out.indexOf("</head>"));
     expect(out).toContain("--rs-header-bg");
     expect(READABLE_CSS).toContain("thead th");
+    // Letter/prose share the content rail — no nested 68ch column
+    expect(READABLE_CSS).not.toContain("68ch");
+    expect(READABLE_CSS).toMatch(/--rs-prose:var\(--rs-content-max\)/);
   });
 
   it("forces wrapping nav and centered content (no page overflow-x)", () => {
@@ -18,6 +22,7 @@ describe("polishPrototypeHtml", () => {
     expect(READABLE_CSS).toContain("flex-wrap:wrap");
     expect(READABLE_CSS).toContain("margin-inline:auto");
     expect(READABLE_CSS).toMatch(/nav[\s\S]*overflow-x:visible/);
+    expect(READABLE_CSS).toContain("text-overflow:unset");
     const out = polishPrototypeHtml(
       `<!doctype html><html><head></head><body><nav style="overflow-x:auto"><a>Operating segments</a></nav><main class="wrap"><article class="prose"><p>Letter</p></article></main></body></html>`,
     );

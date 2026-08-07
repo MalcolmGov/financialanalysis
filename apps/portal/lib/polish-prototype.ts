@@ -15,8 +15,11 @@ export const READABLE_CSS = `
   --rs-rule:color-mix(in srgb,var(--dna-ink,#231F20) 32%,var(--dna-paper,#fff));
   --rs-header-bg:color-mix(in srgb,var(--dna-table-header-bg,#839097) 68%,var(--dna-ink,#231F20));
   --rs-header-bg-emph:color-mix(in srgb,var(--dna-table-header-bg,#839097) 48%,var(--dna-ink,#231F20));
-  --rs-content:min(1120px,100%);
-  --rs-prose:68ch;
+  /* One content rail for headers + letter/prose — do not nest a narrower measure */
+  --rs-content-max:min(1120px,100%);
+  --rs-content:var(--rs-content-max);
+  --rs-prose:var(--rs-content-max);
+  --rs-table-max:min(1280px,100%);
   --rs-pad:clamp(1rem,3.2vw,2rem);
   --n-muted:var(--rs-meta);
   --n-rule:var(--rs-rule);
@@ -204,15 +207,24 @@ footer > .container{
   border-bottom:1px solid var(--rs-rule);
 }
 
-/* Prose — comfortable web reading measure + leading + centered column */
+/* Prose / letter — SAME content rail as section headers (no nested ch measure).
+   Comfortable reading via leading + paragraph spacing, not a narrower max-width. */
 .prose,
 article.prose,
 [data-dna-component="letter-prose"],
 [data-dna-component="letter-block"],
 [data-dna-component="note-block"] .prose,
 .rs-letter-miss,
-.rs-coverage-appendix .rs-letter-miss{
-  max-width:var(--rs-prose);
+.rs-coverage-appendix .rs-letter-miss,
+#shareholder-letter .prose,
+#shareholder-letter [data-dna-component="letter-prose"],
+#shareholder-letter [data-dna-component="letter-block"],
+#letter .prose,
+#overview .prose,
+.letter,
+.letter-body,
+.shareholder-letter{
+  max-width:var(--rs-content-max)!important;
   margin-inline:auto;
   width:100%;
   box-sizing:border-box;
@@ -221,31 +233,49 @@ article.prose,
 article.prose,
 [data-dna-component="letter-prose"],
 [data-dna-component="letter-block"],
-.rs-letter-miss{
-  line-height:1.65;
+.rs-letter-miss,
+.letter,
+.letter-body{
+  line-height:1.7;
 }
 .prose p,
 article.prose p,
 [data-dna-component="letter-prose"] p,
 [data-dna-component="letter-block"] p,
 .rs-letter-miss p,
-.rs-coverage-appendix .rs-letter-miss p{
-  max-width:var(--rs-prose);
-  line-height:1.65;
-  margin:0 0 1.28em;
+.rs-coverage-appendix .rs-letter-miss p,
+#shareholder-letter p,
+#letter p,
+#overview p,
+.letter p,
+.letter-body p{
+  max-width:none!important;
+  width:100%;
+  line-height:1.7;
+  margin:0 0 1.35em;
   color:var(--dna-ink,#231F20);
+  /* Never clip mid-word / ellipsis body copy */
+  overflow:visible!important;
+  text-overflow:unset!important;
+  white-space:normal!important;
+  -webkit-line-clamp:unset!important;
+  line-clamp:unset!important;
+  word-break:normal;
+  overflow-wrap:break-word;
 }
 .prose h3,
 article.prose h3,
 [data-dna-component="letter-prose"] h3{
   margin:2.15em 0 .85em;
   line-height:1.3;
+  max-width:none;
 }
 .prose h4,
 article.prose h4,
 [data-dna-component="letter-prose"] h4{
   margin:1.8em 0 .7em;
   line-height:1.35;
+  max-width:none;
   color:color-mix(in srgb,var(--dna-ink,#231F20) 90%,var(--dna-paper,#fff));
 }
 .prose ul,
@@ -253,8 +283,9 @@ article.prose h4,
 article.prose ul,
 article.prose ol{
   margin:0 0 1.35em;
-  line-height:1.65;
-  max-width:var(--rs-prose);
+  line-height:1.7;
+  max-width:none;
+  width:100%;
 }
 .prose li,
 article.prose li{
@@ -262,23 +293,32 @@ article.prose li{
 }
 .kicker{
   margin-bottom:1.75em;
-  line-height:1.5;
-  max-width:var(--rs-prose);
+  line-height:1.55;
+  max-width:var(--rs-content-max);
   margin-inline:auto;
+  width:100%;
 }
 
-/* KPI / chart / statement blocks — centered, wider than prose */
+/* KPI / chart / statement blocks — same rail; tables may use slightly wider */
 .kpi-row,
 .kpis,
 [data-dna-component="kpi-card"],
 [data-dna-component="chart-block"],
-[data-dna-component="statement-table"],
 [data-dna-component="note-block"],
 .panel,
 .statement,
 .statements,
 .rs-coverage-appendix{
-  max-width:var(--rs-content);
+  max-width:var(--rs-content-max);
+  margin-inline:auto;
+  width:100%;
+  box-sizing:border-box;
+}
+[data-dna-component="statement-table"],
+.rs-injected-table,
+.tbl-wrap,
+.table-wrap{
+  max-width:var(--rs-table-max);
   margin-inline:auto;
   width:100%;
   box-sizing:border-box;

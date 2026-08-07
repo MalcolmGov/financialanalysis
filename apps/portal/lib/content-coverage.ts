@@ -70,7 +70,7 @@ export function renderContentTable(table: ContentTable): string {
 }
 
 const INJECT_CSS = `
-.rs-coverage-appendix{padding:3rem 1.25rem 4rem;max-width:1120px;margin:0 auto}
+.rs-coverage-appendix{padding:3rem 1.25rem 4rem;max-width:var(--rs-content-max,1120px);margin:0 auto}
 .rs-coverage-appendix h2{font-family:var(--dna-font-heading,Georgia,serif);font-size:1.75rem;margin:0 0 1rem;color:var(--dna-ink,#231F20)}
 .rs-coverage-appendix h3{font-family:var(--dna-font-heading,Georgia,serif);font-size:1.15rem;margin:2rem 0 0.75rem;color:var(--dna-ink,#231F20)}
 .rs-coverage-appendix .rs-table-wrap,.rs-injected-table .rs-table-wrap{overflow-x:auto;border:1px solid color-mix(in srgb,var(--dna-ink,#231F20) 28%,var(--dna-paper,#fff));margin-bottom:1.5rem}
@@ -79,8 +79,8 @@ const INJECT_CSS = `
 .rs-coverage-appendix th[scope=row],.rs-coverage-appendix td:first-child,.rs-coverage-appendix th:first-child,.rs-injected-table th[scope=row],.rs-injected-table td:first-child,.rs-injected-table th:first-child{text-align:left;font-weight:600;color:var(--dna-ink,#231F20)}
 .rs-coverage-appendix thead th,.rs-injected-table thead th{background:color-mix(in srgb,var(--dna-table-header-bg,#839097) 68%,var(--dna-ink,#231F20));color:var(--dna-table-header-text,#fff);text-align:right;font-weight:600}
 .rs-coverage-appendix thead th:first-child,.rs-injected-table thead th:first-child{text-align:left}
-.rs-coverage-appendix .rs-letter-miss,.rs-letter-miss{max-width:68ch;line-height:1.65}
-.rs-coverage-appendix .rs-letter-miss p,.rs-letter-miss p{max-width:68ch;line-height:1.65;margin:0 0 1.28em;color:var(--dna-ink,#231F20)}
+.rs-coverage-appendix .rs-letter-miss,.rs-letter-miss{max-width:var(--rs-content-max,1120px);width:100%;line-height:1.7}
+.rs-coverage-appendix .rs-letter-miss p,.rs-letter-miss p{max-width:none;width:100%;line-height:1.7;margin:0 0 1.35em;color:var(--dna-ink,#231F20);overflow:visible;text-overflow:unset;white-space:normal}
 #financial-statements .rs-injected-table,#notes .rs-injected-table{margin:1.5rem 0}
 `;
 
