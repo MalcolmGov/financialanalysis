@@ -8,9 +8,9 @@ import type {
 } from "@rs/contracts";
 import {
   CHROME_CSS,
-  CHROME_SCRIPT,
   renderBreadcrumb,
   renderPrevNext,
+  renderSelectionTooltip,
   renderSeoHead,
   renderShareBar,
   renderStickyNav,
@@ -23,6 +23,7 @@ import {
   rowHasNumeric,
   rowRoleClass,
 } from "./row-taxonomy.js";
+import { SITE_RUNTIME_JS, siteRuntimeHref } from "./site-runtime.js";
 
 /**
  * Deterministic renderer. (SitePlan, FinancialDocModel, ExtractionResult,
@@ -253,21 +254,26 @@ export function renderSitePlan(
           crumbInHero ? "" : renderBreadcrumb(page.path, page.title, company)
         }`
       : "";
-    const chromeBottom = multiPage ? renderPrevNext(pageOrder, page.path) : "";
-    const chromeScript = multiPage ? `<script>${CHROME_SCRIPT}</script>` : "";
+    const chromeBottom = multiPage
+      ? `${renderPrevNext(pageOrder, page.path)}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
+      : "";
 
     // Prefer injecting chrome around main; otherwise wrap body content.
     let body = shell;
     if (multiPage) {
       if (/<main\b/i.test(body)) {
-        body = `${chromeTop}${body}${chromeBottom}${chromeScript}`;
+        body = `${chromeTop}${body}${chromeBottom}`;
       } else {
-        body = `${chromeTop}<main data-dna-component="page-shell">${body}</main>${chromeBottom}${chromeScript}`;
+        body = `${chromeTop}<main data-dna-component="page-shell">${body}</main>${chromeBottom}`;
       }
     }
 
     const doc = `<!doctype html><html lang="en"><head>${head}</head><body>${body}</body></html>`;
     files[page.path] = doc;
+  }
+
+  if (multiPage) {
+    files["assets/site.js"] = SITE_RUNTIME_JS;
   }
 
   if (multiPage && ctx.docModel) {

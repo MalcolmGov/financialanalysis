@@ -1,5 +1,6 @@
 import type { FinancialDocModel, SitePlan } from "@rs/contracts";
 import { renderBreadcrumb } from "./chrome.js";
+import { renderKpiCardsHtml, segmentHighlightKpis } from "./home-kpis.js";
 import { noteAnchorId, noteNumberFromTitle } from "./notes-linker.js";
 
 /**
@@ -62,22 +63,42 @@ function exploreCards(plan: SitePlan): string {
     .map((n, i) => {
       const n_ = String(i + 1).padStart(2, "0");
       // Decorative card index — not a financial figure (Gate B allow-list).
-      return `<a class="explore-card" href="${escapeHtml(n.href)}"><span class="explore-n" data-allow-number>${n_}</span><span class="explore-label">${escapeHtml(n.label)}</span></a>`;
+      return `<a class="explore-card reveal" href="${escapeHtml(n.href)}"><span class="explore-n" data-allow-number>${n_}</span><span class="explore-label">${escapeHtml(n.label)}</span></a>`;
     })
     .join("");
   return `<section class="explore" aria-label="Explore the report"><h2 class="prose-h">Explore the report</h2><div class="explore-grid">${cards}</div></section>`;
 }
 
+/** Flatten highlights blocks into plain text for KPI segmentation. */
+function highlightsPlain(docModel: FinancialDocModel): { text: string; src?: string } {
+  const hi = docModel.sections.find((s) => s.kind === "highlights");
+  if (!hi) return { text: "" };
+  const parts: string[] = [];
+  let src: string | undefined;
+  for (const b of hi.blocks) {
+    if (b.kind === "table" || b.kind === "heading") continue;
+    const t = b.text?.trim();
+    if (!t) continue;
+    parts.push(t);
+    if (!src && b.src_ref) src = b.src_ref;
+  }
+  return { text: parts.join(" "), src };
+}
+
 function highlightsHtml(docModel: FinancialDocModel): string {
   const hi = docModel.sections.find((s) => s.kind === "highlights");
   if (!hi) return "";
+  const { text, src } = highlightsPlain(docModel);
+  const kpis = segmentHighlightKpis(text, src);
+  const kpiHtml = renderKpiCardsHtml(kpis);
   const body = wrapLooseListItems(
     sectionBlocksHtml(
       docModel.sections.filter((s) => s.kind === "highlights"),
       ["highlights"],
     ),
   );
-  return `<section class="highlights" aria-label="Highlights">${body || "<p class=\"prose-p\">Highlights from the interim results.</p>"}</section>`;
+  // KPI cards (motion) + provenance-preserving prose highlights underneath.
+  return `${kpiHtml}<section class="highlights reveal" aria-label="Highlights">${body || "<p class=\"prose-p\">Highlights from the interim results.</p>"}</section>`;
 }
 
 function homeHero(docModel: FinancialDocModel): string {

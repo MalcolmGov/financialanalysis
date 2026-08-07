@@ -1,8 +1,12 @@
 /**
  * Shared microsite chrome for multi-page SitePlan export:
- * sticky nav (Financials dropdown), breadcrumb, prev/next footer, SEO head.
+ * sticky nav (Financials dropdown + mobile toggle), breadcrumb, prev/next,
+ * selection mark/share tooltip host, SEO head.
  * Uses DNA CSS variables — no Inter / Google Fonts CDN.
+ * Interaction behaviour lives in site-runtime.ts (assets/site.js).
  */
+
+import { SITE_RUNTIME_JS } from "./site-runtime.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -104,7 +108,32 @@ export function renderStickyNav(
       return `<li${active ? ' class="is-active"' : ""}><a href="${escapeHtml(href)}"${isCur}>${escapeHtml(item.label)}</a></li>`;
     })
     .join("");
-  return `<nav class="site-nav" data-dna-component="sticky-nav" aria-label="Primary"><ul class="nav-row">${items}</ul></nav>`;
+
+  const mobileLinks = grouped
+    .map((item) => {
+      if (item.children?.length) {
+        const kids = item.children
+          .map((c) => {
+            const href = hrefFrom(currentPath, c.href);
+            const isCur = c.href === currentPath ? ' aria-current="page"' : "";
+            const active = c.href === currentPath ? " is-active" : "";
+            return `<a class="nav-mobile__link nav-mobile__sub${active}" href="${escapeHtml(href)}"${isCur}>${escapeHtml(c.label)}</a>`;
+          })
+          .join("");
+        return `<div class="nav-mobile__group"><div class="nav-mobile__heading">${escapeHtml(item.label)}</div>${kids}</div>`;
+      }
+      const href = hrefFrom(currentPath, item.href);
+      const isCur = item.href === currentPath ? ' aria-current="page"' : "";
+      const active =
+        item.href === currentPath ||
+        (item.href === "index.html" && currentPath === "index.html")
+          ? " is-active"
+          : "";
+      return `<a class="nav-mobile__link${active}" href="${escapeHtml(href)}"${isCur}>${escapeHtml(item.label)}</a>`;
+    })
+    .join("");
+
+  return `<nav class="site-nav" data-dna-component="sticky-nav" aria-label="Primary"><div class="nav-inner"><ul class="nav-row">${items}</ul><button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="nav-mobile" aria-label="Open menu"><span></span><span></span><span></span></button></div><div class="nav-mobile" id="nav-mobile">${mobileLinks}</div></nav>`;
 }
 
 export function renderBreadcrumb(
@@ -153,46 +182,54 @@ export function renderShareBar(): string {
   return `<div class="share-bar" data-dna-component="share"><button type="button" data-share="copy">Copy link</button><a data-share="linkedin" href="#" rel="noopener noreferrer" target="_blank">LinkedIn</a></div>`;
 }
 
-/** Tiny chrome behaviours: Financials dropdown click + copy/share. */
-export const CHROME_SCRIPT = `
-(function(){
-  document.querySelectorAll('.nav-dd-btn').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var open=btn.getAttribute('aria-expanded')==='true';
-      btn.setAttribute('aria-expanded', open?'false':'true');
-      btn.parentElement && btn.parentElement.classList.toggle('is-open', !open);
-    });
-  });
-  document.querySelectorAll('[data-share="copy"]').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var url=location.href;
-      if(navigator.clipboard&&navigator.clipboard.writeText){
-        navigator.clipboard.writeText(url).then(function(){btn.textContent='Copied'; setTimeout(function(){btn.textContent='Copy link'},1600)});
-      }
-    });
-  });
-  document.querySelectorAll('[data-share="linkedin"]').forEach(function(a){
-    a.addEventListener('click',function(e){
-      e.preventDefault();
-      var u='https://www.linkedin.com/sharing/share-offsite/?url='+encodeURIComponent(location.href);
-      window.open(u,'_blank','noopener,noreferrer');
-    });
-  });
-})();
-`.trim();
+/** Selection tooltip host for Copy / Highlight / LinkedIn (wired by SiteRuntime). */
+export function renderSelectionTooltip(): string {
+  return `<div id="share-tooltip" role="tooltip"><button type="button" class="share-tip-btn" id="sel-share-copy">Copy</button><button type="button" class="share-tip-btn" id="sel-share-mark">Highlight</button><button type="button" class="share-tip-btn" id="sel-share-linkedin">LinkedIn</button></div>`;
+}
+
+/**
+ * @deprecated Prefer assets/site.js via SITE_RUNTIME_JS. Kept as an alias so
+ * older callers that inlined CHROME_SCRIPT still get the full runtime.
+ */
+export const CHROME_SCRIPT = SITE_RUNTIME_JS;
 
 /** Baseline chrome CSS (DNA tokens; no external font CDN). */
 export const CHROME_CSS = `
 .site-nav{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--dna-paper,#fff) 94%,var(--dna-ink,#111));border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 16%,transparent);backdrop-filter:blur(10px)}
-.site-nav .nav-row{display:flex;flex-wrap:wrap;align-items:center;gap:.1rem .35rem;list-style:none;margin:0 auto;padding:.65rem clamp(1rem,3vw,2rem);max-width:1120px}
+.site-nav .nav-inner{display:flex;align-items:center;gap:.5rem;max-width:1120px;margin:0 auto;padding:.65rem clamp(1rem,3vw,2rem)}
+.site-nav .nav-row{display:flex;flex-wrap:wrap;align-items:center;gap:.1rem .35rem;list-style:none;margin:0;padding:0;flex:1}
 .site-nav a,.site-nav .nav-dd-btn{font-family:var(--dna-font-body,system-ui,sans-serif);font-size:.76rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dna-ink,#231F20);text-decoration:none;background:none;border:0;padding:.5rem .6rem;cursor:pointer}
 .site-nav a[aria-current="page"],.site-nav .is-active>a,.site-nav .is-active>.nav-dd-btn{color:var(--dna-brand,#B8912A);font-weight:700}
 .nav-dd{position:relative}
 .nav-dd-menu{display:none;position:absolute;left:0;top:calc(100% - 2px);min-width:15rem;margin:0;padding:.4rem 0;list-style:none;background:var(--dna-paper,#fff);border:1px solid color-mix(in srgb,var(--dna-ink,#111) 18%,transparent);box-shadow:0 10px 28px rgba(0,0,0,.1);z-index:50}
 .nav-dd:hover .nav-dd-menu,.nav-dd:focus-within .nav-dd-menu,.nav-dd.is-open .nav-dd-menu{display:block}
 .nav-dd-menu a{display:block;text-transform:none;letter-spacing:0;font-size:.9rem;padding:.45rem .95rem}
+.nav-toggle{display:none;flex-direction:column;justify-content:center;gap:5px;margin-left:auto;padding:.45rem;background:none;border:0;cursor:pointer}
+.nav-toggle span{display:block;width:22px;height:2px;background:var(--dna-ink,#231F20);border-radius:1px}
+.nav-mobile{display:none;flex-direction:column;gap:0;padding:.35rem clamp(1rem,3vw,2rem) 1rem;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
+.nav-mobile.is-open{display:flex}
+.nav-mobile__link{display:block;padding:.7rem .35rem;font-family:var(--dna-font-body,system-ui,sans-serif);font-size:.95rem;color:var(--dna-ink,#231F20);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent)}
+.nav-mobile__link.is-active,.nav-mobile__link[aria-current="page"]{color:var(--dna-brand,#B8912A);font-weight:700}
+.nav-mobile__sub{padding-left:1.1rem;font-size:.9rem}
+.nav-mobile__heading{padding:.65rem .35rem .2rem;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--dna-ink,#111) 50%,var(--dna-paper,#fff))}
+@media (max-width:820px){
+  .site-nav .nav-row{display:none}
+  .nav-toggle{display:flex}
+  .nav-mobile.is-open{display:flex}
+}
 .share-bar{display:flex;gap:.5rem;align-items:center;max-width:1120px;margin:0 auto;padding:.45rem clamp(1rem,3vw,2rem) 0;font-family:var(--dna-font-body,system-ui,sans-serif)}
 .share-bar button,.share-bar a{font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;color:color-mix(in srgb,var(--dna-ink,#111) 60%,var(--dna-paper,#fff));background:none;border:0;padding:.35rem .45rem;cursor:pointer;text-decoration:none}
+#share-tooltip{position:absolute;z-index:200;display:none;gap:.35rem;background:var(--dna-ink,#231F20);color:var(--dna-paper,#fff);border-radius:6px;padding:.35rem .45rem;box-shadow:0 8px 28px rgba(0,0,0,.18);transform:translateX(-50%);pointer-events:none}
+#share-tooltip.is-visible{display:flex;pointer-events:auto}
+.share-tip-btn{font-family:var(--dna-font-body,system-ui,sans-serif);font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--dna-paper,#fff);background:transparent;border:0;padding:.35rem .55rem;cursor:pointer}
+.share-tip-btn:hover{color:var(--dna-brand,#B8912A)}
+mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#B8912A) 28%,transparent);color:inherit;border-radius:2px;padding:0 2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dna-brand,#B8912A) 40%,transparent)}
+.reveal,.kpi-card{opacity:0;transform:translateY(14px);transition:opacity .55s ease,transform .55s ease}
+.reveal.is-visible,.reveal.revealed,.kpi-card.is-visible,.kpi-card.revealed{opacity:1;transform:none}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(14.5rem,1fr));gap:.85rem;margin:0 0 1.25rem}
+.kpi-card{padding:1rem 1.1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 14%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--dna-shading,#F2F2F2) 40%,var(--dna-paper,#fff)),var(--dna-paper,#fff));border-top:3px solid var(--dna-brand,#B8912A)}
+.kpi-label{margin:0 0 .45rem;font-size:.82rem;line-height:1.35;color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff))}
+.kpi-value{margin:0;font-family:var(--dna-font-heading,Georgia,serif);font-size:clamp(1.25rem,2.4vw,1.65rem);font-weight:700;font-variant-numeric:tabular-nums;color:var(--dna-ink,#231F20)}
 .breadcrumb{display:flex;flex-wrap:wrap;gap:.35rem .5rem;align-items:center;font-family:var(--dna-font-body,system-ui,sans-serif);font-size:.82rem;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff));margin:0 0 .85rem}
 .breadcrumb a{color:var(--dna-brand,#B8912A);text-decoration:none}
 .bc-sep{opacity:.45}
@@ -219,6 +256,7 @@ export const CHROME_CSS = `
 .highlights .prose-p,.prose-p{margin:.35rem 0;line-height:1.55}
 .explore-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.75rem}
 .explore-card{display:flex;gap:.65rem;align-items:baseline;padding:.85rem 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 16%,transparent);color:inherit;text-decoration:none}
+.explore-card.reveal{/* reveal opacity owned by .reveal */}
 .explore-n{font-size:.72rem;letter-spacing:.06em;color:var(--dna-brand,#B8912A)}
 .explore-label{font-family:var(--dna-font-heading,Georgia,serif)}
 .download-list{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}

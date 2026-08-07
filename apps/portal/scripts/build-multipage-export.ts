@@ -53,6 +53,8 @@ async function main() {
   const bs = built.files["financials/balance-sheet.html"] ?? "";
   const cf = built.files["financials/cash-flows.html"] ?? "";
   const notes = built.files["financials/notes.html"] ?? "";
+  const home = built.files["index.html"] ?? "";
+  const siteJs = built.files["assets/site.js"] ?? "";
   const checks = [
     ["index.html", !!built.files["index.html"]],
     ["commentary.html", !!built.files["commentary.html"]],
@@ -70,6 +72,13 @@ async function main() {
     ["notes", !!built.files["financials/notes.html"]],
     ["downloads", !!built.files["downloads.html"]],
     ["no prototype entrypoint", !built.files["prototype/index.html"] || built.entrypoint === "index.html"],
+    // P2 — SiteRuntime
+    ["assets/site.js", siteJs.includes("data-countup") && siteJs.includes("user-mark") && siteJs.includes("data-nav-toggle")],
+    ["runtime script tag", home.includes("assets/site.js") && bs.includes("../assets/site.js")],
+    ["mobile nav", home.includes("data-nav-toggle") && home.includes('id="nav-mobile"')],
+    ["selection tooltip", home.includes("share-tooltip") && home.includes("sel-share-mark")],
+    ["KPI count-up", home.includes("data-countup") && home.includes("kpi-card")],
+    ["reveal hooks", home.includes("class=\"kpi-card reveal\"") || home.includes("kpi-card reveal")],
     ["gate A", built.gateA.status === "pass"],
     ["gate B", built.gateB.status === "pass"],
   ] as const;

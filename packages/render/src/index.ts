@@ -5,6 +5,8 @@ export * from "./chrome.js";
 export * from "./enrich.js";
 export * from "./notes-linker.js";
 export * from "./row-taxonomy.js";
+export * from "./site-runtime.js";
+export * from "./home-kpis.js";
 export * from "./gate-a.js";
 export * from "./gate-b.js";
 export * from "./color.js";

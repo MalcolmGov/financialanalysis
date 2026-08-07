@@ -53,6 +53,8 @@ export function gateB(
   let matched = 0;
 
   for (const [page, html] of Object.entries(files)) {
+    // Skip shared assets (site.js, CSS, binaries) — Gate B audits HTML only.
+    if (!page.endsWith(".html") && !page.endsWith(".htm")) continue;
     const { document } = parseHTML(html);
 
     // 1. Every data-src element must equal its source verbatim.
