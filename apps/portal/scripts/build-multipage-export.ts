@@ -50,12 +50,23 @@ async function main() {
   }
 
   const income = built.files["financials/income-statement.html"] ?? "";
+  const bs = built.files["financials/balance-sheet.html"] ?? "";
+  const cf = built.files["financials/cash-flows.html"] ?? "";
+  const notes = built.files["financials/notes.html"] ?? "";
   const checks = [
     ["index.html", !!built.files["index.html"]],
     ["commentary.html", !!built.files["commentary.html"]],
     ["income-statement", income.includes("5 053.2") || income.includes("fin-table")],
-    ["site-nav", income.includes("site-nav")],
-    ["cur shading", income.includes("data-cur-col") || income.includes('class="cur')],
+    ["site-nav", income.includes("site-nav") && income.includes("nav-dd")],
+    ["breadcrumb", bs.includes("breadcrumb")],
+    ["prev/next", bs.includes("page-pager")],
+    ["page hero", bs.includes("page-hero") && bs.includes("page-hero__eyebrow")],
+    ["cur shading IS", income.includes("data-cur-col") && income.includes(" cur")],
+    ["cur shading BS", bs.includes('data-cur-col="3"') || /data-cur-col="3"/.test(bs)],
+    ["cur shading CF", cf.includes("data-cur-col")],
+    ["row taxonomy", /class="r-(section|line|subtotal|total)"/.test(bs)],
+    ["note links", bs.includes('class="note-ref"') && bs.includes("notes.html#note-")],
+    ["note anchors", /id="note-\d+"/.test(notes)],
     ["notes", !!built.files["financials/notes.html"]],
     ["downloads", !!built.files["downloads.html"]],
     ["no prototype entrypoint", !built.files["prototype/index.html"] || built.entrypoint === "index.html"],

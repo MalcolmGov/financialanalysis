@@ -1,4 +1,6 @@
 import type { FinancialDocModel, SitePlan } from "@rs/contracts";
+import { renderBreadcrumb } from "./chrome.js";
+import { noteAnchorId, noteNumberFromTitle } from "./notes-linker.js";
 
 /**
  * Fill WW-style prose pages after the deterministic table render.
@@ -16,8 +18,7 @@ function escapeHtml(s: string): string {
 
 const NOTE_HEADING = /^(\d{1,2})\.\s+\S/;
 function noteNumberOf(title: string): number | null {
-  const m = NOTE_HEADING.exec(title.trim());
-  return m ? Number(m[1]) : null;
+  return noteNumberFromTitle(title);
 }
 
 function sectionBlocksHtml(
@@ -125,11 +126,23 @@ function replaceHomeHero(html: string, hero: string): string {
   );
 }
 
-/** Wrap each notes table section with #note-N when a note number is known. */
-function anchorNotes(
-  html: string,
-  docModel: FinancialDocModel,
-): string {
+function pageHero(opts: {
+  path: string;
+  title: string;
+  company?: string;
+  periodLabel?: string;
+  eyebrow?: string;
+}): string {
+  const crumb = renderBreadcrumb(opts.path, opts.title, opts.company);
+  const eyebrow = opts.eyebrow ?? "Condensed Consolidated — Unaudited";
+  const sub = opts.periodLabel?.trim()
+    ? `<p class="page-hero__sub" data-allow-number>${escapeHtml(opts.periodLabel.trim())}</p>`
+    : "";
+  return `<header class="page-hero" data-dna-component="page-hero">${crumb}<p class="page-hero__eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(opts.title)}</h1>${sub}</header>`;
+}
+
+/** Map table src → note number from section metadata + table title cells. */
+function noteNumberByTableSrc(docModel: FinancialDocModel): Map<string, number> {
   const bySrc = new Map<string, number>();
   for (const sec of docModel.sections) {
     const n =
@@ -143,6 +156,22 @@ function anchorNotes(
       }
     }
   }
+  // Also scan table header first cells for "N. Title" when section meta missed it.
+  for (const tbl of docModel.tables) {
+    if (bySrc.has(tbl.src_table)) continue;
+    const tip = tbl.header_matrix[0]?.[0]?.raw ?? "";
+    const n = noteNumberOf(tip);
+    if (n != null) bySrc.set(tbl.src_table, n);
+  }
+  return bySrc;
+}
+
+/** Wrap each notes table section with #note-N when a note number is known. */
+function anchorNotes(
+  html: string,
+  docModel: FinancialDocModel,
+): string {
+  const bySrc = noteNumberByTableSrc(docModel);
   return html.replace(
     /<section([^>]*data-dna-component="statement-table"[^>]*)>([\s\S]*?)<\/section>/gi,
     (full, attrs: string, inner: string) => {
@@ -150,15 +179,90 @@ function anchorNotes(
       const src = m?.[1];
       const n = src ? bySrc.get(src) : undefined;
       if (n == null) return full;
-      const id = `note-${n}`;
+      const id = noteAnchorId(n);
       if (/\sid="/.test(attrs)) return full;
-      return `<section id="${id}"${attrs}><h2 class="note-title" data-allow-number>Note ${n}</h2>${inner}</section>`;
+      return `<section id="${id}" class="note-block"${attrs}><h2 class="note-title" data-allow-number>Note ${n}</h2>${inner}</section>`;
     },
   );
 }
 
-function pageTitleBanner(title: string): string {
-  return `<header class="page-title-banner"><h1>${escapeHtml(title)}</h1></header>`;
+/**
+ * Build anchored prose note blocks from the notes section headings (1. … 10. …).
+ * Tables already on the page keep their anchors; prose fills gaps so statement
+ * note links always resolve.
+ */
+function notesProseBlocks(docModel: FinancialDocModel): string {
+  const notesSec = docModel.sections.find(
+    (s) => s.kind === "note" && s.id === "doc:sec_notes",
+  );
+  if (!notesSec) return "";
+
+  type Bucket = {
+    n: number;
+    title: string;
+    titleSrc?: string;
+    paras: Array<{ text: string; src?: string }>;
+  };
+  const buckets: Bucket[] = [];
+  let cur: Bucket | null = null;
+
+  for (const b of notesSec.blocks) {
+    if (b.kind === "table") continue;
+    const text = b.text?.trim();
+    if (!text) continue;
+    if (b.kind === "heading" && NOTE_HEADING.test(text)) {
+      const n = noteNumberOf(text)!;
+      cur = { n, title: text, titleSrc: b.src_ref, paras: [] };
+      buckets.push(cur);
+      continue;
+    }
+    if (!cur) continue;
+    if (b.kind === "heading" && /notes to the/i.test(text)) continue;
+    cur.paras.push({ text, src: b.src_ref });
+  }
+
+  // Deduplicate by note number (continued headings); keep first rich bucket.
+  const byN = new Map<number, Bucket>();
+  for (const b of buckets) {
+    const prev = byN.get(b.n);
+    if (!prev || b.paras.length > prev.paras.length) byN.set(b.n, b);
+  }
+
+  return [...byN.values()]
+    .sort((a, b) => a.n - b.n)
+    .map((b) => {
+      const id = noteAnchorId(b.n);
+      const titleSrc = b.titleSrc ? ` data-src="${escapeHtml(b.titleSrc)}"` : "";
+      const paras = b.paras
+        .slice(0, 12)
+        .map((p) => {
+          const src = p.src ? ` data-src="${escapeHtml(p.src)}"` : "";
+          return `<p class="prose-p"${src}>${escapeHtml(p.text)}</p>`;
+        })
+        .join("\n");
+      return `<section class="note-block" id="${id}" data-dna-component="note-prose"><h2 class="note-title"${titleSrc} data-allow-number>${escapeHtml(b.title)}</h2>${paras}</section>`;
+    })
+    .join("\n");
+}
+
+/**
+ * Merge prose note anchors with table sections: if a #note-N table already
+ * exists, drop the prose duplicate; otherwise keep prose so links resolve.
+ */
+function mergeNotesPage(html: string, proseHtml: string): string {
+  if (!proseHtml) return html;
+  const existing = new Set(
+    [...html.matchAll(/\sid="(note-\d+)"/g)].map((m) => m[1]!),
+  );
+  const keep = proseHtml.replace(
+    /<section class="note-block" id="(note-\d+)"[\s\S]*?<\/section>/g,
+    (full, id: string) => (existing.has(id) ? "" : full),
+  );
+  // Insert prose notes after the page hero / before first table section.
+  if (/<\/header>/i.test(html) && /page-hero/.test(html)) {
+    return html.replace(/<\/header>/i, (m) => `${m}${keep}`);
+  }
+  return html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${keep}`);
 }
 
 export function enrichMultiPageFiles(
@@ -167,6 +271,8 @@ export function enrichMultiPageFiles(
   docModel: FinancialDocModel,
 ): Record<string, string> {
   const out = { ...files };
+  const company = docModel.meta.company;
+  const periodLabel = docModel.meta.period_label;
 
   if (out["index.html"]) {
     let html = replaceHomeHero(out["index.html"], homeHero(docModel));
@@ -180,7 +286,13 @@ export function enrichMultiPageFiles(
       sectionBlocksHtml(docModel.sections, ["letter", "reviewOfOperations", "dividendDeclaration"]),
     );
     const content =
-      pageTitleBanner("Commentary") +
+      pageHero({
+        path: "commentary.html",
+        title: "Commentary",
+        company,
+        periodLabel,
+        eyebrow: "Shareholder letter & operations",
+      }) +
       (prose || `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter.</p>`);
     out["commentary.html"] = injectInto(out["commentary.html"], "prose-body", content);
   }
@@ -197,7 +309,13 @@ export function enrichMultiPageFiles(
       ]),
     );
     const content =
-      pageTitleBanner("Administration") +
+      pageHero({
+        path: "administration.html",
+        title: "Administration",
+        company,
+        periodLabel,
+        eyebrow: "Corporate information",
+      }) +
       (prose || `<p class="prose-p">Administration details from the results announcement.</p>`);
     out["administration.html"] = injectInto(out["administration.html"], "prose-body", content);
   }
@@ -206,26 +324,48 @@ export function enrichMultiPageFiles(
     out["downloads.html"] = injectInto(
       out["downloads.html"],
       "prose-body",
-      pageTitleBanner("Downloads") + downloadsHtml(docModel),
+      pageHero({
+        path: "downloads.html",
+        title: "Downloads",
+        company,
+        periodLabel,
+        eyebrow: "Source documents",
+      }) + downloadsHtml(docModel),
     );
   }
 
   if (out["financials/notes.html"]) {
     let html = out["financials/notes.html"];
-    if (!/<h1[\s>]/i.test(html)) {
-      const banner = pageTitleBanner("Notes to the financial statements");
-      html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${banner}`);
-    }
-    out["financials/notes.html"] = anchorNotes(html, docModel);
+    // Strip any prior title banner before injecting hero.
+    html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
+    html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
+    const hero = pageHero({
+      path: "financials/notes.html",
+      title: "Notes to the financial statements",
+      company,
+      periodLabel,
+      eyebrow: "Condensed Consolidated — Unaudited",
+    });
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    html = anchorNotes(html, docModel);
+    html = mergeNotesPage(html, notesProseBlocks(docModel));
+    out["financials/notes.html"] = html;
   }
 
-  // Statement page titles
+  // Statement page heroes (eyebrow, H1, period)
   for (const page of plan.pages) {
     if (!page.path.startsWith("financials/") || page.path.endsWith("notes.html")) continue;
-    const html = out[page.path];
-    if (!html || /page-title-banner/.test(html)) continue;
-    const banner = pageTitleBanner(page.title);
-    out[page.path] = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${banner}`);
+    let html = out[page.path];
+    if (!html) continue;
+    html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
+    html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
+    const hero = pageHero({
+      path: page.path,
+      title: page.title,
+      company,
+      periodLabel,
+    });
+    out[page.path] = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
   }
 
   return out;

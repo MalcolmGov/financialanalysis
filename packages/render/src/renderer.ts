@@ -16,7 +16,13 @@ import {
   renderStickyNav,
 } from "./chrome.js";
 import { enrichMultiPageFiles } from "./enrich.js";
+import { linkNoteRefHtml, notesBaseHref } from "./notes-linker.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
+import {
+  classifyStatementRow,
+  rowHasNumeric,
+  rowRoleClass,
+} from "./row-taxonomy.js";
 
 /**
  * Deterministic renderer. (SitePlan, FinancialDocModel, ExtractionResult,
@@ -44,7 +50,10 @@ export function numberSpan(ref: string, verbatim: string): string {
   return `<span class="num" data-src="${escapeHtml(ref)}">${escapeHtml(verbatim)}</span>`;
 }
 
-/** Latest-year column (0-based) from FinTable header matrix, or null. */
+/**
+ * Latest-year column (0-based) from FinTable header matrix, or null.
+ * On same-year ties prefer leftmost (current period is listed first in IR tables).
+ */
 function findCurrentPeriodCol(table: FinTable): number | null {
   let bestCol: number | null = null;
   let bestYear = -1;
@@ -53,7 +62,10 @@ function findCurrentPeriodCol(table: FinTable): number | null {
     for (const h of row) {
       const years = [...h.raw.matchAll(/\b((?:19|20)\d{2})\b/g)].map((m) => Number(m[1]));
       const y = years.length ? Math.max(...years) : null;
-      if (y != null && y >= bestYear) {
+      if (
+        y != null &&
+        (bestCol == null || y > bestYear || (y === bestYear && col < bestCol))
+      ) {
         bestYear = y;
         bestCol = col;
       }
@@ -63,7 +75,7 @@ function findCurrentPeriodCol(table: FinTable): number | null {
   return bestCol;
 }
 
-function renderFinTable(table: FinTable): string {
+function renderFinTable(table: FinTable, notesBase: string | null): string {
   const cur0 = findCurrentPeriodCol(table);
   const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
 
@@ -90,6 +102,8 @@ function renderFinTable(table: FinTable): string {
 
   const body = table.rows
     .map((row) => {
+      const label = row.cells[0]?.raw ?? "";
+      const role = classifyStatementRow(label, rowHasNumeric(row.cells));
       let col = 0;
       const cells = row.cells
         .map((cell) => {
@@ -101,6 +115,11 @@ function renderFinTable(table: FinTable): string {
           if (cell.kind === "number") {
             return `<td class="cell-num${curCls}">${numberSpan(cell.src_ref, cell.raw)}</td>`;
           }
+          if (cell.kind === "noteRef" && cell.raw.trim() && notesBase) {
+            const src = ` data-src="${escapeHtml(cell.src_ref)}"`;
+            const linked = linkNoteRefHtml(cell.raw, notesBase, escapeHtml);
+            return `<td class="cell-noteRef${curCls}"${src}>${linked}</td>`;
+          }
           // Every cell with CONTENT is provenance-tagged — text row-labels
           // ("Balance at 30 June 2024"), nil markers and note refs all carry
           // digits that must trace to their source cell (cell.raw is the
@@ -110,7 +129,7 @@ function renderFinTable(table: FinTable): string {
           return `<td class="cell-${cell.kind}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
         })
         .join("");
-      return `<tr>${cells}</tr>`;
+      return `<tr class="${rowRoleClass(role)}">${cells}</tr>`;
     })
     .join("");
 
@@ -122,6 +141,7 @@ function renderSlot(
   slotDef: SlotDef,
   value: unknown,
   ctx: ResolveContext,
+  notesBase: string | null,
 ): string {
   switch (slotDef.type) {
     case "text":
@@ -132,7 +152,9 @@ function renderSlot(
       const ref = String(value ?? "");
       if (slotDef.accepts === "table") {
         const table = findDocTable(ref, ctx);
-        return table ? renderFinTable(table) : `<!-- unresolved table ${escapeHtml(ref)} -->`;
+        return table
+          ? renderFinTable(table, notesBase)
+          : `<!-- unresolved table ${escapeHtml(ref)} -->`;
       }
       const raw = resolveCell(ref, ctx);
       if (raw === null) return `<!-- unresolved ref ${escapeHtml(ref)} -->`;
@@ -164,13 +186,14 @@ function renderComponent(
   def: ComponentDef,
   inst: ComponentInstance,
   ctx: ResolveContext,
+  notesBase: string | null,
 ): string {
   let html = def.html;
   html = html.replace(/\{\{variant\}\}/g, escapeHtml(inst.variant ?? "default"));
   html = html.replace(/\{\{slot:([a-zA-Z0-9_]+)\}\}/g, (_m, slotName: string) => {
     const slotDef = def.slots[slotName];
     if (!slotDef) return "";
-    return renderSlot(slotName, slotDef, inst.slots[slotName], ctx);
+    return renderSlot(slotName, slotDef, inst.slots[slotName], ctx, notesBase);
   });
   return html;
 }
@@ -193,13 +216,21 @@ export function renderSitePlan(
 
   for (const page of plan.pages) {
     const tpl = templates.get(page.template);
+    const notesBase = notesBaseHref(page.path);
+    // Breadcrumb lives in page-hero for financial pages (enrich); keep top crumb elsewhere.
+    const crumbInHero =
+      multiPage &&
+      (page.path.startsWith("financials/") ||
+        page.path === "commentary.html" ||
+        page.path === "administration.html" ||
+        page.path === "downloads.html");
     let shell = tpl?.shell_html ?? "<main>{{region:main}}</main>";
     shell = shell.replace(/\{\{region:([a-zA-Z0-9_-]+)\}\}/g, (_m, regionId: string) => {
       const instances = page.regions[regionId] ?? [];
       return instances
         .map((inst) => {
           const def = components.get(inst.component);
-          return def ? renderComponent(def, inst, ctx) : "";
+          return def ? renderComponent(def, inst, ctx, notesBase) : "";
         })
         .join("\n");
     });
@@ -218,7 +249,9 @@ export function renderSitePlan(
       : `<meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style>`;
 
     const chromeTop = multiPage
-      ? `${renderStickyNav(plan.nav, page.path)}${renderShareBar()}${renderBreadcrumb(page.path, page.title, company)}`
+      ? `${renderStickyNav(plan.nav, page.path)}${renderShareBar()}${
+          crumbInHero ? "" : renderBreadcrumb(page.path, page.title, company)
+        }`
       : "";
     const chromeBottom = multiPage ? renderPrevNext(pageOrder, page.path) : "";
     const chromeScript = multiPage ? `<script>${CHROME_SCRIPT}</script>` : "";
@@ -245,21 +278,37 @@ export function renderSitePlan(
 
 /** Older blueprints only locked :root tokens — inject baseline table layout. */
 function ensureStatementCss(tokensCss: string): string {
-  if (tokensCss.includes(".fin-table")) return tokensCss;
+  if (tokensCss.includes(".fin-table")) {
+    // P1 row taxonomy / note-ref rules may be missing from older locked blueprints.
+    if (tokensCss.includes(".r-section") && tokensCss.includes(".note-ref")) return tokensCss;
+    return `${tokensCss}
+${STATEMENT_P1_CSS}`;
+  }
   return `${tokensCss}
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;padding:24px 20px 48px;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
-main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:grid;gap:28px}
+body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
+main[data-dna-component="page-shell"]{max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem) 2rem;display:grid;gap:1.5rem}
 .statement-table{overflow-x:auto}
 .fin-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:600;text-align:left;padding:8px 10px;vertical-align:bottom}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
-.fin-table td{padding:7px 10px;border-bottom:1px solid rgba(0,0,0,.1);vertical-align:top}
-.fin-table tbody tr:nth-child(even) td{background:var(--dna-shading,#f2f2f2)}
-.fin-table td.cur,.fin-table th.cur,.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#E9E7E4)!important}
+.fin-table td{padding:6px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
+.fin-table td.cur,.fin-table th.cur,.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
 .fin-table thead th.cur{filter:brightness(.92)}
 .fin-table .cell-nil{text-align:right;opacity:.55}
-.fin-table .cell-noteRef{text-align:center;width:3.5em;opacity:.6}
+.fin-table .cell-noteRef{text-align:center;width:3.5em}
 .fin-table .num{font-variant-numeric:tabular-nums}
+${STATEMENT_P1_CSS}
 `;
 }
+
+/** Row taxonomy + note-ref presentation (appended when base .fin-table CSS already exists). */
+const STATEMENT_P1_CSS = `
+.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:12px}
+.fin-table tr.r-subtotal td{font-weight:700}
+.fin-table tr.r-total td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent)}
+.fin-table tr.r-line td.cell-num.cur{font-weight:600}
+.fin-table .note-ref{color:var(--dna-brand,#B8912A);text-decoration:none;font-weight:600;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#B8912A) 55%,transparent)}
+.fin-table .note-ref:hover{border-bottom-style:solid}
+.fin-table .cell-noteRef{text-align:center;width:3.5em}
+`.trim();

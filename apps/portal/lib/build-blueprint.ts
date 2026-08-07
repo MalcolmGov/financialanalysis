@@ -38,19 +38,24 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 /** Baseline layout CSS for the deterministic statements render (uses DNA tokens). */
 const STATEMENT_BASE_CSS = `
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;padding:24px 20px 48px;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
-main[data-dna-component="page-shell"]{max-width:1100px;margin:0 auto;display:grid;gap:28px}
+body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
+main[data-dna-component="page-shell"]{max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem) 2rem;display:grid;gap:1.5rem}
 .statement-table{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .fin-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-family:var(--dna-font-heading,inherit);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 18%,transparent);vertical-align:bottom}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
-.fin-table td{padding:7px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
-.fin-table tbody tr:nth-child(even) td{background:var(--dna-shading,var(--dna-table-shading,#f2f2f2))}
-.fin-table td.cur,.fin-table th.cur{background:var(--dna-shading,var(--dna-table-shading,#E9E7E4))!important}
+.fin-table td{padding:6px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
+.fin-table td.cur,.fin-table th.cur{background:var(--dna-shading,var(--dna-table-shading,#F2F2F2))!important}
 .fin-table thead th.cur{filter:brightness(.92)}
 .fin-table .num{font-variant-numeric:tabular-nums}
 .fin-table .cell-nil{color:color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);text-align:right}
-.fin-table .cell-noteRef{text-align:center;width:3.5em;color:color-mix(in srgb,var(--dna-ink,#111) 55%,transparent)}
+.fin-table .cell-noteRef{text-align:center;width:3.5em}
+.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:12px}
+.fin-table tr.r-subtotal td{font-weight:700}
+.fin-table tr.r-total td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent)}
+.fin-table tr.r-line td.cell-num.cur{font-weight:600}
+.fin-table .note-ref{color:var(--dna-brand,#B8912A);text-decoration:none;font-weight:600;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#B8912A) 55%,transparent)}
+.fin-table .note-ref:hover{border-bottom-style:solid}
 @media print{body{padding:0}.statement-table{overflow:visible}}
 `.trim();
 
