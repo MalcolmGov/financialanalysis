@@ -139,6 +139,8 @@ export async function GET(
     documentId: project.currentDocumentId,
     pageCount,
     runStartedAt: run?.createdAt ? run.createdAt.toISOString() : null,
+    /** Approximate status entry time — used as wait-clock fallback on reload. */
+    statusUpdatedAt: project.updatedAt ? project.updatedAt.toISOString() : null,
     extraction:
       showExtraction && job
         ? {

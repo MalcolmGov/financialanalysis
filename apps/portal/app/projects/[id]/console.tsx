@@ -1,12 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { upload } from "@vercel/blob/client";
 
 /** Prototype-as-product rail — no blueprint / mapping / QA gates. */
 const STEPS = ["Upload", "Extraction", "Design DNA", "Prototype", "Export"] as const;
 
 type EventRow = { id: number; type: string; createdAt: string };
+
+type BusyWaitKind = "extracting" | "dna_detecting" | "prototype_generating";
+
+/** Soft typical durations for operator wait copy (not hard SLAs). */
+const BUSY_ETA_SECONDS: Record<BusyWaitKind, number> = {
+  extracting: Math.round(2.5 * 60),
+  dna_detecting: Math.round(1.5 * 60),
+  prototype_generating: 6 * 60,
+};
 
 type ExtractionProgress = {
   jobId: string;
@@ -42,15 +51,12 @@ type DnaSummary = {
   blobPath: string;
 };
 
-/** Docling on CPU is slow; warm-up + ~25–40s/page is a realistic operator guide. */
-function estimateExtractionSeconds(pageCount: number | null): number {
-  const pages = Math.max(1, pageCount ?? 10);
-  return Math.min(45 * 60, Math.max(2 * 60, 75 + pages * 30));
-}
-
-/** Opus studio HTML generation — typically several minutes; retries can push longer. */
-function estimatePrototypeSeconds(): number {
-  return 6 * 60;
+function isBusyWaitStatus(status: string): status is BusyWaitKind {
+  return (
+    status === "extracting" ||
+    status === "dna_detecting" ||
+    status === "prototype_generating"
+  );
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -58,6 +64,55 @@ function formatDuration(totalSeconds: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+/** Soft remaining copy — never a hard 0:00 countdown while still working. */
+function formatSoftRemaining(remainingSec: number, overdue: boolean): string {
+  if (overdue) return "Taking longer than usual…";
+  if (remainingSec <= 75) return "About 1 min left";
+  return `About ${Math.ceil(remainingSec / 60)} min left`;
+}
+
+/** Ease toward ~90%; hold there until the step completes (panel unmounts). */
+function softProgressPct(
+  elapsedSec: number,
+  estimateSec: number,
+  pagePct: number | null,
+): number {
+  const timePct = Math.min(0.9, (elapsedSec / Math.max(1, estimateSec)) * 0.9);
+  if (pagePct == null) return timePct;
+  return Math.min(0.9, Math.max(timePct, pagePct * 0.9));
+}
+
+function resolveBusyStartedMs(opts: {
+  kind: BusyWaitKind;
+  now: number;
+  events: EventRow[];
+  runStartedAt: string | null;
+  statusUpdatedAt: string | null;
+  clientStartedAt: number | null;
+}): number {
+  const { kind, now, events, runStartedAt, statusUpdatedAt, clientStartedAt } = opts;
+  if (kind === "extracting") {
+    const awaiting = events.find((e) => e.type === "awaiting.extraction")?.createdAt;
+    if (awaiting) {
+      const t = Date.parse(awaiting);
+      if (!Number.isNaN(t)) return t;
+    }
+    if (runStartedAt) {
+      const t = Date.parse(runStartedAt);
+      if (!Number.isNaN(t)) return t;
+    }
+  }
+  // Prefer client observation of the status transition (approve click / poll flip).
+  if (clientStartedAt != null) return clientStartedAt;
+  // Server updatedAt approximates when this status was entered (reload mid-wait).
+  // Do not fall back to runStartedAt here — that includes prior pipeline steps.
+  if (statusUpdatedAt) {
+    const t = Date.parse(statusUpdatedAt);
+    if (!Number.isNaN(t)) return t;
+  }
+  return now;
 }
 
 function nextActionForStatus(status: string, hasDocument: boolean): {
@@ -81,7 +136,7 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "extracting":
       return {
         title: "Extracting document",
-        hint: "Docling is reading the PDF on the worker. Leave this tab open.",
+        hint: "Docling is reading the PDF on the worker. Usually about 2–3 minutes — leave this tab open.",
         waiting: true,
       };
     case "extraction_failed":
@@ -92,7 +147,7 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "dna_detecting":
       return {
         title: "Measuring design DNA",
-        hint: "Palette, type, and table treatment are being derived from the PDF.",
+        hint: "Palette, type, and table treatment are being derived from the PDF. Usually about 1–2 minutes.",
         waiting: true,
       };
     case "dna_review":
@@ -167,6 +222,11 @@ export function ProjectConsole(props: {
   const [prototypeError, setPrototypeError] = useState<string | null>(null);
   const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
   const [now, setNow] = useState(() => Date.now());
+  /** Client timestamp when we observed entering a busy wait status. */
+  const [clientBusyStartedAt, setClientBusyStartedAt] = useState<number | null>(null);
+  /** Server project.updatedAt — fallback when reloading mid-wait. */
+  const [statusUpdatedAt, setStatusUpdatedAt] = useState<string | null>(null);
+  const prevStatusRef = useRef(props.initialStatus);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--max", "1240px");
@@ -174,6 +234,17 @@ export function ProjectConsole(props: {
       document.documentElement.style.removeProperty("--max");
     };
   }, []);
+
+  useEffect(() => {
+    if (status === prevStatusRef.current) return;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (isBusyWaitStatus(status) && status !== prev) {
+      setClientBusyStartedAt(Date.now());
+    } else if (!isBusyWaitStatus(status)) {
+      setClientBusyStartedAt(null);
+    }
+  }, [status]);
 
   useEffect(() => {
     if (status !== "in_review" && status !== "blueprint_proposed") return;
@@ -254,6 +325,7 @@ export function ProjectConsole(props: {
         documentId?: string | null;
         pageCount?: number | null;
         runStartedAt?: string | null;
+        statusUpdatedAt?: string | null;
         extraction?: ExtractionProgress | null;
         exportReady?: boolean;
       };
@@ -262,6 +334,7 @@ export function ProjectConsole(props: {
       if (data.documentId) setDocumentId(data.documentId);
       if (typeof data.pageCount === "number") setPageCount(data.pageCount);
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
+      if (data.statusUpdatedAt) setStatusUpdatedAt(data.statusUpdatedAt);
       if (data.extraction) {
         setExtraction(data.extraction);
       } else if (data.status === "uploaded" || data.status === "created") {
@@ -287,21 +360,21 @@ export function ProjectConsole(props: {
   }, [props.projectId]);
 
   const extracting = status === "extracting";
-  const generating = status === "prototype_generating";
+  const waitingBusy = isBusyWaitStatus(status);
 
   useEffect(() => {
-    const ms = extracting || generating ? 2000 : 4000;
+    const ms = waitingBusy ? 2000 : 4000;
     const id = window.setInterval(() => {
       void refreshEvents();
     }, ms);
     return () => window.clearInterval(id);
-  }, [refreshEvents, extracting, generating]);
+  }, [refreshEvents, waitingBusy]);
 
   useEffect(() => {
-    if (!extracting && !generating) return;
+    if (!waitingBusy) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [extracting, generating]);
+  }, [waitingBusy]);
 
   const onUpload = useCallback(
     async (file: File) => {
@@ -437,29 +510,49 @@ export function ProjectConsole(props: {
     [props.projectId, refreshEvents],
   );
 
+  const busyKind = isBusyWaitStatus(status) ? status : null;
+
   const waitStats = useMemo(() => {
-    const estimate = estimateExtractionSeconds(pageCount);
-    const started = runStartedAt ? Date.parse(runStartedAt) : now;
+    if (!busyKind) return null;
+    const estimate = BUSY_ETA_SECONDS[busyKind];
+    const started = resolveBusyStartedMs({
+      kind: busyKind,
+      now,
+      events,
+      runStartedAt,
+      statusUpdatedAt,
+      clientStartedAt: clientBusyStartedAt,
+    });
     const elapsedSec = Math.max(0, Math.floor((now - started) / 1000));
     const remainingSec = Math.max(0, estimate - elapsedSec);
-    const pctFromTime = Math.min(0.95, elapsedSec / estimate);
+    const overdue = elapsedSec > estimate;
     const totalPages = extraction?.totalPages ?? pageCount;
     const pagesDone = extraction?.pagesDone ?? 0;
-    const pctFromPages =
-      totalPages && totalPages > 0 ? Math.min(0.99, pagesDone / totalPages) : null;
-    const pct = pctFromPages ?? pctFromTime;
-    return { estimate, elapsedSec, remainingSec, pct, pagesDone, totalPages, overdue: elapsedSec > estimate };
-  }, [pageCount, runStartedAt, now, extraction]);
-
-  const protoWaitStats = useMemo(() => {
-    const estimate = estimatePrototypeSeconds();
-    const gateAt = events.find((e) => e.type === "gate.dna")?.createdAt;
-    const started = gateAt ? Date.parse(gateAt) : runStartedAt ? Date.parse(runStartedAt) : now;
-    const elapsedSec = Math.max(0, Math.floor((now - started) / 1000));
-    const remainingSec = Math.max(0, estimate - elapsedSec);
-    const pct = Math.min(0.95, elapsedSec / estimate);
-    return { estimate, elapsedSec, remainingSec, pct, overdue: elapsedSec > estimate };
-  }, [events, runStartedAt, now]);
+    const pagePct =
+      busyKind === "extracting" && totalPages != null && totalPages > 0
+        ? Math.min(1, pagesDone / totalPages)
+        : null;
+    const pct = softProgressPct(elapsedSec, estimate, pagePct);
+    return {
+      kind: busyKind,
+      estimate,
+      elapsedSec,
+      remainingSec,
+      pct,
+      pagesDone,
+      totalPages,
+      overdue,
+    };
+  }, [
+    busyKind,
+    now,
+    events,
+    runStartedAt,
+    statusUpdatedAt,
+    clientBusyStartedAt,
+    extraction,
+    pageCount,
+  ]);
 
   const currentStepIndex = stepIndexForStatus(status);
   const canRun =
@@ -474,7 +567,7 @@ export function ProjectConsole(props: {
   const next = nextActionForStatus(status, !!documentId);
 
   async function approveDna() {
-    await gate(
+    const ok = await gate(
       "dna",
       {
         schema_version: "dna-correction/1",
@@ -485,6 +578,10 @@ export function ProjectConsole(props: {
       },
       "DNA approval",
     );
+    if (ok) {
+      setStatus("prototype_generating");
+      setClientBusyStartedAt(Date.now());
+    }
   }
 
   async function approveExport() {
@@ -705,52 +802,57 @@ export function ProjectConsole(props: {
         </section>
       ) : null}
 
-      {extracting ? (
-        <section className="rs-sheet" aria-live="polite">
-          <h2 className="rs-section-title">Extraction in progress</h2>
-          <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
-            Docling is reading the PDF on the worker. First convert after deploy can take longer
-            while models load. Typically a few minutes for a {pageCount ?? "multi"}-page results
-            pack.
-          </p>
-          <div className="rs-stat-row">
-            <div>
-              <div className="rs-stat-label">Elapsed</div>
-              <div className="rs-stat-value">{formatDuration(waitStats.elapsedSec)}</div>
-            </div>
-            <div>
-              <div className="rs-stat-label">
-                {waitStats.overdue ? "Past estimate" : "Est. remaining"}
-              </div>
-              <div className="rs-stat-value">
-                {waitStats.overdue
-                  ? `+${formatDuration(waitStats.elapsedSec - waitStats.estimate)}`
-                  : formatDuration(waitStats.remainingSec)}
-              </div>
-            </div>
-            <div>
-              <div className="rs-stat-label">Pages</div>
-              <div className="rs-stat-value">
-                {waitStats.totalPages != null
-                  ? `${waitStats.pagesDone} / ${waitStats.totalPages}`
-                  : pageCount != null
-                    ? `0 / ${pageCount}`
-                    : "—"}
-              </div>
-            </div>
-          </div>
-          <div className="rs-progress rs-progress--live">
-            <div
-              className="rs-progress__bar"
-              style={{ width: `${Math.round(waitStats.pct * 100)}%` }}
-            />
-          </div>
-          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
-            {waitStats.overdue
-              ? "Still working — large or OCR-heavy PDFs can overrun the estimate."
-              : `Rough guide ~${formatDuration(waitStats.estimate)} for this document.`}
-          </p>
-        </section>
+      {extracting && waitStats ? (
+        <BusyWaitSheet
+          title="Extraction in progress"
+          body={
+            <>
+              Docling is reading the PDF on the worker. First convert after deploy can take longer
+              while models load. Typically about 2–3 minutes for a {pageCount ?? "multi"}-page
+              results pack.
+            </>
+          }
+          elapsedSec={waitStats.elapsedSec}
+          remainingLabel={formatSoftRemaining(waitStats.remainingSec, waitStats.overdue)}
+          overdue={waitStats.overdue}
+          pct={waitStats.pct}
+          third={{
+            label: "Pages",
+            value:
+              waitStats.totalPages != null
+                ? `${waitStats.pagesDone} / ${waitStats.totalPages}`
+                : pageCount != null
+                  ? `0 / ${pageCount}`
+                  : "—",
+          }}
+          footer={
+            waitStats.overdue
+              ? "Still working — large or OCR-heavy PDFs can overrun the usual window."
+              : "Nothing to click right now — waiting on extraction."
+          }
+        />
+      ) : null}
+
+      {status === "dna_detecting" && waitStats ? (
+        <BusyWaitSheet
+          title="Measuring design DNA"
+          body={
+            <>
+              Palette, type, and table treatment are being derived from the PDF. Usually about{" "}
+              <strong>1–2 minutes</strong> — leave this tab open.
+            </>
+          }
+          elapsedSec={waitStats.elapsedSec}
+          remainingLabel={formatSoftRemaining(waitStats.remainingSec, waitStats.overdue)}
+          overdue={waitStats.overdue}
+          pct={waitStats.pct}
+          third={{ label: "Typical", value: "~1.5 min", compact: true }}
+          footer={
+            waitStats.overdue
+              ? "Still working — vision measurement can overrun on dense packs."
+              : "Nothing to click right now — waiting on design DNA."
+          }
+        />
       ) : null}
 
       {status === "dna_review" ? (
@@ -912,49 +1014,28 @@ export function ProjectConsole(props: {
         </section>
       ) : null}
 
-      {status === "prototype_generating" ? (
-        <section className="rs-sheet" aria-live="polite">
-          <h2 className="rs-section-title">Generating prototype</h2>
-          <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
-            Building the first interactive HTML prototype from the approved DNA and extracted
-            content. Usually <strong>3–8 minutes</strong> (opus studio) — leave this tab open.
-            When it finishes, status becomes <strong>in review</strong> and you can refine or
-            approve.
-          </p>
-          <div className="rs-stat-row">
-            <div>
-              <div className="rs-stat-label">Elapsed</div>
-              <div className="rs-stat-value">{formatDuration(protoWaitStats.elapsedSec)}</div>
-            </div>
-            <div>
-              <div className="rs-stat-label">
-                {protoWaitStats.overdue ? "Past typical" : "Est. remaining"}
-              </div>
-              <div className="rs-stat-value">
-                {protoWaitStats.overdue
-                  ? `+${formatDuration(protoWaitStats.elapsedSec - protoWaitStats.estimate)}`
-                  : formatDuration(protoWaitStats.remainingSec)}
-              </div>
-            </div>
-            <div>
-              <div className="rs-stat-label">Typical</div>
-              <div className="rs-stat-value" style={{ fontSize: "1.15rem" }}>
-                3–8 min
-              </div>
-            </div>
-          </div>
-          <div className="rs-progress rs-progress--live">
-            <div
-              className="rs-progress__bar"
-              style={{ width: `${Math.round(protoWaitStats.pct * 100)}%` }}
-            />
-          </div>
-          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
-            {protoWaitStats.overdue
+      {status === "prototype_generating" && waitStats ? (
+        <BusyWaitSheet
+          title="Generating prototype"
+          body={
+            <>
+              Building the first interactive HTML prototype from the approved DNA and extracted
+              content. Usually <strong>3–8 minutes</strong> (opus studio) — leave this tab open.
+              When it finishes, status becomes <strong>in review</strong> and you can refine or
+              approve.
+            </>
+          }
+          elapsedSec={waitStats.elapsedSec}
+          remainingLabel={formatSoftRemaining(waitStats.remainingSec, waitStats.overdue)}
+          overdue={waitStats.overdue}
+          pct={waitStats.pct}
+          third={{ label: "Typical", value: "3–8 min", compact: true }}
+          footer={
+            waitStats.overdue
               ? "Still working — long runs and a single automatic retry can exceed the typical window."
-              : "Nothing to click right now — waiting on generation."}
-          </p>
-        </section>
+              : "Nothing to click right now — waiting on generation."
+          }
+        />
       ) : null}
 
       {status === "in_review" || status === "blueprint_proposed" ? (
@@ -1142,6 +1223,59 @@ export function ProjectConsole(props: {
         )}
       </details>
     </div>
+  );
+}
+
+function BusyWaitSheet(props: {
+  title: string;
+  body: ReactNode;
+  elapsedSec: number;
+  remainingLabel: string;
+  overdue: boolean;
+  pct: number;
+  third: { label: string; value: ReactNode; compact?: boolean };
+  footer: string;
+}) {
+  return (
+    <section className="rs-sheet" aria-live="polite">
+      <h2 className="rs-section-title">{props.title}</h2>
+      <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
+        {props.body}
+      </p>
+      <div className="rs-stat-row">
+        <div>
+          <div className="rs-stat-label">Elapsed</div>
+          <div className="rs-stat-value">{formatDuration(props.elapsedSec)}</div>
+        </div>
+        <div>
+          <div className="rs-stat-label">{props.overdue ? "Estimate" : "Est. remaining"}</div>
+          <div
+            className="rs-stat-value"
+            style={{ fontSize: props.overdue || props.remainingLabel.length > 8 ? "1.15rem" : undefined }}
+          >
+            {props.remainingLabel}
+          </div>
+        </div>
+        <div>
+          <div className="rs-stat-label">{props.third.label}</div>
+          <div
+            className="rs-stat-value"
+            style={props.third.compact ? { fontSize: "1.15rem" } : undefined}
+          >
+            {props.third.value}
+          </div>
+        </div>
+      </div>
+      <div className="rs-progress rs-progress--live">
+        <div
+          className="rs-progress__bar"
+          style={{ width: `${Math.round(props.pct * 100)}%` }}
+        />
+      </div>
+      <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+        {props.footer}
+      </p>
+    </section>
   );
 }
 
