@@ -57,7 +57,7 @@ export default async function SignIn({
             placeholder="you@example.com"
             className="rs-field"
           />
-          <label className="rs-tiny" htmlFor="password" style={{ marginTop: 6 }}>
+          <label className="rs-tiny" htmlFor="password" style={{ marginTop: 10 }}>
             Password
           </label>
           <input
@@ -69,7 +69,7 @@ export default async function SignIn({
             placeholder="Password"
             className="rs-field"
           />
-          <button type="submit" className="rs-btn rs-btn--primary" style={{ marginTop: 8 }}>
+          <button type="submit" className="rs-btn rs-btn--primary" style={{ marginTop: 18 }}>
             Sign in
           </button>
         </form>

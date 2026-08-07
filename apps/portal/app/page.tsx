@@ -22,20 +22,18 @@ export default async function Home() {
         <p className="rs-kicker">Results Studio</p>
         <h1>Projects</h1>
         <p className="rs-lede">
-          Turn one results PDF into a verified interactive microsite — measured design DNA, human
-          gates, export-ready HTML.
+          One results PDF becomes a verified interactive microsite — measured DNA, human gates,
+          export-ready HTML.
         </p>
       </section>
 
       <NewProject />
 
       <section className="rs-fade-up-delay">
-        <p className="rs-kicker" style={{ marginBottom: 4 }}>
-          Recent
-        </p>
+        <p className="rs-kicker">Library</p>
         {projects.length === 0 ? (
-          <p className="rs-muted" style={{ margin: "12px 0 0" }}>
-            No projects yet. Create one above to begin the five-step flow.
+          <p className="rs-muted" style={{ margin: "16px 0 0" }}>
+            No projects yet. Create one above to begin.
           </p>
         ) : (
           <ul className="rs-project-list">

@@ -479,180 +479,186 @@ export function ProjectConsole(props: {
     );
   }
 
+  const progressPct =
+    currentStepIndex <= 0 ? 0 : Math.min(100, (currentStepIndex / (STEPS.length - 1)) * 100);
+  const noteDanger =
+    !!note &&
+    (note.startsWith("Failed") ||
+      note.startsWith("Rejected") ||
+      note.startsWith("Upload failed") ||
+      note.startsWith("That file") ||
+      note.startsWith("Start over failed") ||
+      note.startsWith("Pipeline start failed") ||
+      note.startsWith("Extraction failed"));
+
   return (
-    <div className="rs-console rs-fade-up">
+    <div className="rs-console">
       <a href="/" className="rs-back">
         ← Projects
       </a>
 
-      <header className="rs-console-head">
-        <div>
-          <h1>{props.companyName}</h1>
-          <p className="rs-console-sub">
-            <span>{props.periodLabel ?? "—"}</span>
-            <span aria-hidden="true">·</span>
-            <span className="rs-status">
-              {(extracting ||
-                status === "prototype_generating" ||
-                status === "dna_detecting" ||
-                status === "exporting") && <span className="rs-live-dot" aria-hidden="true" />}
-              {status.replaceAll("_", " ")}
-            </span>
-            {pageCount != null ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="rs-tiny">{pageCount} pages</span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        {canStartOver ? (
-          <button
-            type="button"
-            className="rs-btn rs-btn--danger-ghost"
-            disabled={busy}
-            onClick={() => void startOver()}
-            title="Detach the current run so you can upload a new PDF or re-run from scratch"
-          >
-            Start over
-          </button>
-        ) : null}
-      </header>
-
-      <ol className="rs-steps" aria-label="Pipeline steps">
-        {STEPS.map((label, i) => {
-          const state = i < currentStepIndex ? "done" : i === currentStepIndex ? "active" : "todo";
-          return (
-            <li
-              key={label}
-              className={`rs-step${state === "done" ? " rs-step--done" : ""}${state === "active" ? " rs-step--active" : ""}`}
-              aria-current={state === "active" ? "step" : undefined}
-            >
-              <span className="rs-step__n">0{i + 1}</span>
-              <span className="rs-step__label">{label}</span>
-            </li>
-          );
-        })}
-      </ol>
-
-      <div className="rs-action">
-        <div className="rs-action__copy">
-          <span className="rs-action__label">{next.waiting ? "In progress" : "Next action"}</span>
-          <h2 className="rs-action__title">{next.title}</h2>
-          <p className="rs-action__hint">{next.hint}</p>
-        </div>
-        <div className="rs-action__cta">
-          {canRun ? (
-            <button
-              type="button"
-              className="rs-btn rs-btn--primary"
-              disabled={busy}
-              onClick={() => void startPipeline()}
-            >
-              {status === "extraction_failed" ? "Retry pipeline" : "Run pipeline"}
-            </button>
-          ) : null}
-          {status === "dna_review" ? (
-            <button
-              type="button"
-              className="rs-btn rs-btn--primary"
-              disabled={busy || (!dna && !dnaError)}
-              onClick={() => void approveDna()}
-            >
-              Approve design DNA
-            </button>
-          ) : null}
-          {status === "in_review" ? (
-            <button
-              type="button"
-              className="rs-btn rs-btn--primary"
-              disabled={busy}
-              onClick={() => void approveExport()}
-            >
-              Approve &amp; export
-            </button>
-          ) : null}
-          {status === "exported" || exportReady ? (
-            <a
-              href={`/api/projects/${props.projectId}/export`}
-              className="rs-btn rs-btn--primary"
-            >
-              Download microsite zip
-            </a>
-          ) : null}
-        </div>
-      </div>
-
-      {note ? (
-        <p
-          className={
-            note.startsWith("Failed") ||
-            note.startsWith("Rejected") ||
-            note.startsWith("Upload failed") ||
-            note.startsWith("That file") ||
-            note.startsWith("Start over failed") ||
-            note.startsWith("Pipeline start failed") ||
-            note.startsWith("Extraction failed")
-              ? "rs-note rs-note--danger"
-              : "rs-note"
-          }
-        >
-          {note}
-        </p>
-      ) : null}
-
-      {showUpload ? (
-        <section className={`rs-panel${currentStepIndex === 0 ? " rs-panel--accent" : ""}`}>
-          <h2 className="rs-section-title">Upload the results PDF</h2>
-          <div
-            className="rs-dropzone"
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "copy";
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (busy) return;
-              const f = e.dataTransfer.files?.[0];
-              if (f) void onUpload(f);
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 13, maxWidth: 360 }}>
-              Drop a PDF here, or choose a file. Private storage; 150 MB / 250 pages max.
+      <div className="rs-stage">
+        <header className="rs-stage-head">
+          <div>
+            <p className="rs-kicker">Project</p>
+            <h1>{props.companyName}</h1>
+            <p className="rs-console-sub">
+              <span>{props.periodLabel ?? "—"}</span>
+              <span aria-hidden="true">·</span>
+              <span className="rs-status">
+                {(extracting ||
+                  status === "prototype_generating" ||
+                  status === "dna_detecting" ||
+                  status === "exporting") && <span className="rs-live-dot" aria-hidden="true" />}
+                {status.replaceAll("_", " ")}
+              </span>
+              {pageCount != null ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="rs-tiny">{pageCount} pages</span>
+                </>
+              ) : null}
             </p>
-            <label
-              className="rs-btn rs-btn--primary"
-              style={{
-                cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.6 : 1,
-              }}
+          </div>
+          {canStartOver ? (
+            <button
+              type="button"
+              className="rs-btn rs-btn--quiet"
+              disabled={busy}
+              onClick={() => void startOver()}
+              title="Detach the current run so you can upload a new PDF or re-run from scratch"
             >
-              <input
-                type="file"
-                accept="application/pdf"
-                style={{ display: "none" }}
+              Start over
+            </button>
+          ) : null}
+        </header>
+
+        <div className="rs-rail-wrap">
+          <div className="rs-rail__track" aria-hidden="true">
+            <div className="rs-rail__progress" style={{ width: `${progressPct}%` }} />
+          </div>
+          <ol className="rs-rail" aria-label="Pipeline steps">
+            {STEPS.map((label, i) => {
+              const state =
+                i < currentStepIndex ? "done" : i === currentStepIndex ? "active" : "todo";
+              return (
+                <li
+                  key={label}
+                  className={`rs-rail-item${state === "done" ? " rs-rail-item--done" : ""}${state === "active" ? " rs-rail-item--active" : ""}`}
+                  aria-current={state === "active" ? "step" : undefined}
+                >
+                  <span className="rs-rail-item__dot" />
+                  <span className="rs-rail-item__label">{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        <div className="rs-directive">
+          <div>
+            <p className="rs-kicker">{next.waiting ? "In progress" : "Next"}</p>
+            <h2>{next.title}</h2>
+            <p>{next.hint}</p>
+          </div>
+          <div className="rs-directive__cta">
+            {canRun ? (
+              <button
+                type="button"
+                className="rs-btn rs-btn--primary"
                 disabled={busy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void onUpload(f);
-                  e.target.value = "";
-                }}
-              />
-              {busy ? "Uploading…" : "Choose PDF"}
-            </label>
-            {documentId && pageCount != null ? (
-              <p className="rs-tiny" style={{ margin: 0 }}>
-                Current document · {pageCount} pages
-              </p>
+                onClick={() => void startPipeline()}
+              >
+                {status === "extraction_failed" ? "Retry pipeline" : "Run pipeline"}
+              </button>
+            ) : null}
+            {status === "dna_review" ? (
+              <button
+                type="button"
+                className="rs-btn rs-btn--primary"
+                disabled={busy || (!dna && !dnaError)}
+                onClick={() => void approveDna()}
+              >
+                Approve design DNA
+              </button>
+            ) : null}
+            {status === "in_review" ? (
+              <button
+                type="button"
+                className="rs-btn rs-btn--primary"
+                disabled={busy}
+                onClick={() => void approveExport()}
+              >
+                Approve &amp; export
+              </button>
+            ) : null}
+            {status === "exported" || exportReady ? (
+              <a
+                href={`/api/projects/${props.projectId}/export`}
+                className="rs-btn rs-btn--primary"
+              >
+                Download zip
+              </a>
             ) : null}
           </div>
-        </section>
-      ) : null}
+        </div>
+
+        {note ? (
+          <p className={noteDanger ? "rs-note rs-note--danger" : "rs-note"}>{note}</p>
+        ) : null}
+
+        {showUpload ? (
+          <div className="rs-upload">
+            <div
+              className="rs-dropzone"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (busy) return;
+                const f = e.dataTransfer.files?.[0];
+                if (f) void onUpload(f);
+              }}
+            >
+              <p className="rs-kicker">Source document</p>
+              <h3 className="rs-dropzone__title">
+                {documentId ? "PDF ready — replace anytime" : "Drop the results PDF"}
+              </h3>
+              <p className="rs-dropzone__hint">
+                Private storage · 150 MB / 250 pages max
+                {documentId && pageCount != null ? ` · current pack ${pageCount} pages` : ""}
+              </p>
+              <label
+                className="rs-btn rs-btn--ghost"
+                style={{
+                  cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1,
+                }}
+              >
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: "none" }}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void onUpload(f);
+                    e.target.value = "";
+                  }}
+                />
+                {busy ? "Uploading…" : documentId ? "Replace PDF" : "Choose PDF"}
+              </label>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {status === "extraction_failed" ? (
-        <section className="rs-panel rs-panel--danger">
+        <section className="rs-sheet rs-sheet--alert">
           <h2 className="rs-section-title">Extraction failed</h2>
-          <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
+          <p style={{ color: "var(--danger)", fontSize: 14, margin: 0 }}>
             {extraction?.error ??
               "The worker could not convert this PDF. Fix the worker and retry the pipeline."}
           </p>
@@ -676,17 +682,17 @@ export function ProjectConsole(props: {
               Start over
             </button>
           </div>
-          <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
-            Start over clears the failed run so you can upload a new PDF or re-run the current one
-            after the worker is healthy again.
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            Start over clears the failed run so you can upload a new PDF or re-run after the worker
+            is healthy.
           </p>
         </section>
       ) : null}
 
       {extracting ? (
-        <section className="rs-panel rs-panel--accent" aria-live="polite">
+        <section className="rs-sheet" aria-live="polite">
           <h2 className="rs-section-title">Extraction in progress</h2>
-          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
             Docling is reading the PDF on the worker. First convert after deploy can take longer
             while models load. Typically a few minutes for a {pageCount ?? "multi"}-page results
             pack.
@@ -723,7 +729,7 @@ export function ProjectConsole(props: {
               style={{ width: `${Math.round(waitStats.pct * 100)}%` }}
             />
           </div>
-          <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
             {waitStats.overdue
               ? "Still working — large or OCR-heavy PDFs can overrun the estimate."
               : `Rough guide ~${formatDuration(waitStats.estimate)} for this document.`}
@@ -732,9 +738,9 @@ export function ProjectConsole(props: {
       ) : null}
 
       {status === "dna_review" ? (
-        <section className="rs-panel rs-panel--accent rs-fade-up-delay">
+        <section className="rs-sheet rs-fade-up-delay">
           <h2 className="rs-section-title">Review design DNA</h2>
-          <p className="rs-muted" style={{ fontSize: 13, marginTop: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
             Measured visual identity from the PDF (palette, type, table treatment). Approve only if
             it looks faithful — the prototype is constrained by it.
           </p>
@@ -873,7 +879,7 @@ export function ProjectConsole(props: {
                 target="_blank"
                 rel="noreferrer"
                 className="rs-tiny"
-                style={{ color: "var(--accent-strong)" }}
+                style={{ color: "var(--signal)" }}
               >
                 Open full DNA JSON
               </a>
@@ -891,23 +897,23 @@ export function ProjectConsole(props: {
       ) : null}
 
       {status === "prototype_generating" ? (
-        <section className="rs-panel rs-panel--accent" aria-live="polite">
+        <section className="rs-sheet" aria-live="polite">
           <h2 className="rs-section-title">Generating prototype</h2>
-          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
             Building the first interactive HTML prototype from the approved DNA and extracted
             content. This usually takes several minutes — leave this tab open. When it finishes,
             status becomes <strong>in review</strong> and you can refine or approve.
           </p>
-          <p style={{ color: "var(--accent-strong)", fontSize: 13, margin: 0 }}>
+          <p style={{ color: "var(--signal)", fontSize: 14, margin: 0 }}>
             Nothing to click right now — waiting on generation.
           </p>
         </section>
       ) : null}
 
       {status === "in_review" || status === "blueprint_proposed" ? (
-        <section className="rs-panel rs-panel--accent rs-fade-up-delay">
+        <section className="rs-sheet rs-fade-up-delay">
           <h2 className="rs-section-title">Prototype preview</h2>
-          <p className="rs-muted" style={{ fontSize: 13, marginTop: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
             Interactive HTML generated from the approved DNA. Compare it to the source PDF
             look-and-feel, then refine or approve.
           </p>
@@ -954,7 +960,7 @@ export function ProjectConsole(props: {
                   target="_blank"
                   rel="noreferrer"
                   className="rs-tiny"
-                  style={{ color: "var(--accent-strong)", marginLeft: "auto" }}
+                  style={{ color: "var(--signal)", marginLeft: "auto" }}
                 >
                   Open in new tab
                 </a>
@@ -976,9 +982,9 @@ export function ProjectConsole(props: {
       ) : null}
 
       {status === "in_review" ? (
-        <section className="rs-panel">
+        <section className="rs-sheet">
           <h2 className="rs-section-title">Refine prototype</h2>
-          <p className="rs-muted" style={{ fontSize: 13, marginTop: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
             Patch-first edits against the current prototype. Numbers cannot change — describe
             layout, styling, or non-numeric copy only. When it looks right, Approve &amp; export.
           </p>
@@ -1041,9 +1047,9 @@ export function ProjectConsole(props: {
       ) : null}
 
       {status === "exporting" ? (
-        <section className="rs-panel rs-panel--accent" aria-live="polite">
+        <section className="rs-sheet" aria-live="polite">
           <h2 className="rs-section-title">Packaging export</h2>
-          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
             Zipping the approved prototype HTML. Download appears when status becomes{" "}
             <strong>exported</strong>.
           </p>
@@ -1051,9 +1057,9 @@ export function ProjectConsole(props: {
       ) : null}
 
       {status === "exported" || exportReady ? (
-        <section className="rs-panel rs-panel--accent">
+        <section className="rs-sheet">
           <h2 className="rs-section-title">Export ready</h2>
-          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 14, margin: 0 }}>
             The zip contains the approved interactive prototype as <code>index.html</code> — open
             it locally or host on any static server.
           </p>
