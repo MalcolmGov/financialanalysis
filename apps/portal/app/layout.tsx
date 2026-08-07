@@ -1,5 +1,20 @@
 import type { Metadata } from "next";
+import { Public_Sans, Spectral } from "next/font/google";
 import "./globals.css";
+
+const spectral = Spectral({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-spectral",
+  display: "swap",
+});
+
+const publicSans = Public_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-public-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Results Studio",
@@ -8,25 +23,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
-        <header
-          style={{
-            borderBottom: "3px solid var(--accent)",
-            padding: "18px 28px",
-            display: "flex",
-            alignItems: "baseline",
-            gap: 14,
-          }}
-        >
-          <a href="/" style={{ textDecoration: "none", color: "var(--ink)" }}>
-            <strong style={{ fontSize: 18 }}>Results Studio</strong>
-          </a>
-          <span style={{ fontSize: 12, color: "var(--ink-2)", letterSpacing: ".08em" }}>
-            PDF → VERIFIED INTERACTIVE RESULTS
-          </span>
-        </header>
-        <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px" }}>{children}</main>
+    <html lang="en" data-theme="light" className={`${spectral.variable} ${publicSans.variable}`}>
+      <body className={publicSans.className}>
+        <div className="rs-shell">
+          <header className="rs-header">
+            <a href="/" className="rs-brand">
+              <span className="rs-brand-mark">Results Studio</span>
+              <span className="rs-brand-sub">Operator console</span>
+            </a>
+            <span className="rs-header-meta">PDF → verified interactive results</span>
+          </header>
+          <main className="rs-main">{children}</main>
+        </div>
       </body>
     </html>
   );

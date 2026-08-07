@@ -17,47 +17,42 @@ export default async function Home() {
   await requireOperatorOrRedirect();
   const projects = await listProjects();
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      <section>
-        <h1 style={{ fontSize: 28, margin: "0 0 4px" }}>Projects</h1>
-        <p style={{ color: "var(--ink-2)", margin: 0 }}>
-          Each project turns one results PDF into a verified interactive microsite.
+    <div className="rs-home rs-fade-up">
+      <section className="rs-home-hero">
+        <p className="rs-kicker">Results Studio</p>
+        <h1>Projects</h1>
+        <p className="rs-lede">
+          Turn one results PDF into a verified interactive microsite — measured design DNA, human
+          gates, export-ready HTML.
         </p>
       </section>
 
       <NewProject />
 
-      <section style={{ display: "grid", gap: 8 }}>
+      <section className="rs-fade-up-delay">
+        <p className="rs-kicker" style={{ marginBottom: 4 }}>
+          Recent
+        </p>
         {projects.length === 0 ? (
-          <p style={{ color: "var(--ink-2)" }}>
-            No projects yet. Create one above to begin the nine-step pipeline.
+          <p className="rs-muted" style={{ margin: "12px 0 0" }}>
+            No projects yet. Create one above to begin the five-step flow.
           </p>
         ) : (
-          projects.map((p) => (
-            <a
-              key={p.id}
-              href={`/projects/${p.id}`}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "14px 16px",
-                border: "1px solid var(--rule)",
-                borderRadius: 8,
-                textDecoration: "none",
-                color: "var(--ink)",
-              }}
-            >
-              <span>
-                <strong>{p.companyName}</strong>
-                {p.periodLabel ? (
-                  <span style={{ color: "var(--ink-2)" }}> · {p.periodLabel}</span>
-                ) : null}
-              </span>
-              <span style={{ fontSize: 12, color: "var(--accent-strong)", letterSpacing: ".06em" }}>
-                {p.status.toUpperCase()}
-              </span>
-            </a>
-          ))
+          <ul className="rs-project-list">
+            {projects.map((p) => (
+              <li key={p.id}>
+                <a href={`/projects/${p.id}`} className="rs-project-row">
+                  <span>
+                    <strong>{p.companyName}</strong>
+                    {p.periodLabel ? (
+                      <span className="rs-project-meta"> · {p.periodLabel}</span>
+                    ) : null}
+                  </span>
+                  <span className="rs-status">{p.status.replaceAll("_", " ")}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </div>

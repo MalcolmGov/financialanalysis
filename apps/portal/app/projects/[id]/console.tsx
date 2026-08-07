@@ -55,6 +55,77 @@ function formatDuration(totalSeconds: number): string {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
+function nextActionForStatus(status: string, hasDocument: boolean): {
+  title: string;
+  hint: string;
+  waiting?: boolean;
+} {
+  switch (status) {
+    case "created":
+      return {
+        title: "Upload the results PDF",
+        hint: "Drop the source pack below to begin. Private storage; 150 MB / 250 pages max.",
+      };
+    case "uploaded":
+      return {
+        title: "Run the pipeline",
+        hint: hasDocument
+          ? "Extraction will read the PDF, then pause for design DNA review."
+          : "Upload a PDF before starting.",
+      };
+    case "extracting":
+      return {
+        title: "Extracting document",
+        hint: "Docling is reading the PDF on the worker. Leave this tab open.",
+        waiting: true,
+      };
+    case "extraction_failed":
+      return {
+        title: "Retry extraction",
+        hint: "Fix the worker if needed, then retry — or start over with a new PDF.",
+      };
+    case "dna_detecting":
+      return {
+        title: "Measuring design DNA",
+        hint: "Palette, type, and table treatment are being derived from the PDF.",
+        waiting: true,
+      };
+    case "dna_review":
+      return {
+        title: "Approve design DNA",
+        hint: "Confirm the measured identity looks faithful before prototype generation.",
+      };
+    case "prototype_generating":
+      return {
+        title: "Generating prototype",
+        hint: "Building interactive HTML from approved DNA and extracted content.",
+        waiting: true,
+      };
+    case "in_review":
+    case "blueprint_proposed":
+      return {
+        title: "Review & refine prototype",
+        hint: "Compare to the source look-and-feel, refine if needed, then approve & export.",
+      };
+    case "exporting":
+      return {
+        title: "Packaging export",
+        hint: "Zipping the approved prototype. Download appears when status is exported.",
+        waiting: true,
+      };
+    case "exported":
+      return {
+        title: "Download microsite",
+        hint: "The zip contains index.html — open locally or host on any static server.",
+      };
+    default:
+      return {
+        title: "Continue the run",
+        hint: `Current status: ${status.replaceAll("_", " ")}.`,
+      };
+  }
+}
+
 export function ProjectConsole(props: {
   projectId: string;
   orgId: string;
@@ -75,7 +146,6 @@ export function ProjectConsole(props: {
   const [busy, setBusy] = useState(false);
   const [runStartedAt, setRunStartedAt] = useState<string | null>(props.initialRunStartedAt);
   const [extraction, setExtraction] = useState<ExtractionProgress | null>(null);
-  const [qaVerdict, setQaVerdict] = useState<"pass" | "fail" | null>(null);
   const [exportReady, setExportReady] = useState(false);
   const [refinePrompt, setRefinePrompt] = useState("");
   const [forceRegen, setForceRegen] = useState(false);
@@ -92,6 +162,13 @@ export function ProjectConsole(props: {
   const [prototypeError, setPrototypeError] = useState<string | null>(null);
   const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--max", "1240px");
+    return () => {
+      document.documentElement.style.removeProperty("--max");
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== "in_review" && status !== "blueprint_proposed") return;
@@ -173,7 +250,6 @@ export function ProjectConsole(props: {
         pageCount?: number | null;
         runStartedAt?: string | null;
         extraction?: ExtractionProgress | null;
-        qaVerdict?: "pass" | "fail" | null;
         exportReady?: boolean;
       };
       setEvents(data.events);
@@ -198,9 +274,6 @@ export function ProjectConsole(props: {
         );
       } else if (data.status === "extracting" || data.status === "uploaded" || data.status === "created") {
         setNote((prev) => (prev?.startsWith("Extraction failed:") ? null : prev));
-      }
-      if (data.qaVerdict === "pass" || data.qaVerdict === "fail" || data.qaVerdict === null) {
-        setQaVerdict(data.qaVerdict);
       }
       if (typeof data.exportReady === "boolean") setExportReady(data.exportReady);
     } catch {
@@ -285,7 +358,6 @@ export function ProjectConsole(props: {
       setExtraction(null);
       setRunStartedAt(null);
       setEvents([]);
-      setQaVerdict(null);
       setExportReady(false);
       setDna(null);
       setDnaError(null);
@@ -378,34 +450,66 @@ export function ProjectConsole(props: {
     (status === "uploaded" || status === "extraction_failed") && !!documentId;
   // Anything past a parked project can be abandoned and restarted.
   const canStartOver = status !== "created" && status !== "uploaded";
+  const showUpload =
+    status === "created" ||
+    status === "uploaded" ||
+    status === "extraction_failed" ||
+    currentStepIndex === 0;
+  const next = nextActionForStatus(status, !!documentId);
+
+  async function approveDna() {
+    await gate(
+      "dna",
+      {
+        schema_version: "dna-correction/1",
+        dna_id: dna?.dnaId ?? "",
+        edits: [],
+        approve: true,
+        approved_by: "operator",
+      },
+      "DNA approval",
+    );
+  }
+
+  async function approveExport() {
+    await gate(
+      "review",
+      { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
+      "Approve & export",
+    );
+  }
 
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      <a href="/" style={{ color: "var(--accent-strong)", fontSize: 13, textDecoration: "none" }}>
+    <div className="rs-console rs-fade-up">
+      <a href="/" className="rs-back">
         ← Projects
       </a>
-      <header
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
+
+      <header className="rs-console-head">
         <div>
-          <h1 style={{ fontSize: 26, margin: "0 0 2px" }}>{props.companyName}</h1>
-          <p style={{ color: "var(--ink-2)", margin: 0 }}>
-            {props.periodLabel ?? "—"} ·{" "}
-            <span style={{ color: "var(--accent-strong)", letterSpacing: ".06em" }}>
-              {status.toUpperCase()}
+          <h1>{props.companyName}</h1>
+          <p className="rs-console-sub">
+            <span>{props.periodLabel ?? "—"}</span>
+            <span aria-hidden="true">·</span>
+            <span className="rs-status">
+              {(extracting ||
+                status === "prototype_generating" ||
+                status === "dna_detecting" ||
+                status === "exporting") && <span className="rs-live-dot" aria-hidden="true" />}
+              {status.replaceAll("_", " ")}
             </span>
+            {pageCount != null ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="rs-tiny">{pageCount} pages</span>
+              </>
+            ) : null}
           </p>
         </div>
         {canStartOver ? (
           <button
             type="button"
-            style={ghost}
+            className="rs-btn rs-btn--danger-ghost"
             disabled={busy}
             onClick={() => void startOver()}
             title="Detach the current run so you can upload a new PDF or re-run from scratch"
@@ -415,212 +519,305 @@ export function ProjectConsole(props: {
         ) : null}
       </header>
 
-      <ol
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 6,
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-        }}
-      >
+      <ol className="rs-steps" aria-label="Pipeline steps">
         {STEPS.map((label, i) => {
           const state = i < currentStepIndex ? "done" : i === currentStepIndex ? "active" : "todo";
           return (
             <li
               key={label}
-              style={{
-                fontSize: 12,
-                padding: "5px 10px",
-                borderRadius: 99,
-                border: "1px solid var(--rule)",
-                color: state === "todo" ? "var(--ink-2)" : "#fff",
-                background:
-                  state === "done"
-                    ? "var(--accent-strong)"
-                    : state === "active"
-                      ? "var(--accent)"
-                      : "transparent",
-                fontVariantNumeric: "tabular-nums",
-              }}
+              className={`rs-step${state === "done" ? " rs-step--done" : ""}${state === "active" ? " rs-step--active" : ""}`}
+              aria-current={state === "active" ? "step" : undefined}
             >
-              {i + 1}. {label}
+              <span className="rs-step__n">0{i + 1}</span>
+              <span className="rs-step__label">{label}</span>
             </li>
           );
         })}
       </ol>
 
-      <section style={panel}>
-        <h2 style={h2}>1 · Upload the results PDF</h2>
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-            justifyItems: "center",
-            padding: "28px 24px",
-            border: "1.5px dashed var(--rule)",
-            borderRadius: 8,
-            textAlign: "center",
-            color: "var(--ink-2)",
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "copy";
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (busy) return;
-            const f = e.dataTransfer.files?.[0];
-            if (f) void onUpload(f);
-          }}
+      <div className="rs-action">
+        <div className="rs-action__copy">
+          <span className="rs-action__label">{next.waiting ? "In progress" : "Next action"}</span>
+          <h2 className="rs-action__title">{next.title}</h2>
+          <p className="rs-action__hint">{next.hint}</p>
+        </div>
+        <div className="rs-action__cta">
+          {canRun ? (
+            <button
+              type="button"
+              className="rs-btn rs-btn--primary"
+              disabled={busy}
+              onClick={() => void startPipeline()}
+            >
+              {status === "extraction_failed" ? "Retry pipeline" : "Run pipeline"}
+            </button>
+          ) : null}
+          {status === "dna_review" ? (
+            <button
+              type="button"
+              className="rs-btn rs-btn--primary"
+              disabled={busy || (!dna && !dnaError)}
+              onClick={() => void approveDna()}
+            >
+              Approve design DNA
+            </button>
+          ) : null}
+          {status === "in_review" ? (
+            <button
+              type="button"
+              className="rs-btn rs-btn--primary"
+              disabled={busy}
+              onClick={() => void approveExport()}
+            >
+              Approve &amp; export
+            </button>
+          ) : null}
+          {status === "exported" || exportReady ? (
+            <a
+              href={`/api/projects/${props.projectId}/export`}
+              className="rs-btn rs-btn--primary"
+            >
+              Download microsite zip
+            </a>
+          ) : null}
+        </div>
+      </div>
+
+      {note ? (
+        <p
+          className={
+            note.startsWith("Failed") ||
+            note.startsWith("Rejected") ||
+            note.startsWith("Upload failed") ||
+            note.startsWith("That file") ||
+            note.startsWith("Start over failed") ||
+            note.startsWith("Pipeline start failed") ||
+            note.startsWith("Extraction failed")
+              ? "rs-note rs-note--danger"
+              : "rs-note"
+          }
         >
-          <p style={{ margin: 0, fontSize: 13, maxWidth: 360 }}>
-            Drop a PDF here, or choose a file. Private storage; 150 MB / 250 pages max.
-          </p>
-          <label
-            style={{
-              ...primary,
-              display: "inline-block",
-              cursor: busy ? "not-allowed" : "pointer",
-              opacity: busy ? 0.6 : 1,
+          {note}
+        </p>
+      ) : null}
+
+      {showUpload ? (
+        <section className={`rs-panel${currentStepIndex === 0 ? " rs-panel--accent" : ""}`}>
+          <h2 className="rs-section-title">Upload the results PDF</h2>
+          <div
+            className="rs-dropzone"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (busy) return;
+              const f = e.dataTransfer.files?.[0];
+              if (f) void onUpload(f);
             }}
           >
-            <input
-              type="file"
-              accept="application/pdf"
-              style={{ display: "none" }}
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void onUpload(f);
-                e.target.value = "";
+            <p style={{ margin: 0, fontSize: 13, maxWidth: 360 }}>
+              Drop a PDF here, or choose a file. Private storage; 150 MB / 250 pages max.
+            </p>
+            <label
+              className="rs-btn rs-btn--primary"
+              style={{
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.6 : 1,
               }}
-            />
-            {busy ? "Uploading…" : "Choose PDF"}
-          </label>
-        </div>
-        {canRun ? (
-          <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
-            Run pipeline
-          </button>
-        ) : null}
-      </section>
+            >
+              <input
+                type="file"
+                accept="application/pdf"
+                style={{ display: "none" }}
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onUpload(f);
+                  e.target.value = "";
+                }}
+              />
+              {busy ? "Uploading…" : "Choose PDF"}
+            </label>
+            {documentId && pageCount != null ? (
+              <p className="rs-tiny" style={{ margin: 0 }}>
+                Current document · {pageCount} pages
+              </p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {status === "extraction_failed" ? (
-        <section style={panel}>
-          <h2 style={h2}>2 · Extraction failed</h2>
-          <p style={{ color: "#b91c1c", fontSize: 13, margin: 0 }}>
+        <section className="rs-panel rs-panel--danger">
+          <h2 className="rs-section-title">Extraction failed</h2>
+          <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
             {extraction?.error ??
-              "The worker could not convert this PDF. Fix the worker and click Run pipeline again."}
+              "The worker could not convert this PDF. Fix the worker and retry the pipeline."}
           </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="rs-row">
             {canRun ? (
-              <button style={primary} disabled={busy} onClick={() => void startPipeline()}>
+              <button
+                type="button"
+                className="rs-btn rs-btn--primary"
+                disabled={busy}
+                onClick={() => void startPipeline()}
+              >
                 Retry pipeline
               </button>
             ) : null}
-            <button style={ghost} disabled={busy} onClick={() => void startOver()}>
+            <button
+              type="button"
+              className="rs-btn rs-btn--ghost"
+              disabled={busy}
+              onClick={() => void startOver()}
+            >
               Start over
             </button>
           </div>
-          <p style={{ color: "var(--ink-2)", fontSize: 12, margin: 0 }}>
-            Start over clears the failed run so you can upload a new PDF (section 1) or re-run the
-            current one after the worker is healthy again.
+          <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+            Start over clears the failed run so you can upload a new PDF or re-run the current one
+            after the worker is healthy again.
           </p>
         </section>
       ) : null}
 
-      {status === "prototype_generating" ? (
-        <section style={panel} aria-live="polite">
-          <h2 style={h2}>4 · Generating prototype</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            Claude is building the first interactive HTML prototype from the approved DNA and extracted
-            content. This usually takes several minutes — leave this tab open. When it finishes, status
-            becomes <strong>IN_REVIEW</strong> and you can refine or approve the design.
+      {extracting ? (
+        <section className="rs-panel rs-panel--accent" aria-live="polite">
+          <h2 className="rs-section-title">Extraction in progress</h2>
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            Docling is reading the PDF on the worker. First convert after deploy can take longer
+            while models load. Typically a few minutes for a {pageCount ?? "multi"}-page results
+            pack.
           </p>
-          <p style={{ color: "var(--accent-strong)", fontSize: 13, margin: 0 }}>
-            Nothing to click right now — waiting on generation.
+          <div className="rs-stat-row">
+            <div>
+              <div className="rs-stat-label">Elapsed</div>
+              <div className="rs-stat-value">{formatDuration(waitStats.elapsedSec)}</div>
+            </div>
+            <div>
+              <div className="rs-stat-label">
+                {waitStats.overdue ? "Past estimate" : "Est. remaining"}
+              </div>
+              <div className="rs-stat-value">
+                {waitStats.overdue
+                  ? `+${formatDuration(waitStats.elapsedSec - waitStats.estimate)}`
+                  : formatDuration(waitStats.remainingSec)}
+              </div>
+            </div>
+            <div>
+              <div className="rs-stat-label">Pages</div>
+              <div className="rs-stat-value">
+                {waitStats.totalPages != null
+                  ? `${waitStats.pagesDone} / ${waitStats.totalPages}`
+                  : pageCount != null
+                    ? `0 / ${pageCount}`
+                    : "—"}
+              </div>
+            </div>
+          </div>
+          <div className="rs-progress rs-progress--live">
+            <div
+              className="rs-progress__bar"
+              style={{ width: `${Math.round(waitStats.pct * 100)}%` }}
+            />
+          </div>
+          <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+            {waitStats.overdue
+              ? "Still working — large or OCR-heavy PDFs can overrun the estimate."
+              : `Rough guide ~${formatDuration(waitStats.estimate)} for this document.`}
           </p>
         </section>
       ) : null}
 
       {status === "dna_review" ? (
-        <section style={panel}>
-          <h2 style={h2}>3 · Review design DNA</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
-            This is the measured visual identity from the PDF (palette, type, table treatment). Approve
-            only if it looks faithful — the prototype and microsite are constrained by it.
+        <section className="rs-panel rs-panel--accent rs-fade-up-delay">
+          <h2 className="rs-section-title">Review design DNA</h2>
+          <p className="rs-muted" style={{ fontSize: 13, marginTop: 0 }}>
+            Measured visual identity from the PDF (palette, type, table treatment). Approve only if
+            it looks faithful — the prototype is constrained by it.
           </p>
           {dnaError ? (
-            <p style={{ color: "#b91c1c", fontSize: 13, margin: 0 }}>Could not load DNA: {dnaError}</p>
+            <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
+              Could not load DNA: {dnaError}
+            </p>
           ) : null}
           {!dna && !dnaError ? (
-            <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>Loading measured DNA…</p>
+            <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+              Loading measured DNA…
+            </p>
           ) : null}
           {dna ? (
-            <div style={{ display: "grid", gap: 16 }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 13 }}>
+            <div className="rs-stack">
+              <div className="rs-stat-row">
                 <div>
-                  <div style={statLabel}>Confidence</div>
-                  <div style={statValue}>
+                  <div className="rs-stat-label">Confidence</div>
+                  <div className="rs-stat-value">
                     {dna.confidence != null ? `${Math.round(dna.confidence * 100)}%` : "—"}
                   </div>
                 </div>
                 <div>
-                  <div style={statLabel}>Theme</div>
-                  <div style={statValue}>{dna.theme.mode ?? "—"}</div>
+                  <div className="rs-stat-label">Theme</div>
+                  <div className="rs-stat-value" style={{ fontSize: "1.15rem" }}>
+                    {dna.theme.mode ?? "—"}
+                  </div>
                 </div>
                 <div>
-                  <div style={statLabel}>Revision</div>
-                  <div style={statValue}>v{dna.revision}</div>
+                  <div className="rs-stat-label">Revision</div>
+                  <div className="rs-stat-value">v{dna.revision}</div>
                 </div>
               </div>
               {dna.theme.rationale ? (
-                <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>{dna.theme.rationale}</p>
+                <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+                  {dna.theme.rationale}
+                </p>
               ) : null}
               <div>
-                <div style={{ ...statLabel, marginBottom: 8 }}>Palette roles</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                <div className="rs-stat-label" style={{ marginBottom: 8 }}>
+                  Palette roles
+                </div>
+                <div className="rs-swatches">
                   {dna.roles.map((r) => (
-                    <div key={r.role} style={{ width: 88, fontSize: 11 }}>
+                    <div key={r.role} className="rs-swatch">
                       <div
                         title={r.hex}
-                        style={{
-                          height: 40,
-                          borderRadius: 6,
-                          background: r.hex,
-                          border: "1px solid var(--rule)",
-                          marginBottom: 4,
-                        }}
+                        className="rs-swatch__chip"
+                        style={{ background: r.hex }}
                       />
                       <div style={{ color: "var(--ink)", fontWeight: 600 }}>{r.role}</div>
-                      <div style={{ color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>
+                      <div
+                        style={{
+                          color: "var(--ink-2)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
                         {r.hex}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
+              <div className="rs-meta-grid">
                 <div>
-                  <span style={{ color: "var(--ink-2)" }}>Heading face · </span>
+                  <span className="rs-muted">Heading face · </span>
                   {dna.type.heading ?? "—"}
                 </div>
                 <div>
-                  <span style={{ color: "var(--ink-2)" }}>Body face · </span>
+                  <span className="rs-muted">Body face · </span>
                   {dna.type.body ?? "—"}
                 </div>
                 {dna.type.headingTreatment ? (
                   <div>
-                    <span style={{ color: "var(--ink-2)" }}>Heading treatment · </span>
+                    <span className="rs-muted">Heading treatment · </span>
                     {dna.type.headingTreatment.case ?? "?"} / weight{" "}
-                    {dna.type.headingTreatment.weight ?? "?"} / {dna.type.headingTreatment.color ?? "?"}
+                    {dna.type.headingTreatment.weight ?? "?"} /{" "}
+                    {dna.type.headingTreatment.color ?? "?"}
                   </div>
                 ) : null}
                 {dna.tableStyle.headerBg ? (
                   <div>
-                    <span style={{ color: "var(--ink-2)" }}>Table header · </span>
+                    <span className="rs-muted">Table header · </span>
                     <span
                       style={{
                         display: "inline-block",
@@ -639,21 +836,30 @@ export function ProjectConsole(props: {
                 ) : null}
                 {dna.toneWords.length ? (
                   <div>
-                    <span style={{ color: "var(--ink-2)" }}>Tone · </span>
+                    <span className="rs-muted">Tone · </span>
                     {dna.toneWords.join(", ")}
                   </div>
                 ) : null}
                 {dna.componentIds.length ? (
                   <div>
-                    <span style={{ color: "var(--ink-2)" }}>Components · </span>
+                    <span className="rs-muted">Components · </span>
                     {dna.componentIds.join(", ")}
                   </div>
                 ) : null}
               </div>
               {dna.flags.length ? (
                 <div>
-                  <div style={{ ...statLabel, marginBottom: 6 }}>Confidence flags</div>
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--ink-2)" }}>
+                  <div className="rs-stat-label" style={{ marginBottom: 6 }}>
+                    Confidence flags
+                  </div>
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                      fontSize: 12,
+                      color: "var(--ink-2)",
+                    }}
+                  >
                     {dna.flags.slice(0, 8).map((f) => (
                       <li key={`${f.path}-${f.reason}`}>
                         {f.path}: {f.reason} ({Math.round(f.confidence * 100)}%)
@@ -666,133 +872,65 @@ export function ProjectConsole(props: {
                 href={`/api/blob/${dna.blobPath}`}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: 12, color: "var(--accent-strong)" }}
+                className="rs-tiny"
+                style={{ color: "var(--accent-strong)" }}
               >
                 Open full DNA JSON
               </a>
             </div>
           ) : null}
           <button
-            style={{ ...primary, marginTop: 8 }}
+            type="button"
+            className="rs-btn rs-btn--primary"
             disabled={busy || (!dna && !dnaError)}
-            onClick={() =>
-              void gate(
-                "dna",
-                {
-                  schema_version: "dna-correction/1",
-                  dna_id: dna?.dnaId ?? "",
-                  edits: [],
-                  approve: true,
-                  approved_by: "operator",
-                },
-                "DNA approval",
-              )
-            }
+            onClick={() => void approveDna()}
           >
             Approve design DNA
           </button>
         </section>
       ) : null}
 
-      {extracting ? (
-        <section style={panel} aria-live="polite">
-          <h2 style={h2}>2 · Extraction in progress</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            Docling is reading the PDF on the worker. First convert after deploy can take longer
-            while models load; page counts update after the document convert finishes. Typically a
-            few minutes for a {pageCount ?? "multi"}-page results pack.
+      {status === "prototype_generating" ? (
+        <section className="rs-panel rs-panel--accent" aria-live="polite">
+          <h2 className="rs-section-title">Generating prototype</h2>
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            Building the first interactive HTML prototype from the approved DNA and extracted
+            content. This usually takes several minutes — leave this tab open. When it finishes,
+            status becomes <strong>in review</strong> and you can refine or approve.
           </p>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 12,
-              marginTop: 4,
-            }}
-          >
-            <div>
-              <div style={statLabel}>Elapsed</div>
-              <div style={statValue}>{formatDuration(waitStats.elapsedSec)}</div>
-            </div>
-            <div>
-              <div style={statLabel}>
-                {waitStats.overdue ? "Past estimate" : "Est. remaining"}
-              </div>
-              <div style={statValue}>
-                {waitStats.overdue
-                  ? `+${formatDuration(waitStats.elapsedSec - waitStats.estimate)}`
-                  : formatDuration(waitStats.remainingSec)}
-              </div>
-            </div>
-            <div>
-              <div style={statLabel}>Pages</div>
-              <div style={statValue}>
-                {waitStats.totalPages != null
-                  ? `${waitStats.pagesDone} / ${waitStats.totalPages}`
-                  : pageCount != null
-                    ? `0 / ${pageCount}`
-                    : "—"}
-              </div>
-            </div>
-          </div>
-          <div
-            style={{
-              height: 8,
-              borderRadius: 99,
-              background: "var(--rule)",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${Math.round(waitStats.pct * 100)}%`,
-                background: "var(--accent)",
-                transition: "width 0.6s ease",
-              }}
-            />
-          </div>
-          <p style={{ color: "var(--ink-2)", fontSize: 12, margin: 0 }}>
-            {waitStats.overdue
-              ? "Still working — large or OCR-heavy PDFs can overrun the estimate. Leave this tab open."
-              : `Rough guide ~${formatDuration(waitStats.estimate)} for this document. Countdown is an estimate, not a hard deadline.`}
+          <p style={{ color: "var(--accent-strong)", fontSize: 13, margin: 0 }}>
+            Nothing to click right now — waiting on generation.
           </p>
         </section>
       ) : null}
 
       {status === "in_review" || status === "blueprint_proposed" ? (
-        <section style={panel}>
-          <h2 style={h2}>5 · Prototype preview</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
-            Interactive HTML generated from the approved DNA. Compare it to the source PDF look-and-feel,
-            then refine or approve.
+        <section className="rs-panel rs-panel--accent rs-fade-up-delay">
+          <h2 className="rs-section-title">Prototype preview</h2>
+          <p className="rs-muted" style={{ fontSize: 13, marginTop: 0 }}>
+            Interactive HTML generated from the approved DNA. Compare it to the source PDF
+            look-and-feel, then refine or approve.
           </p>
           {prototypeError ? (
-            <p style={{ color: "#b91c1c", fontSize: 13, margin: 0 }}>
+            <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
               Could not load prototype: {prototypeError}
             </p>
           ) : null}
           {!prototype && !prototypeError ? (
-            <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>Loading prototype…</p>
+            <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+              Loading prototype…
+            </p>
           ) : null}
           {prototype ? (
             <>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 12,
-                  alignItems: "center",
-                  fontSize: 13,
-                }}
-              >
+              <div className="rs-preview-toolbar">
                 <span>
                   v{prototype.versionNumber} · {prototype.refinementMode}
                   {prototype.sizeBytes != null
                     ? ` · ${Math.round(prototype.sizeBytes / 1024)} KB`
                     : ""}
                 </span>
-                <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                <div className="rs-viewport" role="group" aria-label="Preview width">
                   {(
                     [
                       [390, "Phone"],
@@ -804,13 +942,7 @@ export function ProjectConsole(props: {
                     <button
                       key={label}
                       type="button"
-                      style={{
-                        ...ghost,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        background: previewWidth === w ? "var(--accent)" : "transparent",
-                        color: previewWidth === w ? "#fff" : "var(--ink-2)",
-                      }}
+                      aria-pressed={previewWidth === w}
                       onClick={() => setPreviewWidth(w)}
                     >
                       {label}
@@ -821,33 +953,20 @@ export function ProjectConsole(props: {
                   href={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ fontSize: 12, color: "var(--accent-strong)" }}
+                  className="rs-tiny"
+                  style={{ color: "var(--accent-strong)", marginLeft: "auto" }}
                 >
                   Open in new tab
                 </a>
               </div>
-              <div
-                style={{
-                  width: "100%",
-                  overflow: "auto",
-                  border: "1px solid var(--rule)",
-                  borderRadius: 8,
-                  background: "#111",
-                }}
-              >
+              <div className="rs-preview-frame">
                 <iframe
                   key={prototype.versionId}
                   title={`Prototype v${prototype.versionNumber}`}
                   src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
                   sandbox="allow-scripts"
                   style={{
-                    display: "block",
                     width: previewWidth === "full" ? "100%" : previewWidth,
-                    maxWidth: "100%",
-                    height: 720,
-                    margin: "0 auto",
-                    border: 0,
-                    background: "#fff",
                   }}
                 />
               </div>
@@ -857,12 +976,11 @@ export function ProjectConsole(props: {
       ) : null}
 
       {status === "in_review" ? (
-        <section style={panel}>
-          <h2 style={h2}>5 · Refine prototype</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
-            Patch-first edits against the current prototype. Numbers cannot change — describe layout,
-            styling, or non-numeric copy only. When it looks right, Approve &amp; export to download
-            this HTML as the microsite.
+        <section className="rs-panel">
+          <h2 className="rs-section-title">Refine prototype</h2>
+          <p className="rs-muted" style={{ fontSize: 13, marginTop: 0 }}>
+            Patch-first edits against the current prototype. Numbers cannot change — describe
+            layout, styling, or non-numeric copy only. When it looks right, Approve &amp; export.
           </p>
           <textarea
             value={refinePrompt}
@@ -870,29 +988,9 @@ export function ProjectConsole(props: {
             placeholder="e.g. Make the masthead tighter and move KPIs into a single horizontal band."
             rows={3}
             disabled={busy}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "10px 12px",
-              border: "1px solid var(--line)",
-              borderRadius: 6,
-              font: "inherit",
-              fontSize: 13,
-              resize: "vertical",
-              background: "var(--paper)",
-              color: "var(--ink)",
-            }}
+            className="rs-field"
           />
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 13,
-              color: "var(--ink-2)",
-              marginTop: 8,
-            }}
-          >
+          <label className="rs-check">
             <input
               type="checkbox"
               checked={forceRegen}
@@ -901,9 +999,10 @@ export function ProjectConsole(props: {
             />
             Force full regen (slow / expensive — only if patch cannot express the change)
           </label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <div className="rs-row">
             <button
-              style={primary}
+              type="button"
+              className="rs-btn rs-btn--primary"
               disabled={busy || !refinePrompt.trim()}
               onClick={() => {
                 const prompt = refinePrompt.trim();
@@ -921,8 +1020,6 @@ export function ProjectConsole(props: {
                   forceRegen ? "Full regen" : "Refine",
                 ).then((ok) => {
                   if (!ok) return;
-                  // Keep the prompt visible — clearing it looked like a revert.
-                  // Preview label bumps to vN · patch when the step finishes (~30–90s).
                   setNote(
                     `Refine accepted from v${fromVersion}. Patching now — wait for the preview version to bump (do not click Start over).`,
                   );
@@ -932,15 +1029,10 @@ export function ProjectConsole(props: {
               {forceRegen ? "Rebuild prototype" : "Send refine"}
             </button>
             <button
-              style={ghost}
+              type="button"
+              className="rs-btn rs-btn--ghost"
               disabled={busy}
-              onClick={() =>
-                void gate(
-                  "review",
-                  { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
-                  "Approve & export",
-                )
-              }
+              onClick={() => void approveExport()}
             >
               Approve &amp; export
             </button>
@@ -948,99 +1040,54 @@ export function ProjectConsole(props: {
         </section>
       ) : null}
 
-      <section style={panel}>
-        <h2 style={h2}>Human gates</h2>
-        <p style={{ color: "var(--ink-2)", fontSize: 13, marginTop: 0 }}>
-          Two decisions: approve the measured DNA, then approve the prototype to download that HTML
-          as the microsite. Refine as needed before export.
-        </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button
-            style={status === "dna_review" ? primary : ghost}
-            disabled={busy || status !== "dna_review"}
-            onClick={() =>
-              void gate(
-                "dna",
-                {
-                  schema_version: "dna-correction/1",
-                  dna_id: "",
-                  edits: [],
-                  approve: true,
-                  approved_by: "operator",
-                },
-                "DNA approval",
-              )
-            }
-          >
-            Approve design DNA
-          </button>
-          <button
-            style={status === "in_review" ? primary : ghost}
-            disabled={busy || status !== "in_review"}
-            onClick={() =>
-              void gate(
-                "review",
-                { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
-                "Approve & export",
-              )
-            }
-          >
-            Approve &amp; export
-          </button>
-        </div>
-      </section>
-
       {status === "exporting" ? (
-        <section style={panel} aria-live="polite">
-          <h2 style={h2}>5 · Packaging export</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+        <section className="rs-panel rs-panel--accent" aria-live="polite">
+          <h2 className="rs-section-title">Packaging export</h2>
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
             Zipping the approved prototype HTML. Download appears when status becomes{" "}
-            <strong>EXPORTED</strong>.
+            <strong>exported</strong>.
           </p>
         </section>
       ) : null}
 
       {status === "exported" || exportReady ? (
-        <section style={panel}>
-          <h2 style={h2}>5 · Export ready</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
-            The zip contains the approved interactive prototype as <code>index.html</code> — open it
-            locally or host on any static server.
+        <section className="rs-panel rs-panel--accent">
+          <h2 className="rs-section-title">Export ready</h2>
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            The zip contains the approved interactive prototype as <code>index.html</code> — open
+            it locally or host on any static server.
           </p>
           <a
             href={`/api/projects/${props.projectId}/export`}
-            style={{ ...primary, display: "inline-block", textDecoration: "none", textAlign: "center" }}
+            className="rs-btn rs-btn--primary"
+            style={{ justifySelf: "start" }}
           >
             Download microsite zip
           </a>
         </section>
       ) : null}
 
-      {note ? (
-        <p style={{ fontSize: 13, color: "var(--accent-strong)", margin: 0 }}>{note}</p>
-      ) : null}
-
-      <section style={panel}>
-        <h2 style={h2}>Run timeline</h2>
+      <details className="rs-timeline">
+        <summary>Run timeline · {events.length} events</summary>
         {events.length === 0 ? (
-          <p style={{ color: "var(--ink-2)", fontSize: 13, margin: 0 }}>
+          <p className="rs-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
             {extracting
               ? "Extraction is running. Timeline events will appear as steps complete."
               : "No events yet. Upload a PDF and run the pipeline to see progress stream in."}
           </p>
         ) : (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
+          <ul>
             {events.map((e) => (
-              <li key={e.id} style={{ fontSize: 13, display: "flex", gap: 10 }}>
-                <span style={{ color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>
+              <li key={e.id}>
+                <time dateTime={e.createdAt}>
                   {new Date(e.createdAt).toLocaleTimeString()}
-                </span>
+                </time>
                 <span>{e.type}</span>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </details>
     </div>
   );
 }
@@ -1067,43 +1114,3 @@ function stepIndexForStatus(status: string): number {
   };
   return map[status] ?? 0;
 }
-
-const panel: React.CSSProperties = {
-  border: "1px solid var(--rule)",
-  borderRadius: 8,
-  padding: 16,
-  display: "grid",
-  gap: 10,
-};
-const h2: React.CSSProperties = { fontSize: 15, margin: 0 };
-const primary: React.CSSProperties = {
-  padding: "9px 18px",
-  border: "none",
-  borderRadius: 6,
-  background: "var(--accent)",
-  color: "#fff",
-  fontWeight: 600,
-  cursor: "pointer",
-  justifySelf: "start",
-};
-const ghost: React.CSSProperties = {
-  padding: "8px 14px",
-  border: "1px solid var(--rule)",
-  borderRadius: 6,
-  background: "transparent",
-  color: "var(--ink)",
-  cursor: "pointer",
-  fontSize: 13,
-};
-const statLabel: React.CSSProperties = {
-  fontSize: 11,
-  color: "var(--ink-2)",
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
-};
-const statValue: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 600,
-  fontVariantNumeric: "tabular-nums",
-  color: "var(--ink)",
-};
