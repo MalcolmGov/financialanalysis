@@ -381,6 +381,7 @@ export async function refinePrototype(
 
   const { getPrivate, putPrivate } = await import("../lib/blob");
   const { assembleAssets, runStudio } = await import("../lib/studio");
+  const { ensureContentCoverage } = await import("../lib/content-coverage");
   const { resolveAssetUris } = await import("../lib/brand-assets");
   const { MODELS, generateStructured } = await import("../lib/anthropic");
   const {
@@ -517,6 +518,23 @@ export async function refinePrototype(
     }
 
     assertNumeralsUnchanged(parentPlaceholder, placeholderHtml);
+    // Re-pack full document content and inject any tables/letter the model omitted.
+    if (extractionForAssets) {
+      const { buildContentSample, highlightsText } = await import("../lib/build-content");
+      const { extractKpis } = await import("../lib/enrich-kpis");
+      const { mapToDocModel } = await import("@rs/mapper");
+      const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
+      const meta = {
+        company: project?.companyName ?? extractionForAssets.source?.pdf_meta?.title ?? "Company",
+        period_label: project?.periodLabel ?? "",
+        doc_kind: "interim_unaudited" as const,
+        currency: "ZAR",
+      };
+      const docModel = mapToDocModel(extractionForAssets, meta);
+      const kpis = await extractKpis(highlightsText(docModel));
+      const fullContent = buildContentSample(docModel, extractionForAssets, { kpis });
+      placeholderHtml = ensureContentCoverage(placeholderHtml, fullContent);
+    }
     const assembledHtml = assembleAssets(placeholderHtml, assetUris);
     const lint = conformanceLint(assembledHtml, dna);
     lintReport = { passed: lint.passed, errors: lint.errors, warnings: lint.warnings };

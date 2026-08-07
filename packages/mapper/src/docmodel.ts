@@ -5,7 +5,7 @@ import type {
   FinancialDocModel,
   FinTable,
 } from "@rs/contracts";
-import { classifyTable, headerRows } from "./classify.js";
+import { classifySectionTitle, classifyTable, headerRows } from "./classify.js";
 
 /**
  * ExtractionResult → FinancialDocModel. Numbers are NEVER re-interpreted: each
@@ -102,15 +102,15 @@ function flattenBody(nodes: Body, out: BlockNode[] = []): BlockNode[] {
 const LETTER_START = /dear shareholder|shareholder letter/i;
 const HIGHLIGHTS = /^highlights$/i;
 const DIVIDEND = /cash dividend|dividend declaration|salient dates/i;
+const NOTES_START = /notes to the condensed|notes to the consolidated|notes to the financial/i;
 /** Prose ends where the primary statements begin. */
 const STATEMENTS_START =
   /statement of (profit or loss|financial position|changes in equity|cash flows)|condensed consolidated financial statements|notes to the/i;
 
 /**
- * Prose sections (shareholder letter, highlights, dividend) from the reading-
- * ordered body blocks — deterministic. The letter runs from its opening heading
- * to the first financial statement; every block keeps its verbatim text and a
- * src_ref back to the extraction block.
+ * Prose sections from reading-ordered body blocks — deterministic.
+ * Letter runs to the first financial-statements heading; notes run from the
+ * notes heading to EOF; other lexicon headings take the following prose window.
  */
 export function extractProseSections(extraction: ExtractionResult): FinancialDocModel["sections"] {
   const flat = flattenBody(extraction.body);
@@ -121,8 +121,11 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
     for (let i = start; i < flat.length; i++) {
       const b = flat[i];
       if (i > start && stop(b, i)) break;
-      if (b.text && (b.type === "paragraph" || b.type === "list_item")) {
-        blocks.push({ kind: "paragraph", text: b.text, src_ref: `ext:${b.id}` });
+      // Section title is stored on the section; skip the opening heading node.
+      if (i === start && b.type === "heading") continue;
+      if (b.text && (b.type === "paragraph" || b.type === "list_item" || b.type === "heading")) {
+        const kind = b.type === "heading" ? "heading" : b.type === "list_item" ? "list" : "paragraph";
+        blocks.push({ kind, text: b.text, src_ref: `ext:${b.id}` });
       }
     }
     return blocks;
@@ -156,7 +159,7 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
 
   const divStart = flat.findIndex((b) => b.type === "heading" && DIVIDEND.test(b.text ?? ""));
   if (divStart >= 0) {
-    const blocks = proseBlocks(divStart, (b) => b.type === "heading");
+    const blocks = proseBlocks(divStart, (b) => b.type === "heading" && !DIVIDEND.test(b.text ?? ""));
     if (blocks.length)
       sections.push({
         id: "doc:sec_dividend",
@@ -167,7 +170,60 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
       });
   }
 
+  const notesStart = flat.findIndex((b) => b.type === "heading" && NOTES_START.test(b.text ?? ""));
+  if (notesStart >= 0) {
+    const blocks = proseBlocks(notesStart, () => false);
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_notes",
+        kind: "note",
+        title: { text: flat[notesStart].text ?? "Notes", src_ref: `ext:${flat[notesStart].id}` },
+        blocks,
+        items: [],
+      });
+  }
+
+  // Lexicon-driven short sections on the cover (shareholder info, directors, …).
+  const seenKinds = new Set(sections.map((s) => s.kind));
+  for (let i = 0; i < flat.length; i++) {
+    const b = flat[i];
+    if (b.type !== "heading" || !b.text) continue;
+    const { kind } = classifySectionTitle(b.text);
+    if (
+      kind === "other" ||
+      kind === "statement" ||
+      kind === "letter" ||
+      kind === "highlights" ||
+      kind === "dividendDeclaration" ||
+      kind === "note" ||
+      seenKinds.has(kind)
+    ) {
+      continue;
+    }
+    const blocks = proseBlocks(i, (n) => n.type === "heading");
+    if (!blocks.length) continue;
+    seenKinds.add(kind);
+    sections.push({
+      id: `doc:sec_${kind}`,
+      kind,
+      title: { text: b.text, src_ref: `ext:${b.id}` },
+      blocks,
+      items: [],
+    });
+  }
+
   return sections;
+}
+
+function extractionTableTitle(table: ExtractionTable, extId: string): string {
+  if (table.caption_block?.trim()) return table.caption_block.trim();
+  const row0 = table.cells
+    .filter((c) => c.r === 0)
+    .sort((a, b) => a.c - b.c)
+    .map((c) => c.text.trim())
+    .filter(Boolean);
+  if (row0[0]) return row0[0];
+  return `Table ${extId}`;
 }
 
 export function mapToDocModel(
@@ -180,16 +236,22 @@ export function mapToDocModel(
   let i = 0;
   for (const [extId, table] of Object.entries(extraction.tables)) {
     const cls = classifyTable(table);
-    if (!cls.is_financial) continue;
+    // Full-document fidelity: include every extracted table (ops, facts, notes).
     i++;
     const docId = `doc:tbl_${i}`;
-    // Statements and notes must appear in full; incidental facts tables need not.
-    const mustAppear = cls.table_type !== "facts";
+    const mustAppear = true;
     tables.push(buildFinTable(table, docId, mustAppear));
+    const title = extractionTableTitle(table, extId);
+    const sectionKind =
+      cls.table_type === "sensitivity" || /segment/i.test(title)
+        ? ("segments" as const)
+        : cls.is_financial
+          ? ("statement" as const)
+          : ("other" as const);
     sections.push({
-      id: `doc:sec_${i}`,
-      kind: "statement",
-      title: { text: table.caption_block ?? `Table ${i}`, src_ref: `ext:${extId}:r0c0` },
+      id: `doc:sec_tbl_${i}`,
+      kind: sectionKind,
+      title: { text: title, src_ref: `ext:${extId}:r0c0` },
       blocks: [{ kind: "table", table_ref: docId }],
       items: [],
     });

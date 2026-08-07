@@ -1,29 +1,45 @@
 import type { DesignDNA } from "@rs/contracts";
 import { MODELS, generateLongText, type Usage } from "./anthropic";
+import { ensureContentCoverage } from "./content-coverage";
 
 /**
  * Step 4 — the AI design studio. Generates ONE self-contained interactive HTML
- * prototype from the approved DesignDNA + a content sample + the client brief.
- * The no-generic-templates rule is enforced downstream by the shared
- * conformance linter (@rs/render), which every version must pass before it is
- * reviewable; this module also runs it as a post-generation gate.
- *
- * Assets enter as {{ASSET:*}} placeholders and are substituted after
- * generation — keeping megabytes of base64 out of the token budget and letting
- * the placeholder form round-trip through refinement.
+ * prototype from the approved DesignDNA + full document content + the client brief.
+ * Assets enter as {{ASSET:*}} placeholders and are substituted after generation.
  */
+
+export interface ContentTable {
+  id: string;
+  caption: string;
+  headers: string[];
+  rows: string[][];
+  table_type?: string;
+  must_appear?: boolean;
+  page?: number;
+}
+
+export interface ContentSection {
+  id: string;
+  kind: string;
+  heading: string;
+  paragraphs: string[];
+}
 
 export interface ContentSample {
   company: string;
   period: string;
   /** Cover KPI cards: label + verbatim value. */
   kpis: { label: string; value: string }[];
-  /** A representative statement table, verbatim. */
+  /** Primary statement (backward compat / chart source). */
   table: { caption: string; headers: string[]; rows: string[][] };
+  /** Every mapped financial/ops table, full rows, verbatim. */
+  tables?: ContentTable[];
   /** A chart derived from real extracted numbers. */
   chart: { title: string; categories: string[]; series: { label: string; values: string[] }[] };
-  /** Opening paragraphs of the shareholder letter + subheads, verbatim. */
+  /** Full shareholder letter prose, verbatim. */
   letter: { heading: string; paragraphs: string[] };
+  /** Additional prose sections (highlights, notes, directors, …). */
+  sections?: ContentSection[];
   /** Dividend / salient-dates list, verbatim. */
   dividend?: string[];
 }
@@ -59,7 +75,7 @@ export function buildTokenBlock(dna: DesignDNA): string {
   return `:root{${decl.join(";")}}`;
 }
 
-const SYSTEM = (company: string) => `You are the design engineer for ${company}'s online financial results. You produce ONE self-contained, interactive HTML file that presents audited results as a beautiful, professional microsite — the calibre a specialist investor-relations agency hand-builds.
+const SYSTEM = (company: string) => `You are the design engineer for ${company}'s online financial results. You produce ONE self-contained, interactive HTML file that presents the FULL interim results announcement as a beautiful, professional microsite — the calibre a specialist investor-relations agency hand-builds. Completeness is mandatory: every supplied table and prose section must appear.
 
 HARD CONSTRAINTS (a violation makes the file unusable):
 - Output ONLY a complete HTML document: <!doctype html> … </html>. No markdown, no code fences, no commentary before or after.
@@ -67,20 +83,25 @@ HARD CONSTRAINTS (a violation makes the file unusable):
 - Use ONLY the fonts named in the tokens (with a generic fallback). Do NOT use Inter, Roboto, Arial, or system-ui as a primary face.
 - Zero external requests: no CDN scripts, no external stylesheets, no remote fonts or images. Reference brand imagery ONLY via the placeholders {{ASSET:banner}} and {{ASSET:logo}} exactly as written — do not invent asset URLs.
 - Real content ONLY, exactly as supplied. NEVER use lorem ipsum. NEVER invent, round, or alter a number — reproduce every figure character-for-character as given (including thin-space thousands like "5 053.2" and parenthesised negatives like "(490.5)").
-- Annotate each major block with data-dna-component="<kebab-name>" (e.g. kpi-card, statement-table, chart-block, hero-banner, footer-strip) and each content section with data-dna-source-page.
+- You MUST include EVERY object in content.tables (full headers and EVERY row) and EVERY paragraph in content.letter.paragraphs and content.sections[].paragraphs and content.dividend. Do not summarize, omit, or “sample” tables.
+- Annotate each major block with data-dna-component="<kebab-name>" (e.g. kpi-card, statement-table, chart-block, hero-banner, footer-strip, note-block) and each content section with data-dna-source-page when known.
 
-NEVER use generic AI aesthetics: purple-on-white gradients, Bootstrap/shadcn defaults, cookie-cutter card grids, emoji bullets. Every visual decision must be traceable to the source document's design DNA described below — its palette, its table treatment, its masthead and motifs.
+NEVER use generic AI aesthetics: purple-on-white gradients, Bootstrap/shadcn defaults, cookie-cutter card grids, emoji bullets. Every visual decision must be traceable to the source document's design DNA — its palette, table treatment, masthead and motifs.
 
 REQUIRED INTERACTIVITY & STRUCTURE:
-- Sticky masthead nav with scrollspy across the sections.
+- Sticky masthead nav with scrollspy. Nav MUST include at least: Highlights, Review of operations (if present), Shareholder letter, Financial statements, Notes, Dividend (if present), plus any other major sections you render.
 - A hero band using {{ASSET:banner}} and the KPI highlight cards.
-- At least one real financial table with the DNA's dark header + current-period shading, right-aligned tabular-nums, sticky first column, and an overflow-x wrapper.
+- A Financial statements region containing each primary statement table (P&L, financial position, changes in equity, cash flows) with the DNA's dark header + current-period shading, right-aligned tabular-nums, sticky first column, and an overflow-x wrapper.
+- A Notes region for note tables and note prose.
 - One inline-SVG chart built from the supplied chart numbers, with visible value labels (each label the verbatim figure).
-- The shareholder-letter prose in a comfortable reading column.
+- The FULL shareholder-letter prose in a comfortable reading column (all paragraphs, in order).
 - A footer strip in the DNA's style.
-- A print stylesheet; responsive to 390px with no horizontal body scroll; WCAG AA text contrast; semantic landmarks + a skip link.`;
+- A print stylesheet; responsive to 390px with no horizontal body scroll; WCAG AA text contrast; semantic landmarks + a skip link.
+- Prefer editorial, premium IR layout: clear hierarchy, generous measure for prose, disciplined table typography — not a sparse marketing landing page.`;
 
 function userPrompt(dna: DesignDNA, content: ContentSample, brief: string, tokenBlock: string): string {
+  const tableCount = content.tables?.length ?? 1;
+  const letterParas = content.letter.paragraphs.length;
   return `DESIGN DNA (the source document's measured visual identity):
 ${JSON.stringify(dna, null, 2)}
 
@@ -90,6 +111,12 @@ ${tokenBlock}
 CLIENT BRIEF:
 ${brief}
 
+COVERAGE CONTRACT — your HTML fails if incomplete:
+- tables to render in full: ${tableCount}
+- shareholder letter paragraphs: ${letterParas}
+- additional prose sections: ${content.sections?.length ?? 0}
+- Include every row of every table. Do not truncate.
+
 CONTENT (reproduce every value verbatim):
 ${JSON.stringify(content, null, 2)}
 
@@ -97,7 +124,6 @@ Produce the complete single-file HTML now.`;
 }
 
 const ASSET_STUBS: Record<"logo" | "banner", string> = {
-  // Fallbacks when extraction yields no usable brand crop.
   banner:
     "data:image/svg+xml;base64," +
     Buffer.from(
@@ -149,6 +175,9 @@ export async function runStudio(opts: {
   if (fence) html = fence[1].trim();
   const docStart = html.indexOf("<!doctype");
   if (docStart > 0) html = html.slice(docStart);
+
+  // Safety net: inject any tables/letter paras the model omitted.
+  html = ensureContentCoverage(html, opts.content);
 
   return {
     placeholderHtml: html,
