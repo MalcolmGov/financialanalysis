@@ -21,6 +21,8 @@ export async function GET(
       status: "created",
       documentId: null,
       pageCount: null,
+      sourcePdfPath: null,
+      sourcePdfUrl: null,
       runStartedAt: null,
       extraction: null,
     });
@@ -33,13 +35,24 @@ export async function GET(
   if (!project) return Response.json({ error: "not found" }, { status: 404 });
 
   let pageCount: number | null = null;
+  let sourcePdfPath: string | null = null;
   if (project.currentDocumentId) {
     const [doc] = await db()
-      .select({ pageCount: schema.documents.pageCount })
+      .select({
+        pageCount: schema.documents.pageCount,
+        blobPath: schema.documents.blobPath,
+      })
       .from(schema.documents)
       .where(eq(schema.documents.id, project.currentDocumentId));
     pageCount = doc?.pageCount ?? null;
+    sourcePdfPath = doc?.blobPath ?? null;
   }
+  const sourcePdfUrl = sourcePdfPath
+    ? `/api/blob/${sourcePdfPath
+        .split("/")
+        .map((s) => encodeURIComponent(s))
+        .join("/")}`
+    : null;
 
   // projects.pipelineRunId stores the WDK workflow id; run_events.run_id FKs
   // to pipeline_runs.id (our UUID). Resolve via the runs table.
@@ -159,6 +172,8 @@ export async function GET(
     status,
     documentId: project.currentDocumentId,
     pageCount,
+    sourcePdfPath,
+    sourcePdfUrl,
     runStartedAt: run?.createdAt ? run.createdAt.toISOString() : null,
     /** Approximate status entry time — used as wait-clock fallback on reload. */
     statusUpdatedAt: project.updatedAt ? project.updatedAt.toISOString() : null,

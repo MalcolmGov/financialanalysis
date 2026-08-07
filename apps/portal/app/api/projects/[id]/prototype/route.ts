@@ -19,6 +19,12 @@ export async function GET(
     return Response.json({ error: "prototype unavailable in MOCK_BLOB mode" }, { status: 404 });
   }
 
+  const [project] = await db()
+    .select({ currentDocumentId: schema.projects.currentDocumentId })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+
   const [row] = await db()
     .select({
       id: schema.prototypeVersions.id,
@@ -44,10 +50,23 @@ export async function GET(
     return Response.json({ error: "no ready prototype version yet" }, { status: 404 });
   }
 
-  const previewPath = `/api/blob/${row.assembledHtmlBlobKey
-    .split("/")
-    .map((s) => encodeURIComponent(s))
-    .join("/")}`;
+  const toBlobUrl = (path: string) =>
+    `/api/blob/${path
+      .split("/")
+      .map((s) => encodeURIComponent(s))
+      .join("/")}`;
+
+  const previewPath = toBlobUrl(row.assembledHtmlBlobKey);
+
+  let sourcePdfPath: string | null = null;
+  if (project?.currentDocumentId) {
+    const [doc] = await db()
+      .select({ blobPath: schema.documents.blobPath })
+      .from(schema.documents)
+      .where(eq(schema.documents.id, project.currentDocumentId))
+      .limit(1);
+    sourcePdfPath = doc?.blobPath ?? null;
+  }
 
   return Response.json({
     versionId: row.id,
@@ -58,5 +77,7 @@ export async function GET(
     sizeBytes: row.sizeBytes,
     createdAt: row.createdAt?.toISOString() ?? null,
     previewUrl: previewPath,
+    sourcePdfPath,
+    sourcePdfUrl: sourcePdfPath ? toBlobUrl(sourcePdfPath) : null,
   });
 }

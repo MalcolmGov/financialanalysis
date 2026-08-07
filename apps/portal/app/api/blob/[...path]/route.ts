@@ -26,23 +26,29 @@ export async function GET(
   } catch {
     return new Response("not found", { status: 404 });
   }
+  const isPdf = blobPath.endsWith(".pdf");
   const contentType = blobPath.endsWith(".html")
     ? "text/html; charset=utf-8"
     : blobPath.endsWith(".json")
       ? "application/json"
       : blobPath.endsWith(".png")
         ? "image/png"
-        : blobPath.endsWith(".pdf")
+        : isPdf
           ? "application/pdf"
           : "application/octet-stream";
 
-  return new Response(new Uint8Array(bytes), {
-    headers: {
-      "content-type": contentType,
-      "cache-control": "private, no-store",
-      // Zero-egress posture for rendered prototypes (MNPI cannot exfiltrate).
-      "content-security-policy":
-        "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:",
-    },
-  });
+  const headers: Record<string, string> = {
+    "content-type": contentType,
+    "cache-control": "private, no-store",
+  };
+  // HTML prototypes: zero-egress CSP. PDFs use the browser viewer — omit CSP
+  // so native PDF chrome (toolbar / fonts) can render in the compare iframe.
+  if (!isPdf) {
+    headers["content-security-policy"] =
+      "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:";
+  } else {
+    headers["content-disposition"] = "inline";
+  }
+
+  return new Response(new Uint8Array(bytes), { headers });
 }

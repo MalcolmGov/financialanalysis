@@ -24,14 +24,30 @@ async function loadProject(id: string) {
           .limit(50)
       : [];
     let pageCount: number | null = null;
+    let sourcePdfUrl: string | null = null;
     if (project.currentDocumentId) {
       const [doc] = await db()
-        .select({ pageCount: schema.documents.pageCount })
+        .select({
+          pageCount: schema.documents.pageCount,
+          blobPath: schema.documents.blobPath,
+        })
         .from(schema.documents)
         .where(eq(schema.documents.id, project.currentDocumentId));
       pageCount = doc?.pageCount ?? null;
+      if (doc?.blobPath) {
+        sourcePdfUrl = `/api/blob/${doc.blobPath
+          .split("/")
+          .map((s) => encodeURIComponent(s))
+          .join("/")}`;
+      }
     }
-    return { project, events, pageCount, runStartedAt: run?.createdAt ?? null };
+    return {
+      project,
+      events,
+      pageCount,
+      sourcePdfUrl,
+      runStartedAt: run?.createdAt ?? null,
+    };
   } catch {
     return null;
   }
@@ -49,6 +65,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       documentId={data?.project.currentDocumentId ?? null}
       initialStatus={data?.project.status ?? "created"}
       initialPageCount={data?.pageCount ?? null}
+      initialSourcePdfUrl={data?.sourcePdfUrl ?? null}
       initialRunStartedAt={data?.runStartedAt ? data.runStartedAt.toISOString() : null}
       companyName={data?.project.companyName ?? "Project"}
       periodLabel={data?.project.periodLabel ?? null}

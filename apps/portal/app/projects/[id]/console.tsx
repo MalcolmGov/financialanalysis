@@ -193,6 +193,7 @@ export function ProjectConsole(props: {
   documentId: string | null;
   initialStatus: string;
   initialPageCount: number | null;
+  initialSourcePdfUrl?: string | null;
   initialRunStartedAt: string | null;
   companyName: string;
   periodLabel: string | null;
@@ -202,6 +203,9 @@ export function ProjectConsole(props: {
   const [status, setStatus] = useState(props.initialStatus);
   const [documentId, setDocumentId] = useState<string | null>(props.documentId);
   const [pageCount, setPageCount] = useState<number | null>(props.initialPageCount);
+  const [sourcePdfUrl, setSourcePdfUrl] = useState<string | null>(
+    props.initialSourcePdfUrl ?? null,
+  );
   const [events, setEvents] = useState<EventRow[]>(props.initialEvents);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -228,6 +232,8 @@ export function ProjectConsole(props: {
   } | null>(null);
   const [prototypeError, setPrototypeError] = useState<string | null>(null);
   const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
+  /** Mobile compare tabs — desktop shows both panes. */
+  const [compareTab, setCompareTab] = useState<"prototype" | "source">("prototype");
   const [now, setNow] = useState(() => Date.now());
   /** Client timestamp when we observed entering a busy wait status. */
   const [clientBusyStartedAt, setClientBusyStartedAt] = useState<number | null>(null);
@@ -235,12 +241,22 @@ export function ProjectConsole(props: {
   const [statusUpdatedAt, setStatusUpdatedAt] = useState<string | null>(null);
   const prevStatusRef = useRef(props.initialStatus);
 
+  const showPrototypePreview =
+    status === "in_review" ||
+    status === "blueprint_proposed" ||
+    status === "exported" ||
+    exportReady;
+
   useEffect(() => {
-    document.documentElement.style.setProperty("--max", "1240px");
+    // Wider stage for side-by-side Source PDF | Prototype compare.
+    document.documentElement.style.setProperty(
+      "--max",
+      showPrototypePreview ? "1560px" : "1240px",
+    );
     return () => {
       document.documentElement.style.removeProperty("--max");
     };
-  }, []);
+  }, [showPrototypePreview]);
 
   useEffect(() => {
     if (status === prevStatusRef.current) return;
@@ -254,7 +270,7 @@ export function ProjectConsole(props: {
   }, [status]);
 
   useEffect(() => {
-    if (status !== "in_review" && status !== "blueprint_proposed") return;
+    if (!showPrototypePreview) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -266,9 +282,11 @@ export function ProjectConsole(props: {
           promptText?: string | null;
           previewUrl?: string;
           sizeBytes?: number | null;
+          sourcePdfUrl?: string | null;
           error?: string;
         };
         if (cancelled) return;
+        if (data.sourcePdfUrl) setSourcePdfUrl(data.sourcePdfUrl);
         if (!res.ok || !data.previewUrl || !data.versionId) {
           setPrototype(null);
           setPrototypeError(data.error ?? res.statusText);
@@ -293,7 +311,7 @@ export function ProjectConsole(props: {
     return () => {
       cancelled = true;
     };
-  }, [status, props.projectId, events.length]);
+  }, [showPrototypePreview, props.projectId, events.length]);
 
   useEffect(() => {
     if (status !== "dna_review") return;
@@ -331,6 +349,7 @@ export function ProjectConsole(props: {
         status?: string;
         documentId?: string | null;
         pageCount?: number | null;
+        sourcePdfUrl?: string | null;
         runStartedAt?: string | null;
         statusUpdatedAt?: string | null;
         extraction?: ExtractionProgress | null;
@@ -346,6 +365,7 @@ export function ProjectConsole(props: {
       if (data.status) setStatus(data.status);
       if (data.documentId) setDocumentId(data.documentId);
       if (typeof data.pageCount === "number") setPageCount(data.pageCount);
+      if (data.sourcePdfUrl !== undefined) setSourcePdfUrl(data.sourcePdfUrl);
       if (data.runStartedAt) setRunStartedAt(data.runStartedAt);
       if (data.statusUpdatedAt) setStatusUpdatedAt(data.statusUpdatedAt);
       if (data.extraction) {
@@ -1051,12 +1071,12 @@ export function ProjectConsole(props: {
         />
       ) : null}
 
-      {status === "in_review" || status === "blueprint_proposed" ? (
+      {showPrototypePreview ? (
         <section className="rs-sheet rs-fade-up-delay">
           <h2 className="rs-section-title">Prototype preview</h2>
           <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
-            Interactive HTML generated from the approved DNA. Compare it to the source PDF
-            look-and-feel, then refine or approve.
+            Source PDF beside the generated HTML so you can compare look-and-feel before
+            refine or approve.
           </p>
           {prototypeError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
@@ -1068,54 +1088,127 @@ export function ProjectConsole(props: {
               Loading prototype…
             </p>
           ) : null}
-          {prototype ? (
+          {prototype || sourcePdfUrl ? (
             <>
               <div className="rs-preview-toolbar">
                 <span>
-                  v{prototype.versionNumber} · {prototype.refinementMode}
-                  {prototype.sizeBytes != null
-                    ? ` · ${Math.round(prototype.sizeBytes / 1024)} KB`
-                    : ""}
+                  {prototype
+                    ? `v${prototype.versionNumber} · ${prototype.refinementMode}${
+                        prototype.sizeBytes != null
+                          ? ` · ${Math.round(prototype.sizeBytes / 1024)} KB`
+                          : ""
+                      }`
+                    : "Source document"}
                 </span>
-                <div className="rs-viewport" role="group" aria-label="Preview width">
-                  {(
-                    [
-                      [390, "Phone"],
-                      [768, "Tablet"],
-                      [1280, "Desktop"],
-                      ["full", "Full"],
-                    ] as const
-                  ).map(([w, label]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      aria-pressed={previewWidth === w}
-                      onClick={() => setPreviewWidth(w)}
+                {prototype ? (
+                  <div className="rs-viewport" role="group" aria-label="Preview width">
+                    {(
+                      [
+                        [390, "Phone"],
+                        [768, "Tablet"],
+                        [1280, "Desktop"],
+                        ["full", "Full"],
+                      ] as const
+                    ).map(([w, label]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={previewWidth === w}
+                        onClick={() => setPreviewWidth(w)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="rs-preview-links">
+                  {sourcePdfUrl ? (
+                    <a
+                      href={sourcePdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rs-tiny"
+                      style={{ color: "var(--signal)" }}
                     >
-                      {label}
-                    </button>
-                  ))}
+                      PDF in new tab
+                    </a>
+                  ) : null}
+                  {prototype ? (
+                    <a
+                      href={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rs-tiny"
+                      style={{ color: "var(--signal)" }}
+                    >
+                      Prototype in new tab
+                    </a>
+                  ) : null}
                 </div>
-                <a
-                  href={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rs-tiny"
-                  style={{ color: "var(--signal)", marginLeft: "auto" }}
-                >
-                  Open in new tab
-                </a>
               </div>
-              <div className="rs-preview-frame">
-                <iframe
-                  key={prototype.versionId}
-                  title={`Prototype v${prototype.versionNumber}`}
-                  src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
-                  sandbox="allow-scripts"
-                  style={{
-                    width: previewWidth === "full" ? "100%" : previewWidth,
-                  }}
-                />
+              <div
+                className="rs-compare-tabs"
+                role="tablist"
+                aria-label="Compare panes"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={compareTab === "prototype"}
+                  onClick={() => setCompareTab("prototype")}
+                >
+                  Prototype
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={compareTab === "source"}
+                  onClick={() => setCompareTab("source")}
+                >
+                  Source PDF
+                </button>
+              </div>
+              <div
+                className={`rs-compare rs-compare--${compareTab}`}
+                data-active-tab={compareTab}
+              >
+                <div className="rs-compare__pane rs-compare__pane--source">
+                  <div className="rs-compare__label">Source PDF</div>
+                  <div className="rs-compare__body">
+                    {sourcePdfUrl ? (
+                      <iframe
+                        title="Source PDF"
+                        src={`${sourcePdfUrl}#view=FitH`}
+                      />
+                    ) : (
+                      <p className="rs-muted rs-compare__empty">
+                        No source PDF on this project yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="rs-compare__pane rs-compare__pane--prototype">
+                  <div className="rs-compare__label">Prototype</div>
+                  <div className="rs-compare__body rs-preview-frame">
+                    {prototype ? (
+                      <iframe
+                        key={prototype.versionId}
+                        title={`Prototype v${prototype.versionNumber}`}
+                        src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
+                        sandbox="allow-scripts"
+                        style={{
+                          width: previewWidth === "full" ? "100%" : previewWidth,
+                        }}
+                      />
+                    ) : (
+                      <p className="rs-muted rs-compare__empty">
+                        {prototypeError
+                          ? "Prototype unavailable."
+                          : "Waiting for prototype…"}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </>
           ) : null}
