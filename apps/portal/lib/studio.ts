@@ -96,27 +96,35 @@ ${JSON.stringify(content, null, 2)}
 Produce the complete single-file HTML now.`;
 }
 
-const ASSET_PLACEHOLDERS: Record<string, string> = {
-  // 1x1 transparent PNG stand-ins; the real assembler substitutes extracted
-  // brand assets. Kept tiny so the assembled form stays well under budget here.
-  "{{ASSET:banner}}":
+const ASSET_STUBS: Record<"logo" | "banner", string> = {
+  // Fallbacks when extraction yields no usable brand crop.
+  banner:
     "data:image/svg+xml;base64," +
     Buffer.from(
       `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='240'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='#0E0B08'/><stop offset='0.55' stop-color='#6B4A1E'/><stop offset='1' stop-color='#C9972F'/></linearGradient></defs><rect width='1200' height='240' fill='url(%23g)'/></svg>`,
     ).toString("base64"),
-  "{{ASSET:logo}}":
+  logo:
     "data:image/svg+xml;base64," +
     Buffer.from(
       `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='48'><text x='0' y='34' font-family='sans-serif' font-weight='700' font-size='28' fill='%23B8912A'>LOGO</text></svg>`,
     ).toString("base64"),
 };
 
+export type AssembleAssetUris = {
+  logo?: string;
+  banner?: string;
+};
+
 /** Substitute {{ASSET:*}} placeholders with data URIs → the browser-facing form. */
-export function assembleAssets(placeholderHtml: string): string {
+export function assembleAssets(
+  placeholderHtml: string,
+  uris?: AssembleAssetUris,
+): string {
   let out = placeholderHtml;
-  for (const [ph, uri] of Object.entries(ASSET_PLACEHOLDERS)) {
-    out = out.split(ph).join(uri);
-  }
+  const logo = uris?.logo || ASSET_STUBS.logo;
+  const banner = uris?.banner || ASSET_STUBS.banner;
+  out = out.split("{{ASSET:logo}}").join(logo);
+  out = out.split("{{ASSET:banner}}").join(banner);
   return out;
 }
 

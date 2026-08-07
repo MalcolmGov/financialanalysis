@@ -276,7 +276,8 @@ export async function generatePrototypeArtifact(
     return persistArtifactStub(runId, projectId, "prototype", { version, note: "MOCK prototype" });
   }
   const { getPrivate, putPrivate } = await import("../lib/blob");
-  const { runStudio } = await import("../lib/studio");
+  const { assembleAssets, runStudio } = await import("../lib/studio");
+  const { pickBrandAssets, loadAssetUris } = await import("../lib/brand-assets");
   const { buildContentSample, highlightsText } = await import("../lib/build-content");
   const { extractKpis } = await import("../lib/enrich-kpis");
   const { mapToDocModel } = await import("@rs/mapper");
@@ -296,7 +297,32 @@ export async function generatePrototypeArtifact(
   const kpis = await extractKpis(highlightsText(docModel));
   const content = buildContentSample(docModel, extractionJson, { kpis });
 
+  const brandBundle = pickBrandAssets(extractionJson, projectId);
+  const brandPath = `runs/${runId}/assets/brand_assets.json`;
+  const brandPut = await putPrivate(brandPath, JSON.stringify(brandBundle), "application/json");
+  await db()
+    .insert(schema.artifacts)
+    .values({
+      runId,
+      kind: "brand_assets",
+      version: 1,
+      blobPath: brandPut.blob_path,
+      sha256: brandPut.sha256,
+      bytes: brandPut.bytes,
+      contentType: "application/json",
+      meta: {
+        roles: brandBundle.assets.map((a) => a.role),
+        origins: brandBundle.assets.map((a) => a.origin ?? null),
+      },
+    })
+    .onConflictDoNothing();
+  console.log(
+    `[run ${runId}] brand_assets roles=${brandBundle.assets.map((a) => `${a.role}:${a.origin ?? "?"}`).join(",") || "none"}`,
+  );
+  const assetUris = await loadAssetUris(brandBundle, getPrivate);
+
   const studio = await runStudio({ dna, content, brief: "Confident, understated, premium; mirror the printed report." });
+  const assembledHtml = assembleAssets(studio.placeholderHtml, assetUris);
 
   // project_id + version_number is unique — after a re-run / start-over residue,
   // allocate the next free number instead of always inserting v1.
@@ -310,7 +336,7 @@ export async function generatePrototypeArtifact(
 
   const base = `runs/${runId}/prototypes/v${versionNumber}`;
   const placeholder = await putPrivate(`${base}/placeholder.html`, studio.placeholderHtml, "text/html");
-  const assembled = await putPrivate(`${base}/assembled.html`, studio.assembledHtml, "text/html");
+  const assembled = await putPrivate(`${base}/assembled.html`, assembledHtml, "text/html");
 
   // prototype_versions.id is a real Postgres uuid column — a human-readable
   // string like `pv_${runId}_${version}` would fail the insert outright.
@@ -355,6 +381,7 @@ export async function refinePrototype(
 
   const { getPrivate, putPrivate } = await import("../lib/blob");
   const { assembleAssets, runStudio } = await import("../lib/studio");
+  const { resolveAssetUris } = await import("../lib/brand-assets");
   const { MODELS, generateStructured } = await import("../lib/anthropic");
   const {
     PATCH_SCHEMA,
@@ -409,6 +436,21 @@ export async function refinePrototype(
   if (!dnaRow) throw new Error(`no design_dna artifact for run ${runId}`);
   const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8"));
 
+  const brandRow = [...runArtifacts].reverse().find((a) => a.kind === "brand_assets");
+  const extractionRow = [...runArtifacts].reverse().find((a) => a.kind === "extraction_result");
+  const brandJson = brandRow
+    ? JSON.parse((await getPrivate(brandRow.blobPath)).toString("utf8"))
+    : null;
+  const extractionForAssets = extractionRow
+    ? JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"))
+    : null;
+  const { uris: assetUris } = await resolveAssetUris({
+    projectId,
+    bundleJson: brandJson,
+    extractionJson: extractionForAssets,
+    getPrivate,
+  });
+
   let placeholderHtml = parentPlaceholder;
   let patches: RefinePatch[] | null = null;
   let model: string = MODELS.refine;
@@ -418,12 +460,11 @@ export async function refinePrototype(
 
   try {
     if (mode === "regen") {
-      const extractionRow = [...runArtifacts].reverse().find((a) => a.kind === "extraction_result");
       if (!extractionRow) throw new Error(`no extraction_result for regen on run ${runId}`);
       const { buildContentSample, highlightsText } = await import("../lib/build-content");
       const { extractKpis } = await import("../lib/enrich-kpis");
       const { mapToDocModel } = await import("@rs/mapper");
-      const extractionJson = JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"));
+      const extractionJson = extractionForAssets ?? JSON.parse((await getPrivate(extractionRow.blobPath)).toString("utf8"));
       const [project] = await db().select().from(schema.projects).where(eq(schema.projects.id, projectId));
       const meta = {
         company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
@@ -476,7 +517,7 @@ export async function refinePrototype(
     }
 
     assertNumeralsUnchanged(parentPlaceholder, placeholderHtml);
-    const assembledHtml = assembleAssets(placeholderHtml);
+    const assembledHtml = assembleAssets(placeholderHtml, assetUris);
     const lint = conformanceLint(assembledHtml, dna);
     lintReport = { passed: lint.passed, errors: lint.errors, warnings: lint.warnings };
     if (!lint.passed) {
@@ -494,7 +535,7 @@ export async function refinePrototype(
   // Persist the attempt (including lint/numeral failures) for audit; only
   // `ready` versions are selectable as approve/refine heads.
   const finalPlaceholder = placeholderHtml;
-  const assembledHtml = assembleAssets(finalPlaceholder);
+  const assembledHtml = assembleAssets(finalPlaceholder, assetUris);
 
   const base = `runs/${runId}/prototypes/v${nextVersion}`;
   const placeholder = await putPrivate(`${base}/placeholder.html`, finalPlaceholder, "text/html");

@@ -171,6 +171,7 @@ export const BrandAssetBundle = z.object({
   ),
   embed_budget_bytes: z.number().int(),
 });
+export type BrandAssetBundle = z.infer<typeof BrandAssetBundle>;
 
 export const ClientBrief = z.object({
   schema_version: z.literal("brief/1"),
