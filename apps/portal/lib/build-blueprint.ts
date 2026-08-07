@@ -188,7 +188,7 @@ ${STATEMENT_BASE_CSS}`;
         name: "Prose block",
         html: `<section data-dna-component="prose-block" class="prose"><p>{{slot:body}}</p></section>`,
         css: "",
-        slots: { body: { type: "text", required: false, max_chars: 500 } },
+        slots: { body: { type: "text", no_numerals: true, required: false, max_chars: 500 } },
         variants: [],
       },
     ],
