@@ -114,7 +114,7 @@ describe("checkLegalCompanyChrome", () => {
       { path: "index.html", title: "Home", company: "DRDGOLD Limited", periodLabel: "HY1" },
       "",
     );
-    const good = `<!doctype html><html><head>${head}</head><body>${nav}<main class="home-hero"><h1 data-allow-number>DRDGOLD Limited</h1></main>${footer}</body></html>`;
+    const good = `<!doctype html><html><head>${head}</head><body>${nav}<main class="home-hero home-hero--composition"><p class="home-hero__company" data-allow-number>DRDGOLD Limited</p><h1 data-allow-number>HY1 FY2026</h1></main>${footer}</body></html>`;
     const ok = checkLegalCompanyChrome(good, "index.html", {
       expectedLegalName: "DRDGOLD",
       forbiddenProjectTitles: ["DRD Gold 1"],

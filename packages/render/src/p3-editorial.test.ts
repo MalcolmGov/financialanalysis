@@ -138,25 +138,34 @@ describe("SeoComposer", () => {
 });
 
 describe("HomeComposer", () => {
-  it("builds hero + KPI band + explore with descriptions", () => {
+  it("builds one-composition hero with brand, results headline, KPI stage", () => {
     const home = composeHome(plan(), docModel());
     expect(home.kpis.length).toBeGreaterThanOrEqual(5);
     expect(home.heroHtml).toContain("home-hero");
+    expect(home.heroHtml).toContain("home-hero--composition");
     expect(home.heroHtml).toContain("home-hero--atmosphere");
     expect(home.heroHtml).toContain("home-hero__atmosphere");
     expect(home.heroHtml).toContain("home-hero__mast");
     expect(home.heroHtml).toContain("home-hero__rule");
+    expect(home.heroHtml).toContain("home-hero__company");
     expect(home.heroHtml).toContain("DRDGOLD Limited");
+    // Brand is company wordmark; H1 is the results/period headline.
+    expect(home.heroHtml).toMatch(/<h1[^>]*>HY1 FY2026/);
     expect(home.heroHtml).toContain("home-lede");
+    expect(home.heroHtml).toContain("The Group delivered a solid operating performance.");
+    expect(home.heroHtml).not.toContain("Investor results centre");
     expect(home.heroHtml).toContain("Condensed Consolidated Unaudited Interim Results");
     expect(home.heroHtml).toContain("downloads.html");
-    expect(home.bodyHtml).toContain('data-dna-component="kpi-band"');
-    expect(home.bodyHtml).toContain("Financial highlights");
-    expect(home.bodyHtml).toContain("kpi-title");
-    expect(home.bodyHtml).toContain("Operating Profit");
-    expect(home.bodyHtml).toContain("kpi-delta");
-    expect(home.bodyHtml).toContain("data-countup");
-    expect(home.bodyHtml).toContain("2 712.8");
+    // KPI band lives in the first-viewport composition, not body filler.
+    expect(home.heroHtml).toContain('data-dna-component="kpi-band"');
+    expect(home.heroHtml).toContain("home-hero__stage");
+    expect(home.heroHtml).toContain("Financial highlights");
+    expect(home.heroHtml).toContain("kpi-title");
+    expect(home.heroHtml).toContain("Operating Profit");
+    expect(home.heroHtml).toContain("kpi-delta");
+    expect(home.heroHtml).toContain("data-countup");
+    expect(home.heroHtml).toContain("2 712.8");
+    expect(home.bodyHtml).not.toContain('data-dna-component="kpi-band"');
     expect(home.bodyHtml).toContain("highlights-band");
     expect(home.bodyHtml).toContain("explore-desc");
     expect(home.bodyHtml).toContain("Explore the report");
@@ -198,7 +207,9 @@ describe("HomeComposer", () => {
     expect(home.heroHtml).toContain("home-hero--photo");
     expect(home.heroHtml).toContain("home-hero--strip");
     // Class on <header> is photo/strip; atmosphere class only appears in onerror fallback.
-    expect(home.heroHtml).toMatch(/<header class="home-hero home-hero--photo home-hero--strip"/);
+    expect(home.heroHtml).toMatch(
+      /<header class="home-hero home-hero--composition home-hero--photo home-hero--strip"/,
+    );
     expect(home.heroHtml).not.toMatch(/<header class="[^"]*home-hero--atmosphere/);
     expect(home.heroHtml).toContain("home-hero__atmosphere");
     expect(home.heroHtml).toContain('src="assets/brand/banner.jpg"');
@@ -212,16 +223,30 @@ describe("HomeComposer", () => {
   it("allow-lists digits in company identity chrome for Gate B", () => {
     const dm = docModel();
     dm.meta.company = "DRD Gold 1";
+    // Drop letter/highlights so the hero has no data-src lede/KPIs against empty extraction.
+    dm.sections = dm.sections.filter(
+      (s) => s.kind !== "letter" && s.kind !== "highlights" && s.kind !== "dividendDeclaration",
+    );
     const home = composeHome(plan(), dm);
-    expect(home.heroHtml).toMatch(/<h1[^>]*data-allow-number[^>]*>DRD Gold 1<\/h1>/);
+    expect(home.heroHtml).toMatch(
+      /<p class="home-hero__company"[^>]*data-allow-number[^>]*>DRD Gold 1<\/p>/,
+    );
     const crumb = renderBreadcrumb("commentary.html", "Commentary", "DRD Gold 1");
     expect(crumb).toContain('data-allow-number');
     expect(crumb).toContain("DRD Gold 1");
     const html = `<!doctype html><html><body>${home.heroHtml}${crumb}<p>Source PDF for <span data-allow-number>DRD Gold 1</span>.</p></body></html>`;
-    const emptyExtraction = { tables: {}, blocks: {} } as unknown as ExtractionResult;
+    const emptyExtraction = { tables: {}, blocks: {}, body: [], furniture: [] } as unknown as ExtractionResult;
     const b = gateB({ "index.html": html }, { extraction: emptyExtraction, docModel: dm });
     expect(b.status).toBe("pass");
     expect(b.failures).toEqual([]);
+  });
+
+  it("falls back to dividend highlight lede when letter prose is absent", () => {
+    const dm = docModel();
+    dm.sections = dm.sections.filter((s) => s.kind !== "letter");
+    const home = composeHome(plan(), dm);
+    expect(home.heroHtml).toContain("Interim cash dividend of 50 SA cps");
+    expect(home.heroHtml).not.toContain("Investor results centre");
   });
 });
 
@@ -231,6 +256,7 @@ describe("CommentaryComposer", () => {
     expect(html).toContain('id="letter"');
     expect(html).toContain('id="dividend"');
     expect(html).toContain("commentary-toc");
+    expect(html).toContain("commentary-toc__n");
     expect(html).toContain("Letter to shareholders");
     expect(html).toContain("Dividend declaration");
     expect(html).toContain("Overview");

@@ -119,8 +119,8 @@ function tocHtml(present: CommentaryBand[]): string {
   if (present.length < 2) return "";
   const links = present
     .map(
-      (b) =>
-        `<a class="commentary-toc__link" href="#${b.id}">${escapeHtml(b.label)}</a>`,
+      (b, i) =>
+        `<a class="commentary-toc__link" href="#${b.id}"><span class="commentary-toc__n" data-allow-number>${String(i + 1).padStart(2, "0")}</span>${escapeHtml(b.label)}</a>`,
     )
     .join("");
   return `<nav class="commentary-toc" aria-label="On this page" data-dna-component="commentary-toc">

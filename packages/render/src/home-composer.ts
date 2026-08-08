@@ -1,6 +1,7 @@
 /**
- * HomeComposer — editorial IR home: hero, KPI band, highlights, Explore grid.
- * KPI figures are verbatim substrings of DocModel highlights (via home-kpis).
+ * HomeComposer — one-composition IR home: brand, results headline, lede,
+ * listing chips, KPI stage. KPI figures are verbatim DocModel highlights
+ * (via home-kpis). No invented marketing copy.
  */
 
 import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
@@ -147,14 +148,95 @@ export interface HomeComposeOptions {
   extraction?: ExtractionResult | null;
 }
 
-function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): string {
+/** Truncate source prose at a sentence boundary — never invents words. */
+function truncateAtSentence(text: string, max = 220): string {
+  const t = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const slice = t.slice(0, max);
+  const stop = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "), slice.lastIndexOf("? "));
+  if (stop >= Math.floor(max * 0.45)) return slice.slice(0, stop + 1).trim();
+  const sp = slice.lastIndexOf(" ");
+  return (sp > 40 ? slice.slice(0, sp) : slice).trim();
+}
+
+/**
+ * Supporting lede — DocModel only: letter lead, else dividend/highlight phrase.
+ * Returns empty string when no source prose is available (no invented filler).
+ */
+/**
+ * Emit a home lede from source text. Full-block copy may keep data-src;
+ * truncated / substring copy uses data-allow-number (Gate B verbatim rule).
+ */
+function ledeParagraph(text: string, srcRef?: string, fullBlock = false): string {
+  const body = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  if (!body) return "";
+  const attr =
+    fullBlock && srcRef
+      ? ` data-src="${escapeHtml(srcRef)}"`
+      : /\d/.test(body)
+        ? " data-allow-number"
+        : "";
+  return `<p class="home-lede"${attr}>${escapeHtml(body)}</p>`;
+}
+
+export function supportingLede(docModel: FinancialDocModel): string {
+  const letter = docModel.sections.find((s) => s.kind === "letter");
+  if (letter) {
+    for (const b of letter.blocks) {
+      if (b.kind === "table" || b.kind === "heading" || b.kind === "list") continue;
+      const text = b.text?.trim();
+      if (!text || /^dear shareholder/i.test(text)) continue;
+      const clipped = truncateAtSentence(text, 240);
+      if (!clipped) continue;
+      const full = clipped === text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      return ledeParagraph(clipped, b.src_ref, full);
+    }
+  }
+
+  const { text: hiText } = highlightsPlain(docModel);
+  if (hiText) {
+    const divMatch = hiText.match(/Interim cash dividend of\s+[\d\s\u00a0]+\.?\d*\s*SA\s*cps/i)?.[0];
+    if (divMatch) {
+      return ledeParagraph(divMatch, undefined, false);
+    }
+  }
+
+  const divSec = docModel.sections.find((s) => s.kind === "dividendDeclaration");
+  if (divSec) {
+    for (const b of divSec.blocks) {
+      if (b.kind === "table" || b.kind === "heading") continue;
+      const text = b.text?.trim();
+      if (!text) continue;
+      const clipped = truncateAtSentence(text, 200);
+      const full = clipped === text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      return ledeParagraph(clipped, b.src_ref, full);
+    }
+  }
+
+  return "";
+}
+
+function kpiStage(kpis: HomeKpiCard[]): string {
+  const grid = renderKpiCardsHtml(kpis);
+  if (!grid) return "";
+  return `<div class="home-hero__stage" data-dna-component="home-kpi-stage">
+<section class="kpi-band" data-dna-component="kpi-band" aria-label="Key figures">
+<div class="section-hdr"><h2 class="section-hdr__title">Financial highlights</h2><p class="section-hdr__sub">Key figures from the results announcement</p></div>
+${grid}
+</section>
+</div>`;
+}
+
+function homeHero(
+  docModel: FinancialDocModel,
+  kpis: HomeKpiCard[],
+  opts: HomeComposeOptions = {},
+): string {
   const company = escapeHtml(docModel.meta.company || "Results");
   const period = docModel.meta.period_label?.trim() || "";
   const kind = escapeHtml(docKindLabel(docModel.meta.doc_kind));
-  const periodHtml = period
-    ? `<p class="home-period" data-allow-number>${escapeHtml(period)}</p>`
-    : "";
   const meta = listingMeta(docModel, opts.extraction);
+  const lede = supportingLede(docModel);
   const banner = opts.brandAssets?.banner;
   const logo = opts.brandAssets?.logo;
   const logoKind = opts.brandAssets?.logoKind ?? (logo?.endsWith(".svg") ? "svg" : "raster");
@@ -165,23 +247,29 @@ function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): s
   const photo = banner
     ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" fetchpriority="high" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}" data-banner-img onerror="${BANNER_IMG_ONERROR}">`
     : "";
-  // DNA-token atmosphere always present — designed plane when banner missing;
-  // subtle underlay when photographic strip/photo exists.
+  // DNA-token designed plane when banner missing; subtle underlay when photo exists.
   const atmosphere = `<div class="home-hero__atmosphere" aria-hidden="true"><div class="home-hero__mesh"></div><div class="home-hero__beam"></div><div class="home-hero__orb home-hero__orb--a"></div><div class="home-hero__orb home-hero__orb--b"></div><div class="home-hero__grain"></div></div>`;
   const lockup = logo
     ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high" data-brand-img onerror="${BRAND_IMG_ONERROR}"></div>`
     : "";
-  return `<header class="home-hero${modeClass}" data-dna-component="home-hero">
+  // Results headline = period when present; else doc-kind label. Brand is company wordmark.
+  const headline = period || docKindLabel(docModel.meta.doc_kind);
+  const headlineAttr = period || /\d/.test(headline) ? " data-allow-number" : "";
+
+  return `<header class="home-hero home-hero--composition${modeClass}" data-dna-component="home-hero">
 ${atmosphere}${photo}<div class="home-hero__mast"></div>
 <div class="home-hero__inner">
-${lockup}<p class="home-kicker">${kind}</p>
-<h1 data-allow-number>${company}</h1>
-${periodHtml}
+<div class="home-hero__brand">
+${lockup}<p class="home-hero__company" data-allow-number>${company}</p>
+</div>
+<p class="home-kicker">${kind}</p>
+<h1${headlineAttr}>${escapeHtml(headline)}</h1>
 <span class="home-hero__rule" aria-hidden="true"></span>
-<p class="home-lede">Investor results centre — key figures, commentary, condensed consolidated statements, notes, and downloads.</p>
+${lede}
 ${meta}
 <p class="home-cta"><a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a></p>
 </div>
+${kpiStage(kpis)}
 </header>`;
 }
 
@@ -255,15 +343,6 @@ function exploreCards(plan: SitePlan): string {
 </section>`;
 }
 
-function kpiBand(kpis: HomeKpiCard[]): string {
-  const grid = renderKpiCardsHtml(kpis);
-  if (!grid) return "";
-  return `<section class="kpi-band" data-dna-component="kpi-band" aria-label="Key figures">
-<div class="section-hdr"><h2 class="section-hdr__title">Financial highlights</h2><p class="section-hdr__sub">Key figures from the results announcement</p></div>
-${grid}
-</section>`;
-}
-
 export interface HomeComposition {
   heroHtml: string;
   bodyHtml: string;
@@ -276,10 +355,9 @@ export function composeHome(
   opts: HomeComposeOptions = {},
 ): HomeComposition {
   const kpis = extractHomeKpis(docModel);
-  const bodyHtml = `${kpiBand(kpis)}${highlightsBand(docModel)}${exploreCards(plan)}`;
   return {
-    heroHtml: homeHero(docModel, opts),
-    bodyHtml,
+    heroHtml: homeHero(docModel, kpis, opts),
+    bodyHtml: `${highlightsBand(docModel)}${exploreCards(plan)}`,
     kpis,
   };
 }

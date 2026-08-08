@@ -246,6 +246,8 @@ export function extractChromeIdentityText(html: string): string {
   const patterns = [
     /class="[^"]*nav-brand__name[^"]*"[^>]*>([^<]*)/gi,
     /class="[^"]*site-footer__brand[^"]*"[^>]*>([^<]*)/gi,
+    // Brand wordmark on home (P3); H1 is the results/period headline.
+    /class="[^"]*home-hero__company[^"]*"[^>]*>([^<]*)/gi,
     /class="[^"]*home-hero[^"]*"[\s\S]*?<h1[^>]*>([^<]*)/gi,
     /property="og:title"\s+content="([^"]*)"/gi,
     /property="og:site_name"\s+content="([^"]*)"/gi,
