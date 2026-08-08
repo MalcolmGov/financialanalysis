@@ -96,6 +96,19 @@ describe("pickBrandAssets", () => {
     expect(banner?.background).toBe("strip");
   });
 
+  it("prefers compact page-2 stamp over wide page-1 marketing panel for logo", () => {
+    const ex = extraction({
+      figures: {
+        panel: fig("panel", { page: 1, w: 454, h: 117, t: 8 }),
+        stamp: fig("stamp", { page: 2, w: 143, h: 81, t: 12 }),
+        banner: fig("banner", { page: 1, w: 1189, h: 135, t: 40 }),
+      },
+    });
+    const bundle = pickBrandAssets(ex, "proj");
+    const logo = bundle.assets.find((a) => a.role === "logo");
+    expect(logo?.blob_path).toBe("figures/stamp.png");
+  });
+
   it("prefers SVG wordmark figures when present in extraction", () => {
     const png = fig("logo-png", { page: 1, w: 180, h: 60, t: 10 });
     const svgFig = {

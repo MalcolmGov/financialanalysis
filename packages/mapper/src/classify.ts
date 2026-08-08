@@ -16,7 +16,7 @@ const STATEMENT_TITLES: { re: RegExp; type: StatementType }[] = [
 
 const SECTION_TITLE_LEXICON: { re: RegExp; kind: SectionKind }[] = [
   { re: /^highlights$/i, kind: "highlights" },
-  { re: /review of operations/i, kind: "reviewOfOperations" },
+  { re: /review of operations|group operational/i, kind: "reviewOfOperations" },
   { re: /shareholder information/i, kind: "shareholderInfo" },
   { re: /issued capital/i, kind: "issuedCapital" },
   { re: /market capitalisation|market cap/i, kind: "marketCap" },

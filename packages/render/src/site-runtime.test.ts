@@ -160,4 +160,14 @@ describe("home KPI segmentation", () => {
     expect(html).toContain("kpi-delta");
     expect(html).toContain("2 712.8");
   });
+
+  it("uses complete highlight sentences as KPI captions (no mid-phrase stubs)", () => {
+    const cards = segmentHighlightKpis(DRD_HIGHLIGHTS);
+    const html = renderKpiCardsHtml(cards);
+    expect(html).toContain("Operating profit increased by 72% to R2 712.8 million");
+    expect(html).toContain("Interim cash dividend of 50 SA cps");
+    expect(html).toContain("R1 651.3 million of capital expenditure");
+    expect(html).not.toMatch(/kpi-label[^>]*>Operating profit increased by 72% to</);
+    expect(html).not.toMatch(/kpi-label[^>]*>Interim cash dividend of</);
+  });
 });

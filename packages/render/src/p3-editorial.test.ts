@@ -288,4 +288,38 @@ describe("CommentaryComposer", () => {
     expect(html).toContain("commentary-section");
     expect(html).not.toMatch(/commentary-section[^>]*\breveal\b/);
   });
+
+  it("surfaces Review of operations when ops prose is nested in the letter", () => {
+    const dm = docModel();
+    const letter = dm.sections.find((s) => s.kind === "letter")!;
+    letter.blocks = [
+      { kind: "heading", text: "Overview", src_ref: "ext:blk-l1" },
+      {
+        kind: "paragraph",
+        text: "The Group delivered a solid operating performance.",
+        src_ref: "ext:blk-l2",
+      },
+      {
+        kind: "heading",
+        text: "Group Operational, Financial and ESG Performance Summary",
+        src_ref: "ext:blk-ops0",
+      },
+      {
+        kind: "paragraph",
+        text: "Gold production at Ergo was 9% lower at 1 683kg.",
+        src_ref: "ext:blk-ops1",
+      },
+      { kind: "heading", text: "Cash Dividend", src_ref: "ext:blk-l3" },
+      {
+        kind: "paragraph",
+        text: "The board declared an interim cash dividend.",
+        src_ref: "ext:blk-l4",
+      },
+    ];
+    const html = composeCommentaryBody(dm);
+    expect(html).toContain('id="operations"');
+    expect(html).toContain("Review of operations");
+    expect(html).toContain("Gold production at Ergo was 9% lower at 1 683kg.");
+    expect(html).toMatch(/commentary-toc__link[^>]*>[\s\S]*Review of operations/);
+  });
 });

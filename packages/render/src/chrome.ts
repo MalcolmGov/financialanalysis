@@ -260,15 +260,18 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .site-nav .nav-inner{display:flex;align-items:center;gap:1rem;max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem);min-height:4.65rem}
 .nav-brand{display:flex;align-items:center;gap:.7rem;text-decoration:none;flex-shrink:0;padding:.4rem 0;margin-right:.4rem}
 .nav-brand__mark{width:11px;height:30px;background:linear-gradient(180deg,var(--dna-brand,#FCAF17),color-mix(in srgb,var(--dna-brand,#FCAF17) 35%,#000));border-radius:1px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dna-brand,#FCAF17) 35%,transparent)}
-.nav-brand__logo-wrap{display:flex;align-items:center;justify-content:center;padding:0;background:transparent;border:0;min-height:0}
-.nav-brand__logo-wrap.is-broken{display:none}
-.nav-brand__logo{display:block;height:38px;width:auto;max-width:176px;object-fit:contain;filter:brightness(0) invert(1);image-rendering:-webkit-optimize-contrast}
+.nav-brand__logo-wrap{display:flex;align-items:center;justify-content:center;padding:0;background:transparent;border:0;min-height:0;min-width:0}
+.nav-brand__logo-wrap.is-broken,.nav-brand__logo-wrap:has(img[hidden]){display:none!important}
+.nav-brand__logo{display:block;height:38px;width:auto;max-width:176px;object-fit:contain;background:transparent;image-rendering:-webkit-optimize-contrast}
+.nav-brand__logo[hidden]{display:none!important}
+/* Raster extraction crops are often white-on-dark panels — never invert (invert → white boxes). */
+.nav-brand__logo--raster{filter:none;-ms-interpolation-mode:nearest-neighbor}
+/* Mono SVG wordmarks on dark masthead: invert to paper. */
 .nav-brand__logo--svg{height:36px;filter:none;background:transparent}
 .nav-brand--logo .nav-brand__logo--svg{filter:brightness(0) invert(1)}
-.nav-brand__logo--raster{-ms-interpolation-mode:nearest-neighbor}
 .nav-brand--logo .nav-brand__name{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* If logo fails (inline onerror / site.js), unclip the text wordmark. */
-.nav-brand:has(.nav-brand__logo-wrap.is-broken) .nav-brand__name{position:static;width:auto;height:auto;padding:0;margin:0;overflow:visible;clip:auto;white-space:normal;border:0}
+.nav-brand:has(.nav-brand__logo-wrap.is-broken) .nav-brand__name,.nav-brand:has(.nav-brand__logo-wrap:has(img[hidden])) .nav-brand__name,.nav-brand:not(:has(.nav-brand__logo-wrap)) .nav-brand__name{position:static;width:auto;height:auto;padding:0;margin:0;overflow:visible;clip:auto;white-space:normal;border:0}
 .nav-brand__name{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:.7rem;font-weight:800;letter-spacing:.08em;color:var(--dna-paper,#fff);line-height:1.15;max-width:14ch}
 .site-nav .nav-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;list-style:none;margin:0;padding:0;flex:1;justify-content:flex-end}
 .site-nav .nav-row>li{display:flex;align-items:stretch}
@@ -352,8 +355,10 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .site-footer__accent{height:3px;background:var(--dna-footer-accent,var(--dna-brand,#FCAF17))}
 .site-footer__inner{max-width:1120px;margin:0 auto;padding:2.35rem clamp(1rem,3vw,2rem) 2.75rem;display:grid;gap:.55rem}
 .site-footer__lockup{display:inline-flex;align-items:center;padding:.2rem 0;margin-bottom:.15rem;width:fit-content;background:transparent;border:0}
-.site-footer__lockup.is-broken{display:none}
-.site-footer__logo{display:block;height:34px;width:auto;max-width:148px;object-fit:contain;filter:brightness(0) invert(1);opacity:.95;image-rendering:-webkit-optimize-contrast}
+.site-footer__lockup.is-broken,.site-footer__lockup:has(img[hidden]){display:none!important}
+.site-footer__logo[hidden]{display:none!important}
+.site-footer__logo{display:block;height:34px;width:auto;max-width:148px;object-fit:contain;opacity:.95;image-rendering:-webkit-optimize-contrast;background:transparent}
+.site-footer__logo--raster{filter:none}
 .site-footer__logo--svg{filter:brightness(0) invert(1)}
 .site-footer__brand{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.05rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dna-brand,#FCAF17)}
 .site-footer__period{margin:0;font-size:.92rem;font-weight:600;color:rgba(255,255,255,.9);letter-spacing:-.01em}
@@ -385,10 +390,11 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .home-hero__mast{height:3px;background:var(--dna-brand,#FCAF17);position:relative;z-index:1;flex-shrink:0}
 .home-hero__brand{display:flex;flex-wrap:wrap;align-items:center;gap:.85rem 1.15rem;margin:0 0 1.35rem}
 .home-hero__lockup{display:inline-flex;align-items:center;gap:.85rem;margin:0;padding:0;background:transparent;border:0}
-.home-hero__lockup.is-broken{display:none}
-.home-hero__logo{display:block;height:56px;width:auto;max-width:240px;object-fit:contain;filter:brightness(0) invert(1);image-rendering:-webkit-optimize-contrast}
-.home-hero__logo--svg{height:52px}
-.home-hero__logo--raster{-ms-interpolation-mode:nearest-neighbor}
+.home-hero__lockup.is-broken,.home-hero__lockup:has(img[hidden]){display:none!important}
+.home-hero__logo{display:block;height:56px;width:auto;max-width:240px;object-fit:contain;background:transparent;image-rendering:-webkit-optimize-contrast}
+.home-hero__logo[hidden]{display:none!important}
+.home-hero__logo--svg{height:52px;filter:brightness(0) invert(1)}
+.home-hero__logo--raster{filter:none;-ms-interpolation-mode:nearest-neighbor}
 .home-hero__company{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(1.05rem,1.8vw,1.35rem);font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;line-height:1.15;text-shadow:0 1px 16px rgba(0,0,0,.2)}
 .home-hero__inner{position:relative;z-index:1;max-width:1120px;width:100%;margin:0 auto;padding:clamp(2.75rem,7vh,4.25rem) clamp(1rem,3vw,2rem) clamp(1.75rem,4vh,2.75rem);flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
 .home-kicker{margin:0 0 .75rem;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dna-brand,#FCAF17);font-weight:800;max-width:46rem}

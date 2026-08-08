@@ -134,6 +134,14 @@ const NOTES_START = /notes to the condensed|notes to the consolidated|notes to t
 /** Prose ends where the primary statements begin. */
 const STATEMENTS_START =
   /statement of (profit or loss|financial position|changes in equity|cash flows)|condensed consolidated financial statements|notes to the/i;
+/**
+ * Ops band start inside a long shareholder letter — DRD packs Ergo/FWGR/ops
+ * summary under these headings rather than a standalone "Review of operations".
+ */
+const OPS_BAND_START =
+  /^(review of operations|group operational\b|operational$|ergo mining proprietary|far west gold recoveries)/i;
+/** Trailing letter chrome that belongs with dividend / close, not ops. */
+const LETTER_TRAILING_STOP = /^(cash dividend|dividend declaration|looking ahead|ni[eë]l\s)/i;
 
 /**
  * Prose sections from reading-ordered body blocks — deterministic.
@@ -162,14 +170,67 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
   const letterStart = flat.findIndex((b) => b.type === "heading" && LETTER_START.test(b.text ?? ""));
   if (letterStart >= 0) {
     const blocks = proseBlocks(letterStart, (b) => b.type === "heading" && STATEMENTS_START.test(b.text ?? ""));
-    if (blocks.length)
-      sections.push({
-        id: "doc:sec_letter",
-        kind: "letter",
-        title: { text: flat[letterStart].text ?? "Shareholder letter", src_ref: `ext:${flat[letterStart].id}` },
-        blocks,
-        items: [],
-      });
+    if (blocks.length) {
+      // Prefer a dedicated ops band when the letter swallows operational prose.
+      const opsAt = blocks.findIndex(
+        (b) => b.kind === "heading" && OPS_BAND_START.test((b.text ?? "").trim()),
+      );
+      const trailAt = blocks.findIndex(
+        (b) => b.kind === "heading" && LETTER_TRAILING_STOP.test((b.text ?? "").trim()),
+      );
+      let letterBlocks = blocks;
+      let opsBlocks: typeof blocks = [];
+      if (opsAt >= 0) {
+        const opsEnd = trailAt > opsAt ? trailAt : blocks.length;
+        letterBlocks = blocks.slice(0, opsAt);
+        opsBlocks = blocks.slice(opsAt, opsEnd);
+        // Keep post-ops closing narrative (Looking Ahead / signoff) on the letter
+        // when it trails the dividend stop — dividend section owns Cash Dividend.
+        if (trailAt > opsAt) {
+          const after = blocks.slice(trailAt).filter((b) => {
+            const t = (b.text ?? "").trim();
+            return !DIVIDEND.test(t) && !/^cash dividend$/i.test(t);
+          });
+          // Looking Ahead + CEO signoff stay with the letter when present after ops.
+          const closeStart = after.findIndex(
+            (b) => b.kind === "heading" && /^looking ahead/i.test((b.text ?? "").trim()),
+          );
+          if (closeStart >= 0) letterBlocks = [...letterBlocks, ...after.slice(closeStart)];
+        }
+      } else if (trailAt >= 0) {
+        // No ops heading — still peel Cash Dividend out of the letter body.
+        letterBlocks = blocks.slice(0, trailAt);
+        const after = blocks.slice(trailAt);
+        const closeStart = after.findIndex(
+          (b) => b.kind === "heading" && /^looking ahead/i.test((b.text ?? "").trim()),
+        );
+        if (closeStart >= 0) letterBlocks = [...letterBlocks, ...after.slice(closeStart)];
+      }
+      if (letterBlocks.length) {
+        sections.push({
+          id: "doc:sec_letter",
+          kind: "letter",
+          title: {
+            text: flat[letterStart].text ?? "Shareholder letter",
+            src_ref: `ext:${flat[letterStart].id}`,
+          },
+          blocks: letterBlocks,
+          items: [],
+        });
+      }
+      if (opsBlocks.length) {
+        sections.push({
+          id: "doc:sec_reviewOfOperations",
+          kind: "reviewOfOperations",
+          title: {
+            text: opsBlocks[0]?.text?.trim() || "Review of operations",
+            src_ref: opsBlocks[0]?.src_ref ?? `ext:${flat[letterStart].id}`,
+          },
+          blocks: opsBlocks,
+          items: [],
+        });
+      }
+    }
   }
 
   const hiStart = flat.findIndex((b) => b.type === "heading" && HIGHLIGHTS.test((b.text ?? "").trim()));

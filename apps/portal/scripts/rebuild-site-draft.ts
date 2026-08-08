@@ -154,11 +154,24 @@ async function main() {
   }
   for (const path of Object.keys(built.binaries).sort()) {
     const body = built.binaries[path]!;
-    const contentType = path.endsWith(".pdf")
+    const lower = path.toLowerCase();
+    const contentType = lower.endsWith(".pdf")
       ? "application/pdf"
-      : path.endsWith(".xlsx")
+      : lower.endsWith(".xlsx")
         ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        : "application/octet-stream";
+        : lower.endsWith(".png")
+          ? "image/png"
+          : lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+            ? "image/jpeg"
+            : lower.endsWith(".webp")
+              ? "image/webp"
+              : lower.endsWith(".svg")
+                ? "image/svg+xml"
+                : lower.endsWith(".woff2")
+                  ? "font/woff2"
+                  : lower.endsWith(".woff")
+                    ? "font/woff"
+                    : "application/octet-stream";
     await putPrivate(`${prefix}/${path}`, body, contentType);
   }
 

@@ -59,4 +59,33 @@ describe("extractProseSections", () => {
     expect(dm.sections.some((s) => s.kind === "letter")).toBe(true);
     expect(dm.sections.some((s) => s.kind === "highlights")).toBe(true);
   });
+
+  it("splits Group Operational / Ergo ops prose out of the shareholder letter", () => {
+    const ex = extraction();
+    ex.body = [
+      heading("h-letter", 2, "Dear Shareholder"),
+      heading("h-ov", 2, "Overview"),
+      para("p-l1", 2, "We are pleased to report that our operating performance is tracking guidance."),
+      heading("h-ops", 3, "Group Operational, Financial and ESG Performance Summary"),
+      heading("h-op", 3, "Operational"),
+      para("p-ops", 3, "Gold production at Ergo was 9% lower at 1 683kg."),
+      heading("h-ergo", 3, "Ergo Mining Proprietary Limited"),
+      para("p-ergo", 3, "Ergo throughput decreased by 5% to 9.4Mt."),
+      heading("h-div", 4, "Cash Dividend"),
+      para("p-div", 4, "The Board has declared an interim cash dividend of 50 SA cents."),
+      heading("h-ahead", 4, "Looking Ahead"),
+      para("p-ahead", 4, "We remain focused on Vision 2028."),
+      heading("h-stmt", 5, "Statement of Profit or Loss and Other Comprehensive Income"),
+    ];
+    const secs = extractProseSections(ex);
+    const letter = secs.find((s) => s.kind === "letter");
+    const ops = secs.find((s) => s.kind === "reviewOfOperations");
+    expect(ops).toBeTruthy();
+    expect(ops!.blocks.map((b) => b.text).join(" ")).toContain("Gold production at Ergo");
+    expect(ops!.blocks.map((b) => b.text).join(" ")).toContain("Ergo throughput");
+    expect(letter!.blocks.map((b) => b.text).join(" ")).toContain("tracking guidance");
+    expect(letter!.blocks.map((b) => b.text).join(" ")).toContain("Vision 2028");
+    expect(letter!.blocks.some((b) => /cash dividend/i.test(b.text || ""))).toBe(false);
+    expect(letter!.blocks.some((b) => /Gold production at Ergo/i.test(b.text || ""))).toBe(false);
+  });
 });

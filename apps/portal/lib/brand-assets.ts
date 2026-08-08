@@ -77,16 +77,26 @@ function candidates(extraction: ExtractionResult): FigureCand[] {
   return out;
 }
 
-/** Prefer classified / SVG / compact early wordmarks over chart-like crops. */
+/**
+ * Prefer classified / SVG / compact early wordmarks over chart-like crops.
+ * Wide marketing panels (e.g. “Positioning for Growth” lockups) look like
+ * solid white boxes once inverted on the masthead — demote them hard.
+ */
 function logoScore(c: FigureCand): number {
   let score = 0;
   if (c.classification === "logo") score += 1000;
   if (c.isSvg) score += 400;
   if (c.page === 1) score += 80;
   else if (c.page === 2) score += 40;
-  // Wordmark-like wide logos score higher than square icons.
-  if (c.aspect >= 2.0 && c.aspect <= 5.0) score += 120;
-  else if (c.aspect >= 1.2 && c.aspect < 2.0) score += 60;
+  // Compact stamp wordmarks beat wide marketing panels.
+  if (c.figure.image.width_px > 0 && c.figure.image.width_px <= 220) score += 140;
+  else if (c.figure.image.width_px <= 320) score += 40;
+  // Marketing strip / panel: wide + multi-line height → bad nav lockup.
+  if (c.aspect >= 3.0 && c.figure.image.width_px >= 320) score -= 280;
+  if (c.aspect >= 3.5 && c.figure.image.height_px >= 100) score -= 120;
+  // Wordmark-like wide logos score higher than square icons — but not panels.
+  if (c.aspect >= 1.4 && c.aspect < 3.0) score += 100;
+  else if (c.aspect >= 1.2 && c.aspect < 1.4) score += 50;
   // Prefer modest page coverage (logo lockup, not full-bleed art).
   const coverage = c.area / c.pageArea;
   if (coverage > 0 && coverage < 0.04) score += 90;
@@ -95,8 +105,9 @@ function logoScore(c: FigureCand): number {
   // Prefer higher (earlier) on the page.
   score += Math.max(0, 40 - c.top * 0.05);
   // Prefer sharper mid-size wordmarks over tiny stamps.
-  if (c.figure.image.width_px >= 200 && c.figure.image.width_px <= 900) score += 40;
-  if (c.figure.image.height_px > 0 && c.figure.image.height_px <= 160) score += 30;
+  if (c.figure.image.width_px >= 120 && c.figure.image.width_px <= 280) score += 50;
+  if (c.figure.image.height_px > 0 && c.figure.image.height_px <= 100) score += 40;
+  else if (c.figure.image.height_px <= 160) score += 15;
   return score;
 }
 
@@ -104,10 +115,12 @@ function pickLogo(cands: FigureCand[]): FigureCand | null {
   const classified = cands.filter((c) => c.classification === "logo");
   const pool = (classified.length ? classified : cands).filter(
     (c) =>
-      c.page <= EARLY_PAGES &&
+      c.page <= EARLY_PAGES + 1 && // page-2 stamps are common WW footer marks
       c.aspect >= LOGO_ASPECT_MIN &&
       c.aspect <= LOGO_ASPECT_MAX &&
-      c.area / c.pageArea < 0.18,
+      c.area / c.pageArea < 0.18 &&
+      // Exclude ultra-wide cinematic strips from the logo role (banner uses them).
+      !(c.aspect >= BANNER_STRIP_ASPECT && c.figure.image.width_px >= 800),
   );
   if (!pool.length) return null;
   return pool.sort((a, b) => {

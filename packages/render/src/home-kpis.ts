@@ -12,6 +12,11 @@ export interface HomeKpiCard {
   delta?: string;
   /** Full display string copied from source (e.g. "R2 712.8 million"). */
   display: string;
+  /**
+   * Complete highlight sentence from source (label + value). Prefer this over
+   * truncated mid-phrase captions like "increased by 72% to".
+   */
+  caption: string;
   /** Numeric magnitude for count-up animation. */
   countup: number;
   decimals: number;
@@ -128,7 +133,8 @@ export function presentKpiLabel(label: string): { shortTitle: string; delta?: st
   return { shortTitle: L };
 }
 
-type Extractor = (src: string) => { label: string; display: string; end: number } | null;
+type ExtractHit = { label: string; display: string; caption: string; end: number };
+type Extractor = (src: string) => ExtractHit | null;
 
 /** Ordered IR highlight extractors (DRD-style flattened cover band). */
 const EXTRACTORS: Extractor[] = [
@@ -138,7 +144,12 @@ const EXTRACTORS: Extractor[] = [
         src,
       );
     return m
-      ? { label: normWs(m[1]!), display: normWs(m[2]!), end: (m.index ?? 0) + m[0].length }
+      ? {
+          label: normWs(m[1]!),
+          display: normWs(m[2]!),
+          caption: normWs(m[0]!),
+          end: (m.index ?? 0) + m[0].length,
+        }
       : null;
   },
   (src) => {
@@ -147,13 +158,23 @@ const EXTRACTORS: Extractor[] = [
         src,
       );
     return m
-      ? { label: normWs(m[1]!), display: normWs(m[2]!), end: (m.index ?? 0) + m[0].length }
+      ? {
+          label: normWs(m[1]!),
+          display: normWs(m[2]!),
+          caption: normWs(m[0]!),
+          end: (m.index ?? 0) + m[0].length,
+        }
       : null;
   },
   (src) => {
     const m = /(Interim cash dividend of)\s+([\d\s\u00a0]+\.?\d*\s*SA\s*cps)/i.exec(src);
     return m
-      ? { label: normWs(m[1]!), display: normWs(m[2]!), end: (m.index ?? 0) + m[0].length }
+      ? {
+          label: normWs(m[1]!),
+          display: normWs(m[2]!),
+          caption: normWs(m[0]!),
+          end: (m.index ?? 0) + m[0].length,
+        }
       : null;
   },
   (src) => {
@@ -162,6 +183,7 @@ const EXTRACTORS: Extractor[] = [
       ? {
           label: "Capital expenditure",
           display: normWs(m[1]!),
+          caption: normWs(m[0]!),
           end: (m.index ?? 0) + m[0].length,
         }
       : null;
@@ -172,7 +194,12 @@ const EXTRACTORS: Extractor[] = [
         src,
       );
     return m
-      ? { label: normWs(m[1]!), display: normWs(m[2]!), end: (m.index ?? 0) + m[0].length }
+      ? {
+          label: normWs(m[1]!),
+          display: normWs(m[2]!),
+          caption: normWs(m[0]!),
+          end: (m.index ?? 0) + m[0].length,
+        }
       : null;
   },
   (src) => {
@@ -181,23 +208,31 @@ const EXTRACTORS: Extractor[] = [
         src,
       );
     return m
-      ? { label: normWs(m[1]!), display: normWs(m[2]!), end: (m.index ?? 0) + m[0].length }
+      ? {
+          label: normWs(m[1]!),
+          display: normWs(m[2]!),
+          caption: normWs(m[0]!),
+          end: (m.index ?? 0) + m[0].length,
+        }
       : null;
   },
 ];
 
 function toCard(
-  label: string,
-  display: string,
+  hit: Pick<ExtractHit, "label" | "display" | "caption">,
   mag: NonNullable<ReturnType<typeof parseMagnitude>>,
   fromSrc?: string,
 ): HomeKpiCard {
-  const present = presentKpiLabel(label);
+  const present = presentKpiLabel(hit.label);
+  const caption =
+    hit.caption ||
+    (hit.label && hit.display ? normWs(`${hit.label} ${hit.display}`) : hit.label || hit.display);
   return {
-    label,
+    label: hit.label,
     shortTitle: present.shortTitle,
     delta: present.delta,
-    display,
+    display: hit.display,
+    caption,
     countup: mag.countup,
     decimals: mag.decimals,
     sep: mag.sep,
@@ -236,13 +271,13 @@ export function segmentHighlightKpis(
       if (!srcCompact.includes(compact(fromFull.display))) continue;
       const mag = parseMagnitude(fromFull.display);
       if (!mag || !srcCompact.includes(compact(mag.valueText))) continue;
-      cards.push(toCard(fromFull.label, fromFull.display, mag, fromSrc));
+      cards.push(toCard(fromFull, mag, fromSrc));
       continue;
     }
     if (!srcCompact.includes(compact(hit.display))) continue;
     const mag = parseMagnitude(hit.display);
     if (!mag || !srcCompact.includes(compact(mag.valueText))) continue;
-    cards.push(toCard(hit.label, hit.display, mag, fromSrc));
+    cards.push(toCard(hit, mag, fromSrc));
     rest = rest.slice(hit.end);
   }
 
@@ -277,8 +312,8 @@ export function renderKpiCardsHtml(cards: HomeKpiCard[]): string {
       const delta = c.delta
         ? `<p class="kpi-delta" data-allow-number>${escapeHtml(c.delta)}</p>`
         : "";
-      // Context line keeps the full source phrase for provenance / screen readers.
-      return `<article class="kpi-card reveal"${from}><div class="kpi-card__top"><p class="kpi-title">${escapeHtml(c.shortTitle)}</p>${delta}</div><p class="kpi-value">${prefixOutside}${span}${suffixOutside}</p><p class="kpi-label" data-allow-number>${escapeHtml(c.label)}</p></article>`;
+      // Caption is the complete source highlight sentence (not a mid-phrase stub).
+      return `<article class="kpi-card reveal"${from}><div class="kpi-card__top"><p class="kpi-title">${escapeHtml(c.shortTitle)}</p>${delta}</div><p class="kpi-value">${prefixOutside}${span}${suffixOutside}</p><p class="kpi-label" data-allow-number>${escapeHtml(c.caption)}</p></article>`;
     })
     .join("");
   return `<section class="kpi-grid" aria-label="Key figures" data-dna-component="kpi-grid">${items}</section>`;

@@ -130,8 +130,51 @@ function tocHtml(present: CommentaryBand[]): string {
 </nav>`;
 }
 
+const OPS_HEADING =
+  /^(review of operations|group operational\b|operational$|ergo mining proprietary|far west gold recoveries|at ergo|at fwgr)/i;
+
+/**
+ * When DocModel lacks a dedicated reviewOfOperations section, carve the best
+ * available ops prose out of the shareholder letter (common DRD shape).
+ */
+function withOpsFallback(sections: FinancialDocModel["sections"]): FinancialDocModel["sections"] {
+  if (sections.some((s) => s.kind === "reviewOfOperations")) return sections;
+  const letterIdx = sections.findIndex((s) => s.kind === "letter");
+  if (letterIdx < 0) return sections;
+  const letter = sections[letterIdx]!;
+  const opsAt = letter.blocks.findIndex(
+    (b) => b.kind === "heading" && OPS_HEADING.test((b.text ?? "").trim()),
+  );
+  if (opsAt < 0) return sections;
+  const stopAt = letter.blocks.findIndex(
+    (b, i) =>
+      i > opsAt &&
+      b.kind === "heading" &&
+      /^(cash dividend|dividend declaration|looking ahead|ni[eë]l\s)/i.test((b.text ?? "").trim()),
+  );
+  const opsEnd = stopAt > opsAt ? stopAt : letter.blocks.length;
+  const opsBlocks = letter.blocks.slice(opsAt, opsEnd);
+  if (!opsBlocks.length) return sections;
+  const next = sections.slice();
+  next[letterIdx] = {
+    ...letter,
+    blocks: [...letter.blocks.slice(0, opsAt), ...letter.blocks.slice(opsEnd)],
+  };
+  next.splice(letterIdx + 1, 0, {
+    id: "doc:sec_reviewOfOperations_fallback",
+    kind: "reviewOfOperations",
+    title: {
+      text: opsBlocks[0]?.text?.trim() || "Review of operations",
+      src_ref: opsBlocks[0]?.src_ref ?? letter.title?.src_ref ?? "ext:ops",
+    },
+    blocks: opsBlocks,
+    items: [],
+  });
+  return next;
+}
+
 export function composeCommentaryBody(docModel: FinancialDocModel): string {
-  const sections = docModel.sections;
+  const sections = withOpsFallback(docModel.sections);
   const rendered: Array<{ band: CommentaryBand; html: string }> = [];
   for (const band of BANDS) {
     const html = bandHtml(band, sections);
@@ -141,5 +184,9 @@ export function composeCommentaryBody(docModel: FinancialDocModel): string {
     return `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter.</p>`;
   }
   const toc = tocHtml(rendered.map((r) => r.band));
-  return `${toc}${rendered.map((r) => r.html).join("\n")}`;
+  const missingOps = !rendered.some((r) => r.band.kind === "reviewOfOperations");
+  const note = missingOps
+    ? `<p class="commentary-note" data-dna-component="commentary-ops-absent">Review of operations was not present as a separate section in the source extraction; letter and dividend bands are shown from available prose.</p>`
+    : "";
+  return `${toc}${note}${rendered.map((r) => r.html).join("\n")}`;
 }
