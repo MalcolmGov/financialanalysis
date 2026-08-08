@@ -17,7 +17,7 @@ export async function reconcileDna(
   probeDna: DesignDNA,
   vision: VisionDNA,
 ): Promise<DesignDNA> {
-  const { nearestDeltaE, deltaE2000, hexToLab } = await import("@rs/render");
+  const { nearestDeltaE, deltaE2000, hexToLab, IR_NEUTRAL_FALLBACKS } = await import("@rs/render");
   const measured = probeDna.palette.measured.map((m) => m.hex);
 
   const roles: DesignDNA["palette"]["roles"] = {};
@@ -57,9 +57,34 @@ export async function reconcileDna(
     }
   }
 
-  // Ensure the load-bearing roles exist; if vision missed paper/ink, default.
-  if (!roles.paper) roles.paper = { hex: "#FFFFFF", provenance: "probe", confidence: 0.7 };
-  if (!roles.ink) roles.ink = { hex: "#231F20", provenance: "probe", confidence: 0.6 };
+  // Ensure load-bearing roles exist. Missing brand/masthead → neutral IR slate
+  // (never DRDGOLD gold/olive — those come only from measured issuer DNA).
+  if (!roles.paper) {
+    roles.paper = { hex: IR_NEUTRAL_FALLBACKS.paper, provenance: "probe", confidence: 0.7 };
+  }
+  if (!roles.ink) {
+    roles.ink = { hex: IR_NEUTRAL_FALLBACKS.ink, provenance: "probe", confidence: 0.6 };
+  }
+  if (!roles.brand) {
+    roles.brand = { hex: IR_NEUTRAL_FALLBACKS.brand, provenance: "probe", confidence: 0.35 };
+    flags.push({
+      path: "palette.roles.brand",
+      reason: "vision omitted brand; using neutral IR slate (not DRDGOLD gold)",
+      confidence: 0.35,
+    });
+  }
+  if (!roles["masthead-bg"]) {
+    roles["masthead-bg"] = {
+      hex: IR_NEUTRAL_FALLBACKS.masthead,
+      provenance: "probe",
+      confidence: 0.35,
+    };
+    flags.push({
+      path: "palette.roles.masthead-bg",
+      reason: "vision omitted masthead-bg; using neutral IR slate (not DRDGOLD olive)",
+      confidence: 0.35,
+    });
+  }
 
   const overall = weightedOverall(roles);
 

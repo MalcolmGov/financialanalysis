@@ -54,7 +54,7 @@ main[data-dna-component="page-shell"]{max-width:none;width:100%;margin:0;padding
 .fin-table tr.r-subtotal td{font-weight:700}
 .fin-table tr.r-total td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent)}
 .fin-table tr.r-line td.cell-num.cur{font-weight:600}
-.fin-table .note-ref{color:var(--dna-brand,#B8912A);text-decoration:none;font-weight:600;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#B8912A) 55%,transparent)}
+.fin-table .note-ref{color:var(--dna-brand,#243B53);text-decoration:none;font-weight:600;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#243B53) 55%,transparent)}
 .fin-table .note-ref:hover{border-bottom-style:solid}
 @media print{body{padding:0}.statement-table{overflow:visible}}
 `.trim();

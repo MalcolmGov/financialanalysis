@@ -886,16 +886,26 @@ export function ProjectConsole(props: {
       const res = await fetch(`/api/projects/${props.projectId}/site`, { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
-        draft?: { draftVersion?: number; brandLogo?: boolean; brandBanner?: boolean };
+        draft?: {
+          draftVersion?: number;
+          brandLogo?: boolean;
+          brandBanner?: boolean;
+          brandWarnings?: string[];
+        };
       };
       if (!res.ok) {
         setBrandKitNote(data.error ?? res.statusText);
         return;
       }
+      const warn =
+        data.draft?.brandWarnings?.length ?
+          ` · brand: ${data.draft.brandWarnings[0]}`
+        : "";
       setBrandKitNote(
         `Draft v${data.draft?.draftVersion ?? "?"} rebuilt` +
           (data.draft?.brandLogo ? " · logo on" : "") +
           (data.draft?.brandBanner ? " · hero on" : "") +
+          warn +
           ".",
       );
       await Promise.all([refreshPublishAndBrand(), refreshSiteDraft()]);
@@ -1272,8 +1282,9 @@ export function ProjectConsole(props: {
         <section className="rs-sheet rs-fade-up-delay">
           <h2 className="rs-section-title">Review design DNA</h2>
           <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
-            Measured visual identity from the PDF (palette, type, table treatment). Approve only if
-            it looks faithful — the multipage site draft is styled from these tokens.
+            Measured visual identity from this issuer&apos;s PDF (palette, type, table treatment) —
+            not a shared DRDGOLD theme. Approve only if it looks faithful; the multipage draft is
+            styled from these tokens. Pair with Brand kit logo/hero for look-and-feel.
           </p>
           {dnaError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
@@ -1613,8 +1624,10 @@ export function ProjectConsole(props: {
                   Official logo &amp; hero photo
                 </h3>
                 <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-                  Client SVG/PNG wordmark and full-bleed hero override extraction stamps. Upload
-                  auto-rebuilds the multipage draft so nav and hero update in preview.
+                  Look-and-feel is per issuer: Design DNA supplies colors/type; Brand kit supplies
+                  logo and hero. Uploads auto-rebuild the multipage draft. Other issuers do not
+                  inherit DRDGOLD gold/olive — approve that project&apos;s DNA and upload its logo
+                  before publish.
                 </p>
               </div>
               <button
@@ -1724,8 +1737,9 @@ export function ProjectConsole(props: {
                   Publish readiness checklist
                 </h3>
                 <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-                  Formal accept of the multipage pack. Sign-off unlocks Approve &amp; export when
-                  critical gates pass.
+                  Formal accept of the multipage pack. Checklist includes brand differentiation
+                  (issuer DNA accent + logo). Sign-off unlocks Approve &amp; export when critical
+                  gates pass.
                 </p>
               </div>
               {publishReady?.signoff && !publishReady.signoffStale ? (

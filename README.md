@@ -3,7 +3,8 @@
 Converts a company's published financial-results PDF into a verified, brand-faithful, interactive HTML microsite through a nine-step pipeline with human gates. **No generic templates** — every visual decision derives from the source PDF's measured design DNA. **The AI never touches a number** — numeric content flows through references only, verified by blocking gates before export.
 
 Architecture: `~/Documents/results-studio-architecture/` (canonical: `00-consolidated-architecture.html`).
-Reference/golden document: DRDGOLD HY1 FY2026 interim results (Workiva, 10 pp).
+IR multipage v1 engine blueprint: [`docs/ir-multipage-v1-blueprint.md`](docs/ir-multipage-v1-blueprint.md) — shared IA/composers/gates; brand per issuer via Design DNA + Brand kit.
+Reference/golden project: DRDGOLD HY1 FY2026 (`444cd443-97cc-4b9c-b0f6-eef4f65c2f98`, “DRD Gold 1”) — reference marker only, not the global theme.
 
 ## Layout
 

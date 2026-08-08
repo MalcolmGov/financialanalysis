@@ -143,6 +143,31 @@ async function readinessFromDraft(projectId: string) {
       ? m.brand_banner
       : Boolean(meta.brandBanner ?? bannerOrigin);
 
+  let brandHex: string | null = null;
+  let accentHex: string | null = null;
+  let mastheadHex: string | null = null;
+  try {
+    const [dnaArt] = await db()
+      .select({ blobPath: schema.artifacts.blobPath })
+      .from(schema.artifacts)
+      .where(
+        and(eq(schema.artifacts.runId, ctx.run!.id), eq(schema.artifacts.kind, "design_dna")),
+      )
+      .orderBy(desc(schema.artifacts.createdAt))
+      .limit(1);
+    if (dnaArt) {
+      const dna = JSON.parse((await getPrivate(dnaArt.blobPath)).toString("utf8")) as {
+        palette?: { roles?: Record<string, { hex?: string }> };
+      };
+      const roles = dna.palette?.roles ?? {};
+      brandHex = roles.brand?.hex ?? null;
+      accentHex = roles.accent?.hex ?? null;
+      mastheadHex = roles["masthead-bg"]?.hex ?? null;
+    }
+  } catch {
+    /* DNA optional for checklist soft items */
+  }
+
   const checklist = buildPublishChecklist({
     projectId,
     draftId: meta.draftId ?? ctx.art.id,
@@ -156,6 +181,10 @@ async function readinessFromDraft(projectId: string) {
     brandBanner,
     logoOrigin,
     bannerOrigin,
+    clientLogo: Boolean(kit?.logo),
+    brandHex,
+    accentHex,
+    mastheadHex,
     pages,
     files,
     pdfBundled:

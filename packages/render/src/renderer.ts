@@ -489,7 +489,7 @@ main[data-dna-component="page-shell"]{max-width:none;width:100%;margin:0;padding
 .statement-table{overflow-x:auto;margin:.35rem 0 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
 .fin-table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);letter-spacing:-.01em}
 .fin-table thead th{position:relative;z-index:1}
-.fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:700;text-align:left;padding:10px 12px;vertical-align:bottom;font-size:11px;letter-spacing:.03em;line-height:1.35;border-bottom:2px solid var(--dna-brand,#FCAF17)}
+.fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:700;text-align:left;padding:10px 12px;vertical-align:bottom;font-size:11px;letter-spacing:.03em;line-height:1.35;border-bottom:2px solid var(--dna-brand,#243B53)}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
 .fin-table td{padding:7px 12px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 9%,transparent);vertical-align:top}
 .fin-table td.cur,.fin-table th.cur,.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
@@ -522,9 +522,9 @@ ${STATEMENT_IR_CSS}`;
 /** WW-recognizable statement IR skin (sofp-style widths; no decorative grp rules). */
 const STATEMENT_IR_CSS = `
 /* rs-statement-ir */
-.statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:var(--rs-space-2,.7rem) 0 var(--rs-space-5,1.35rem);border:0;border-top:2px solid var(--dna-brand,#FCAF17);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
-.statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 var(--rs-space-2,.7rem);padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#FCAF17);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:var(--rs-fs-eyebrow,.68rem);letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
-.statement-unit__value{color:var(--dna-masthead,#0F3B2E);font-weight:800;letter-spacing:.06em}
+.statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:var(--rs-space-2,.7rem) 0 var(--rs-space-5,1.35rem);border:0;border-top:2px solid var(--dna-brand,#243B53);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
+.statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 var(--rs-space-2,.7rem);padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:var(--rs-fs-eyebrow,.68rem);letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
+.statement-unit__value{color:var(--dna-masthead,#1B2A3A);font-weight:800;letter-spacing:.06em}
 .fin-table{width:100%;min-width:34rem;border-collapse:collapse;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.8125rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
 .fin-table col.c-label{width:auto}
 .fin-table col.c-note{width:3.25rem}
@@ -534,10 +534,10 @@ const STATEMENT_IR_CSS = `
 .fin-table[data-density="periods-3"]{min-width:42rem}
 .fin-table[data-density="periods-3"] col.c-note{width:3rem}
 .fin-table[data-density="periods-3"] col.c-cur,.fin-table[data-density="periods-3"] col.c-cmp{width:7.25rem}
-.fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.3;border:none;border-bottom:2px solid var(--dna-brand,#FCAF17);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
-.fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#839097)}
+.fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.3;border:none;border-bottom:2px solid var(--dna-brand,#243B53);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
+.fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#64748B)}
 .fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F);width:3.25rem;padding-left:4px;padding-right:4px}
-.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#839097)!important;border-left:1px solid #fff;white-space:normal;padding:7px 9px;line-height:1.3;overflow-wrap:break-word;hyphens:manual;vertical-align:bottom}
+.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid #fff;white-space:normal;padding:7px 9px;line-height:1.3;overflow-wrap:break-word;hyphens:manual;vertical-align:bottom}
 .fin-table thead th.h-fig:first-of-type,.fin-table thead th.h-notes + th.h-fig{border-left:0}
 .fin-table[data-density="periods-3"] thead th.h-fig{padding:6px 7px;font-size:.66rem;line-height:1.28}
 .fin-table thead th.h-fig.cur{filter:brightness(.94)}
@@ -558,10 +558,10 @@ const STATEMENT_IR_CSS = `
 .fin-table tr.r-total td{font-weight:700;border-top:1px solid #6C6C6C;border-bottom:1px solid #BAC4CA;background:transparent!important;padding-top:5px;padding-bottom:5px}
 .fin-table tr.r-total td.cur{background:var(--dna-shading,#F2F2F2)!important}
 .fin-table tr.r-line td.cell-num.cur{font-weight:700}
-.fin-table[data-cur-col] thead th.cur{background:color-mix(in srgb,var(--dna-table-header-bg,#839097) 88%,#000)!important;color:#fff!important}
+.fin-table[data-cur-col] thead th.cur{background:color-mix(in srgb,var(--dna-table-header-bg,#64748B) 88%,#000)!important;color:#fff!important}
 .fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
-.fin-table .note-ref{color:color-mix(in srgb,var(--dna-brand,#FCAF17) 35%,var(--dna-masthead,#0F3B2E));text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 70%,#C7B08B);padding:0 1px}
-.fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
+.fin-table .note-ref{color:color-mix(in srgb,var(--dna-brand,#243B53) 35%,var(--dna-masthead,#1B2A3A));text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#243B53) 70%,#94A3B8);padding:0 1px}
+.fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#243B53)}
 .fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.25rem;max-width:3.25rem;padding-left:4px;padding-right:4px;font-size:.76rem;color:var(--dna-ink,#221F1F);vertical-align:middle}
 /* Section/subtotal rules on the label column only — keep figure cells clear. */
 .fin-table tr.bd-tan>td,.fin-table tr.bd-blue>td{border-top:none}
@@ -581,7 +581,7 @@ const STATEMENT_IR_CSS = `
   .statement-table,.fin-wrapper{overflow:visible;border-top:2px solid #000;break-inside:avoid}
   .fin-table{font-size:9.5pt;table-layout:auto;min-width:0}
   .fin-table thead th{position:static;background:#fff!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .fin-table thead th.h-fig{background:#839097!important;color:#fff!important}
+  .fin-table thead th.h-fig{background:#64748B!important;color:#fff!important}
   .fin-table td.cur,.fin-table[data-cur-col] tbody td.cur{background:#F2F2F2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .fin-table tbody tr:hover td,.fin-table tbody tr:hover td.cur{background:inherit!important}
   .fin-table .note-ref{color:#000;border-bottom:none;font-weight:700}

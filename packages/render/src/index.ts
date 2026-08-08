@@ -20,3 +20,4 @@ export * from "./corporate-reliability.js";
 export * from "./delivery-pack.js";
 export * from "./statement-fidelity.js";
 export * from "./legal-company.js";
+export * from "./ir-fallbacks.js";

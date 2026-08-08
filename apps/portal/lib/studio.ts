@@ -1,4 +1,5 @@
 import type { DesignDNA } from "@rs/contracts";
+import { IR_NEUTRAL_FALLBACKS } from "@rs/render";
 import { MODELS, generateLongText, type Usage } from "./anthropic";
 import { buildStudioBrief } from "./build-content";
 import { ensureContentCoverage } from "./content-coverage";
@@ -65,15 +66,19 @@ export function buildTokenBlock(dna: DesignDNA): string {
   const push = (name: string, hex?: string) => {
     if (hex) decl.push(`--dna-${name}:${hex}`);
   };
-  push("paper", r.paper?.hex);
-  push("ink", r.ink?.hex);
-  push("brand", r.brand?.hex);
-  push("accent", r.accent?.hex);
-  push("masthead", r["masthead-bg"]?.hex);
-  push("table-header-bg", r["table-header-bg"]?.hex);
-  push("table-header-text", r["table-header-text"]?.hex ?? "#FFFFFF");
-  push("shading", r["table-shading"]?.hex);
-  push("footer-accent", r["footer-accent"]?.hex ?? r.brand?.hex);
+  // Always emit load-bearing roles. Missing DNA → neutral IR (not DRDGOLD).
+  push("paper", r.paper?.hex ?? IR_NEUTRAL_FALLBACKS.paper);
+  push("ink", r.ink?.hex ?? IR_NEUTRAL_FALLBACKS.ink);
+  push("brand", r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.brand);
+  push("accent", r.accent?.hex ?? r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.accent);
+  push("masthead", r["masthead-bg"]?.hex ?? IR_NEUTRAL_FALLBACKS.masthead);
+  push("table-header-bg", r["table-header-bg"]?.hex ?? IR_NEUTRAL_FALLBACKS.tableHeaderBg);
+  push("table-header-text", r["table-header-text"]?.hex ?? IR_NEUTRAL_FALLBACKS.tableHeaderText);
+  push("shading", r["table-shading"]?.hex ?? IR_NEUTRAL_FALLBACKS.shading);
+  push(
+    "footer-accent",
+    r["footer-accent"]?.hex ?? r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.footerAccent,
+  );
   const heading = dna.type.stack.heading;
   const body = dna.type.stack.body;
   decl.push(`--dna-font-heading:${heading}`);

@@ -5,6 +5,7 @@ import {
 } from "@rs/contracts";
 import { getPrivate, putPrivate } from "./blob";
 import { brandOrigins } from "./brand-kit";
+import { assessBrandDifferentiation } from "./brand-differentiation";
 import type { BrandAssetBundle } from "@rs/contracts";
 
 export const PUBLISH_SIGNOFF_PATH = (projectId: string) =>
@@ -23,6 +24,11 @@ export type PublishReadinessInput = {
   brandBanner: boolean;
   logoOrigin?: string | null;
   bannerOrigin?: string | null;
+  /** Client-uploaded Brand kit logo (not extraction). */
+  clientLogo?: boolean;
+  brandHex?: string | null;
+  accentHex?: string | null;
+  mastheadHex?: string | null;
   pages: Array<{ path: string }>;
   files?: string[];
   pdfBundled?: boolean;
@@ -48,6 +54,15 @@ export function buildPublishChecklist(input: PublishReadinessInput): PublishChec
   const readme = files.some((f) => f === "README.md" || f.endsWith("/README.md"));
   const exportMeta = files.some((f) => f.includes("_meta/export.json"));
   const deliveryOk = input.deliveryPackOk ?? (readme && exportMeta && excel);
+  const brandDiff = assessBrandDifferentiation({
+    projectId: input.projectId,
+    company: input.company,
+    brandHex: input.brandHex,
+    accentHex: input.accentHex,
+    mastheadHex: input.mastheadHex,
+    clientLogo: Boolean(input.clientLogo),
+    brandLogo: input.brandLogo,
+  });
 
   const items: PublishChecklistItem[] = [
     {
@@ -86,6 +101,13 @@ export function buildPublishChecklist(input: PublishReadinessInput): PublishChec
         ? `Logo from ${input.logoOrigin ?? "bundle"}`
         : "Text wordmark fallback (upload SVG in Brand kit for polish)",
       critical: false,
+    },
+    {
+      id: "brand_differentiated",
+      label: "Brand differentiated (DNA accent + logo — not DRDGOLD defaults)",
+      status: brandDiff.status,
+      detail: brandDiff.detail,
+      critical: brandDiff.critical,
     },
     {
       id: "hero_photo",

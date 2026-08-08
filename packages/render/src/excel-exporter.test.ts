@@ -213,7 +213,7 @@ describe("ExcelExporter", () => {
     expect(sheet1).toContain("fitToPage");
     const styles = unzipEntry(xlsx, "xl/styles.xml");
     expect(styles).toContain("cellXfs");
-    expect(styles).toContain("FF839097");
+    expect(styles).toContain("FF64748B");
     expect(styles).toContain("Arial");
     const sheet2 = unzipEntry(xlsx, "xl/worksheets/sheet2.xml");
     expect(sheet2).toContain("Total assets");

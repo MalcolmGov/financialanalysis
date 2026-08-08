@@ -242,29 +242,29 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <fonts count="7">
     <font><sz val="10"/><name val="Arial"/><family val="2"/></font>
     <font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/><family val="2"/></font>
-    <font><b/><sz val="10"/><color rgb="FF0F3B2E"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FF1B2A3A"/><name val="Arial"/><family val="2"/></font>
     <font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font>
     <font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font>
-    <font><b/><sz val="14"/><color rgb="FF0F3B2E"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="14"/><color rgb="FF1B2A3A"/><name val="Arial"/><family val="2"/></font>
     <font><sz val="9"/><color rgb="FF58595A"/><name val="Arial"/><family val="2"/></font>
   </fonts>
   <fills count="8">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FF839097"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF64748B"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF0"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFF3D6"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF0"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF7F7F7"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFBF0"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF7F8FA"/></patternFill></fill>
   </fills>
   <borders count="6">
     <border><left/><right/><top/><bottom/><diagonal/></border>
-    <border><left/><right/><top/><bottom style="thin"><color rgb="FF839097"/></bottom><diagonal/></border>
-    <border><left/><right/><top style="medium"><color rgb="FF0F3B2E"/></top><bottom style="medium"><color rgb="FFFCAF17"/></bottom><diagonal/></border>
+    <border><left/><right/><top/><bottom style="thin"><color rgb="FF64748B"/></bottom><diagonal/></border>
+    <border><left/><right/><top style="medium"><color rgb="FF1B2A3A"/></top><bottom style="medium"><color rgb="FF243B53"/></bottom><diagonal/></border>
     <border><left style="thin"><color rgb="FF6C6C6C"/></left><right style="thin"><color rgb="FF6C6C6C"/></right><top style="thin"><color rgb="FF6C6C6C"/></top><bottom style="thin"><color rgb="FF6C6C6C"/></bottom><diagonal/></border>
     <border><left/><right/><top style="thin"><color rgb="FFBAC4CA"/></top><bottom/><diagonal/></border>
-    <border><left/><right/><top/><bottom style="medium"><color rgb="FFFCAF17"/></bottom><diagonal/></border>
+    <border><left/><right/><top/><bottom style="medium"><color rgb="FF243B53"/></bottom><diagonal/></border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
   <cellXfs count="10">

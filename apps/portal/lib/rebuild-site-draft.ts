@@ -6,9 +6,15 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { formatReliabilityFailures, resolveLegalCompanyName } from "@rs/render";
 import { getPrivate, putPrivate } from "./blob";
+import {
+  assessBrandDifferentiation,
+  brandDifferentiationRebuildWarning,
+} from "./brand-differentiation";
 import { loadBrandBytes, resolveAssetUris } from "./brand-assets";
+import { loadProjectBrandKit } from "./brand-kit";
 import { buildMultipageExport, type BrandAssetBytes } from "./build-multipage-export";
 import { db, schema } from "./db";
+import { isDrdgoldReferenceProject } from "./reference-projects";
 
 export type RebuildSiteDraftResult = {
   projectId: string;
@@ -24,6 +30,8 @@ export type RebuildSiteDraftResult = {
   brandLogo: boolean;
   brandBanner: boolean;
   company: string;
+  /** Soft brand-differentiation warnings (rebuild still proceeds). */
+  brandWarnings?: string[];
 };
 
 export type RebuildSiteDraftOptions = {
@@ -126,12 +134,42 @@ export async function rebuildProjectSiteDraft(
   }
 
   const brandAssets = await resolveBrand(arts, projectId, extraction);
-
+  const kit = await loadProjectBrandKit(projectId);
   const legal = resolveLegalCompanyName({
     extraction,
     dna,
     projectCompanyName: project.companyName,
   });
+  const roles =
+    (dna as { palette?: { roles?: Record<string, { hex?: string }> } })?.palette?.roles ??
+    {};
+  const brandAssessment = assessBrandDifferentiation({
+    projectId,
+    company: legal.company ?? project.companyName,
+    brandHex: roles.brand?.hex ?? null,
+    accentHex: roles.accent?.hex ?? null,
+    mastheadHex: roles["masthead-bg"]?.hex ?? null,
+    clientLogo: Boolean(kit?.logo),
+    brandLogo: Boolean(brandAssets?.logo || kit?.logo),
+  });
+  const brandWarn = brandDifferentiationRebuildWarning(brandAssessment);
+  const brandWarnings = [
+    ...(brandWarn ? [brandWarn] : []),
+    ...brandAssessment.warnings,
+  ];
+  if (brandWarnings.length) {
+    console.warn(
+      `[rebuild-site-draft] brand differentiation: ${brandWarnings.join(" · ")}`,
+    );
+  }
+  if (
+    !isDrdgoldReferenceProject({ projectId, company: project.companyName }) &&
+    brandAssessment.status === "fail"
+  ) {
+    console.warn(
+      `[rebuild-site-draft] proceeding with draft, but publish sign-off will block until Brand kit + issuer DesignDNA differentiate this project from neutral/DRDGOLD defaults`,
+    );
+  }
 
   const built = buildMultipageExport({
     dna,
@@ -295,5 +333,6 @@ export async function rebuildProjectSiteDraft(
     brandLogo: built.brandLogo,
     brandBanner: built.brandBanner,
     company: built.company,
+    brandWarnings: brandWarnings.length ? brandWarnings : undefined,
   };
 }
