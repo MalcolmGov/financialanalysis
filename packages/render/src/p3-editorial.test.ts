@@ -248,6 +248,25 @@ describe("HomeComposer", () => {
     expect(home.heroHtml).toContain("Interim cash dividend of 50 SA cps");
     expect(home.heroHtml).not.toContain("Investor results centre");
   });
+
+  it("prefers cover period phrase over thin project FY label", () => {
+    const dm = docModel();
+    dm.meta.period_label = "FY2025";
+    const extraction = {
+      body: [
+        {
+          id: "blk-cover",
+          type: "paragraph",
+          text: "Condensed consolidated unaudited interim results for the six months ended 31 December 2025",
+          children: [],
+        },
+      ],
+      furniture: [],
+    } as unknown as ExtractionResult;
+    const home = composeHome(plan(), dm, { extraction });
+    expect(home.heroHtml).toMatch(/<h1[^>]*>for the six months ended 31 December 2025<\/h1>/i);
+    expect(home.heroHtml).not.toMatch(/<h1[^>]*>FY2025<\/h1>/);
+  });
 });
 
 describe("CommentaryComposer", () => {

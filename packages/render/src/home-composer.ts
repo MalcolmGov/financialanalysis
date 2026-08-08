@@ -227,13 +227,63 @@ ${grid}
 </div>`;
 }
 
+/** Verbatim cover period phrases (e.g. "six months ended 31 December 2025"). */
+function coverPeriodPhrase(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): string {
+  const re =
+    /(?:for the\s+)?(?:six months|year)\s+ended\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}/i;
+  const sources: string[] = [];
+  for (const sec of docModel.sections) {
+    for (const b of sec.blocks) {
+      if (b.text?.trim()) sources.push(b.text);
+    }
+  }
+  if (extraction) {
+    const collect = (nodes: ExtractionResult["body"] | undefined) => {
+      for (const n of nodes ?? []) {
+        if (n.text?.trim()) sources.push(n.text);
+        if (n.children?.length) collect(n.children);
+      }
+    };
+    collect(extraction.body);
+    collect(extraction.furniture);
+  }
+  let best = "";
+  for (const raw of sources) {
+    const m = raw.replace(/\u00a0/g, " ").match(re)?.[0];
+    if (!m) continue;
+    const phrase = m.replace(/\s+/g, " ").trim();
+    if (phrase.length > best.length) best = phrase;
+  }
+  return best;
+}
+
+/** Prefer rich cover period over thin project labels like "FY2025". */
+export function resultsHeadline(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): string {
+  const metaPeriod = docModel.meta.period_label?.trim() || "";
+  const cover = coverPeriodPhrase(docModel, extraction);
+  const thinMeta =
+    !metaPeriod ||
+    metaPeriod.length < 24 ||
+    /^FY\d{4}$/i.test(metaPeriod) ||
+    /^HY\d\s+FY\d{4}$/i.test(metaPeriod);
+  if (cover && thinMeta) return cover;
+  if (metaPeriod) return metaPeriod;
+  if (cover) return cover;
+  return docKindLabel(docModel.meta.doc_kind);
+}
+
 function homeHero(
   docModel: FinancialDocModel,
   kpis: HomeKpiCard[],
   opts: HomeComposeOptions = {},
 ): string {
   const company = escapeHtml(docModel.meta.company || "Results");
-  const period = docModel.meta.period_label?.trim() || "";
   const kind = escapeHtml(docKindLabel(docModel.meta.doc_kind));
   const meta = listingMeta(docModel, opts.extraction);
   const lede = supportingLede(docModel);
@@ -252,9 +302,9 @@ function homeHero(
   const lockup = logo
     ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high" data-brand-img onerror="${BRAND_IMG_ONERROR}"></div>`
     : "";
-  // Results headline = period when present; else doc-kind label. Brand is company wordmark.
-  const headline = period || docKindLabel(docModel.meta.doc_kind);
-  const headlineAttr = period || /\d/.test(headline) ? " data-allow-number" : "";
+  // Results headline from period / cover phrase; brand is company wordmark.
+  const headline = resultsHeadline(docModel, opts.extraction);
+  const headlineAttr = /\d/.test(headline) ? " data-allow-number" : "";
 
   return `<header class="home-hero home-hero--composition${modeClass}" data-dna-component="home-hero">
 ${atmosphere}${photo}<div class="home-hero__mast"></div>
