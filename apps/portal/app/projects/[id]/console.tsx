@@ -954,11 +954,42 @@ export function ProjectConsole(props: {
       );
       return;
     }
-    await gate(
-      "review",
-      { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
-      "Approve & export",
-    );
+    setBusy(true);
+    try {
+      // Prefer direct signed-draft export (works after offline rebuilds when the
+      // workflow review hook is no longer waiting). Fall back to the review gate
+      // for runs still mid-pipeline.
+      const res = await fetch(`/api/projects/${props.projectId}/export`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        bundleId?: string;
+        draftVersion?: number;
+      };
+      if (res.ok) {
+        setNote(
+          `Approve & export complete — bundle ${data.bundleId ?? ""} (draft v${data.draftVersion ?? "?"}). Download ready.`,
+        );
+        void refreshEvents();
+        await refreshPublishAndBrand();
+        return;
+      }
+      const ok = await gate(
+        "review",
+        { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
+        "Approve & export",
+      );
+      if (!ok) {
+        setNote(`Failed: ${data.error ?? res.statusText}`);
+      }
+    } catch (err) {
+      setNote(`Failed: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const exportBlocked =

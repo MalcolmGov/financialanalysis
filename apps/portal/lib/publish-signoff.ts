@@ -142,13 +142,19 @@ export function canSignOffPublish(items: PublishChecklistItem[]): boolean {
 export async function loadPublishSignoff(
   projectId: string,
 ): Promise<PublishSignoffT | null> {
-  try {
-    const raw = await getPrivate(PUBLISH_SIGNOFF_PATH(projectId));
-    const parsed = PublishSignoff.safeParse(JSON.parse(raw.toString("utf8")));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
+  // Vercel Blob head/fetch can briefly lag after overwrite — retry so Approve
+  // & export does not embed a stale checklist snapshot.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const raw = await getPrivate(PUBLISH_SIGNOFF_PATH(projectId));
+      const parsed = PublishSignoff.safeParse(JSON.parse(raw.toString("utf8")));
+      if (parsed.success) return parsed.data;
+    } catch {
+      /* retry */
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
   }
+  return null;
 }
 
 export async function savePublishSignoff(
@@ -160,6 +166,23 @@ export async function savePublishSignoff(
     JSON.stringify(next, null, 2),
     "application/json",
   );
+  // Read-after-write confirm (best-effort) so the next load sees this version.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const raw = await getPrivate(PUBLISH_SIGNOFF_PATH(signoff.project_id));
+      const parsed = PublishSignoff.safeParse(JSON.parse(raw.toString("utf8")));
+      if (
+        parsed.success &&
+        parsed.data.draft_id === next.draft_id &&
+        parsed.data.signed_off_at === next.signed_off_at
+      ) {
+        return next;
+      }
+    } catch {
+      /* retry */
+    }
+    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+  }
   return next;
 }
 
