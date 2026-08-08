@@ -205,6 +205,25 @@ async function main() {
     for (const rel of [...assetRefs].sort()) {
       if (!(await fetchAsset(rel))) failed += 1;
     }
+
+    // Delivery-pack sidecars are not linked from HTML but live on the draft
+    // prefix. Fetch them so auditCorporateReliability's auto deliveryPack
+    // path does not false-fail on README / _meta after xlsx/downloads are seen.
+    const deliverySidecars = ["README.md", "_meta/export.json"] as const;
+    for (const rel of deliverySidecars) {
+      const res = await portalFetch(blobApiPath(rel), jar);
+      if (!res.ok) {
+        process.stdout.write(
+          `○ preview-sidecar [${rel}]: HTTP ${res.status} (optional if not a delivery pack)\n`,
+        );
+        continue;
+      }
+      const text = Buffer.from(await res.arrayBuffer()).toString("utf8");
+      files[rel] = text;
+      process.stdout.write(
+        `✓ preview-sidecar [${rel}]: HTTP ${res.status} bytes=${text.length}\n`,
+      );
+    }
   }
 
   const siteFiles: SiteFiles = { files, binaries };
