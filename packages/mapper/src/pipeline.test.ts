@@ -113,6 +113,43 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(noteCell?.kind).toBe("noteRef"); // NOT "number" — it is a cross-reference
   });
 
+  it("omits Unit Rm chip for Review of Operations (per-row unit column)", () => {
+    const cells: Cell[] = [
+      h(0, 0, "Review Of Operations"),
+      h(0, 2, "Six months ended 31 Dec 2025"),
+      h(0, 3, "Six months ended 31 Dec 2024"),
+      h(0, 4, "% change 1"),
+      rh(1, 0, "Cash operating costs"),
+      d(1, 1, "R per kg"),
+      d(1, 2, "980 042"),
+      d(1, 3, "866 221"),
+      d(1, 4, "13"),
+      d(2, 1, "US$ per oz"),
+      d(2, 2, "1 756"),
+      d(2, 3, "1 502"),
+      d(2, 4, "17"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      tables: {
+        t_ops: {
+          id: "t_ops",
+          caption_block: null,
+          prov: [],
+          num_rows: 3,
+          num_cols: 5,
+          cells,
+          column_roles: null,
+        },
+      },
+    };
+    const dm = mapToDocModel(ex, meta);
+    expect(dm.tables[0]!.table_type).toBe("facts");
+    expect(dm.tables[0]!.unit_context.default).toBe("");
+    expect(dm.tables[0]!.rows[0]!.cells[2]!.raw).toBe("980 042");
+    expect(dm.tables[0]!.rows[1]!.cells[1]!.raw).toBe("US$ per oz");
+  });
+
   it("clamps title colspan when Notes is a discrete cell (no 5-col ghost grid)", () => {
     const cells: Cell[] = [
       { ...h(0, 0, "Statement of Profit or Loss"), col_span: 2 },

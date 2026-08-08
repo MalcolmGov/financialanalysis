@@ -116,6 +116,19 @@ function noteColIndex(table: FinTable): number | null {
   return null;
 }
 
+/** Per-row unit column (ops/KPI / assumptions) — col 1 when most cells look like units. */
+function unitColIndex(table: FinTable): number | null {
+  if (noteColIndex(table) === 1) return null;
+  const samples = table.rows
+    .map((r) => r.cells[1]?.raw?.trim() ?? "")
+    .filter(Boolean);
+  if (samples.length < 2) return null;
+  const unitLike = samples.filter((u) =>
+    /^(kg|oz|%|R\b|US\$|R\/|years?\b|South African cents)/i.test(u),
+  ).length;
+  return unitLike >= Math.ceil(samples.length * 0.5) ? 1 : null;
+}
+
 /**
  * Prefer body width when header colspans were over-claimed (layout defense).
  * Clamps individual header spans so Σ spans === bodyColCount.
@@ -149,11 +162,13 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
   const normTable = { ...table, header_matrix };
   const cur0 = findCurrentPeriodCol(normTable);
   const noteCol = noteColIndex(normTable);
+  const unitCol = unitColIndex(normTable);
   const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
   const colCount = bodyColCount;
   const cols = Array.from({ length: colCount }, (_, i) => {
     if (i === 0) return `<col class="c-label">`;
     if (noteCol != null && i === noteCol) return `<col class="c-note">`;
+    if (unitCol != null && i === unitCol) return `<col class="c-unit">`;
     if (cur0 != null && i === cur0) return `<col class="c-cur">`;
     return `<col class="c-cmp">`;
   }).join("");
@@ -223,9 +238,10 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           // omit cells — carry no digit and need no provenance.
           const src = cell.raw.trim() !== "" ? ` data-src="${escapeHtml(cell.src_ref)}"` : "";
           const labelCls = cellIdx === 0 ? " cell-label lbl" : "";
+          const unitCls = unitCol != null && start === unitCol ? " cell-unit" : "";
           const noteEmpty =
             noteCol != null && start === noteCol ? " cell-noteRef note" : "";
-          return `<td class="cell-${cell.kind}${labelCls}${noteEmpty}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
+          return `<td class="cell-${cell.kind}${labelCls}${unitCls}${noteEmpty}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
         })
         .join("");
       return `<tr class="${trClass}">${cells}</tr>`;
@@ -461,6 +477,7 @@ const STATEMENT_IR_CSS = `
 .fin-table{width:100%;min-width:36rem;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.82rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
 .fin-table col.c-label{width:auto}
 .fin-table col.c-note{width:54px}
+.fin-table col.c-unit{width:9.5rem}
 .fin-table col.c-cur,.fin-table col.c-cmp{width:165px}
 .fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.35;border:none;border-bottom:2px solid var(--dna-brand,#FCAF17);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
 .fin-table thead th.h-title{text-align:left;font-size:.9rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:#839097}
@@ -470,7 +487,8 @@ const STATEMENT_IR_CSS = `
 .fin-table thead th.h-fig .h-fig__date{display:block;font-weight:800;letter-spacing:-.01em;line-height:1.3}
 .fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:block;font-weight:600;opacity:.92;font-size:.7rem;margin-top:.1rem}
 .fin-table td{padding:3px 8px;vertical-align:middle;line-height:1.35;border-bottom:none}
-.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px}
+.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px;overflow-wrap:anywhere;hyphens:auto;line-height:1.35;max-width:28rem}
+.fin-table td.cell-unit{text-align:left;white-space:nowrap;color:color-mix(in srgb,var(--dna-ink,#221F1F) 72%,var(--dna-paper,#fff));font-size:.78rem;padding-left:6px;padding-right:8px}
 .fin-table td.cell-num,.fin-table td.cmp,.fin-table td.cur{text-align:right;white-space:nowrap;padding-right:10px;font-variant-numeric:tabular-nums}
 .fin-table td.cur{font-weight:700;background:var(--dna-shading,#F2F2F2)}
 .fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}

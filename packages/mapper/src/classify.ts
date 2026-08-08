@@ -75,16 +75,32 @@ export function classifyTable(table: ExtractionTable): TableClassification {
     .filter((c) => c.is_col_header)
     .map((c) => c.text)
     .join(" ");
+  const title = table.cells
+    .filter((c) => c.r === 0)
+    .sort((a, b) => a.c - b.c)
+    .map((c) => c.text)
+    .join(" ");
   const isFinancial = PERIOD_HEADER.test(headerText) && table.num_cols >= 2;
 
   // Wide reconciliations (segments/AISC): many data columns.
   const wide = table.num_cols >= 8;
   // Sensitivity: "1%/(1%)" increase/decrease patterns.
   const sensitivity = /increase|decrease|1%|sensitivity/i.test(headerText);
+  // Ops / assumptions: dedicated unit column (kg, R per kg, %, …).
+  const col1 = table.cells
+    .filter((c) => c.c === 1 && c.r > 0)
+    .map((c) => c.text.trim())
+    .filter(Boolean);
+  const unitLike = col1.filter((u) => /^(kg|oz|%|R\b|US\$|R\/|years?\b)/i.test(u)).length;
+  const facts =
+    /review\s+of\s+operations/i.test(title) ||
+    (/%\s*change/i.test(headerText) && unitLike >= 2) ||
+    (col1.length >= 3 && unitLike >= Math.ceil(col1.length * 0.6) && table.num_cols <= 5);
 
   let table_type: TableClassification["table_type"] = "statement";
   if (wide) table_type = "wide";
   else if (sensitivity) table_type = "sensitivity";
+  else if (facts) table_type = "facts";
 
   return { is_financial: isFinancial, table_type };
 }

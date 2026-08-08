@@ -25,6 +25,7 @@ from .postprocess import (
     InTable,
     build_extraction_result,
 )
+from .repair_tables import repair_ops_tables_from_pdf
 
 
 def ocr_preflight(pdf_bytes: bytes, sample_pages: int = 20, min_chars: int = 200) -> bool:
@@ -219,6 +220,18 @@ def extract_document(
             btype = "paragraph"
             level = None
         body.append(InBlock(id=f"blk-{_seq(body, furniture)}", type=btype, prov=prov, text=text, level=level))
+
+    # Rebuild mangled ops/KPI grids from the born-digital text layer before
+    # the verbatim ExtractionResult is sealed (Docling merges stacked units).
+    try:
+        tables = repair_ops_tables_from_pdf(tables, pdf_bytes)
+    except Exception as exc:  # noqa: BLE001 — never fail extraction on repair
+        warnings.append(
+            {
+                "code": "LOW_CONFIDENCE_TABLE",
+                "message": f"ops table text-layer repair skipped: {exc}",
+            }
+        )
 
     engine = {
         "docling_version": _docling_version(),

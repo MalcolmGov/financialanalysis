@@ -110,10 +110,44 @@ function buildFinTable(table: ExtractionTable, docTableId: string, mustAppear: b
     must_appear: mustAppear,
     table_type: cls.table_type,
     header_matrix,
-    unit_context: { default: "Rm", per_row: {} },
+    unit_context: { default: inferDefaultUnit(table), per_row: {} },
     row_groups: [],
     rows,
   };
+}
+
+/**
+ * Statement tables carry a shared Rm / R'000 banner. Ops/KPI and assumptions
+ * grids have a per-row unit column — a global "Unit Rm" chip is wrong there.
+ */
+function inferDefaultUnit(table: ExtractionTable): string {
+  const headerText = table.cells
+    .filter((c) => c.is_col_header)
+    .map((c) => c.text)
+    .join(" ");
+  const title = table.cells
+    .filter((c) => c.r === 0)
+    .sort((a, b) => a.c - b.c)
+    .map((c) => c.text)
+    .join(" ");
+  if (/review\s+of\s+operations/i.test(title)) return "";
+
+  const col1 = table.cells
+    .filter((c) => c.c === 1 && c.r > 0)
+    .map((c) => c.text.trim())
+    .filter(Boolean);
+  const unitLike = col1.filter((u) =>
+    /^(kg|oz|%|R\b|US\$|R\/|years?\b)/i.test(u),
+  ).length;
+  if (col1.length >= 2 && unitLike >= Math.ceil(col1.length * 0.5)) return "";
+
+  const m = headerText.match(/\b(Rm|R'000|R million)\b/i);
+  if (m) return m[1]!;
+  // Primary statements historically defaulted to Rm when unit sits in period headers.
+  if (/statement of|financial position|cash flows|changes in equity/i.test(title)) {
+    return "Rm";
+  }
+  return "";
 }
 
 type Body = ExtractionResult["body"];
