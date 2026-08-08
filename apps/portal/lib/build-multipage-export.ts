@@ -5,12 +5,15 @@ import { buildSitePlan, mapToDocModel } from "@rs/mapper";
 import {
   applyDownloadArtifacts,
   auditCorporateReliability,
+  buildDeliveryPackMeta,
   exportExcelFromDocModel,
   fontAssetBinaries,
   gateA,
   gateB,
+  renderClientDeliveryReadme,
   renderSitePlan,
   looksLikeProjectSlug,
+  resolveDisplayPeriodLabel,
   resolveLegalCompanyName,
   SOURCE_PDF_HREF,
   type BrandAssetUris,
@@ -58,9 +61,9 @@ export interface MultipagePageMeta {
 }
 
 export interface MultipageExportResult {
-  /** Text files (HTML/CSS/JS/JSON). */
+  /** Text files (HTML/CSS/JS/JSON/markdown). */
   files: Record<string, string>;
-  /** Binary artifacts (XLSX, PDF) for the zip. */
+  /** Binary artifacts (XLSX, PDF, fonts, brand). */
   binaries: Record<string, Uint8Array>;
   paths: string[];
   pages: MultipagePageMeta[];
@@ -71,7 +74,7 @@ export interface MultipageExportResult {
   mode: "multipage";
   gateA: GateAResult;
   gateB: GateBResult;
-  /** P5 corporate readiness rollup (vis_text, PE, brand, Gate A/B, …). */
+  /** P5/P6 corporate readiness rollup (vis_text, PE, brand, Gate A/B, delivery pack). */
   reliability: { ok: boolean; findings: ReliabilityFinding[] };
   excelSheetNames: string[];
   pdfBundled: boolean;
@@ -80,6 +83,8 @@ export interface MultipageExportResult {
   /** Legal issuer used in chrome (may differ from portal project title). */
   company: string;
   companySource: string;
+  /** Display period used in SEO/chrome/delivery meta. */
+  periodLabel: string;
 }
 
 function sha256Hex(body: string | Buffer): string {
@@ -126,6 +131,7 @@ function materializeBrandAssets(
  * Numbers come only from extraction via the SitePlan renderer.
  * Gate A/B run on the rendered tree so operators sign off a provenance-safe draft.
  * P4: ExcelExporter + optional source PDF under assets/.
+ * P6: README + _meta/export.json client delivery pack.
  */
 export function buildMultipageExport(input: MultipageExportInput): MultipageExportResult {
   const blueprintVersionId = randomUUID();
@@ -159,6 +165,11 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     currency: "ZAR",
   };
   const docModel = mapToDocModel(input.extraction, meta);
+  // P6: sync SEO/chrome/delivery period to cover-accurate label (not thin FY slug).
+  const periodLabel =
+    resolveDisplayPeriodLabel(docModel, input.extraction) || input.periodLabel || "";
+  if (periodLabel) docModel.meta.period_label = periodLabel;
+
   const sitePlan = buildSitePlan(docModel, blueprint);
 
   const binaries: Record<string, Uint8Array> = {
@@ -218,6 +229,26 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
       : []),
   ];
 
+  // P6 handoff artifacts before reliability rollup (delivery-pack checks need them).
+  const pathsPreview = [...Object.keys(files), ...Object.keys(binaries)].sort();
+  const packMeta = buildDeliveryPackMeta({
+    company: legal.company,
+    companySource: legal.source,
+    periodLabel,
+    pages,
+    paths: pathsPreview,
+    excelSheetNames: excel.workbookSheetNames,
+    pdfBundled,
+    brandLogo: Boolean(brandUris.logo),
+    brandBanner: Boolean(brandUris.banner),
+    gateA: a.status,
+    gateB: b.status,
+    reliabilityOk: a.status === "pass" && b.status === "pass",
+    prototypeBundled: Boolean(files["prototype/index.html"]),
+  });
+  files["README.md"] = renderClientDeliveryReadme(packMeta);
+  files["_meta/export.json"] = JSON.stringify(packMeta, null, 2);
+
   const reliability = auditCorporateReliability(
     { files, binaries },
     {
@@ -225,10 +256,31 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
       forbiddenProjectTitles: forbidden.length ? forbidden : undefined,
       gateA: a,
       gateB: b,
+      deliveryPack: true,
     },
   );
 
+  // Refresh handoff with final reliability status (paths include README + meta).
   const paths = [...Object.keys(files), ...Object.keys(binaries)].sort();
+  const finalMeta = buildDeliveryPackMeta({
+    company: legal.company,
+    companySource: legal.source,
+    periodLabel,
+    pages,
+    paths,
+    excelSheetNames: excel.workbookSheetNames,
+    pdfBundled,
+    brandLogo: Boolean(brandUris.logo),
+    brandBanner: Boolean(brandUris.banner),
+    gateA: a.status,
+    gateB: b.status,
+    reliabilityOk: reliability.ok,
+    prototypeBundled: Boolean(files["prototype/index.html"]),
+    createdAt: packMeta.created_at,
+  });
+  files["README.md"] = renderClientDeliveryReadme(finalMeta);
+  files["_meta/export.json"] = JSON.stringify(finalMeta, null, 2);
+
   return {
     files,
     binaries,
@@ -248,5 +300,6 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     brandBanner: Boolean(brandUris.banner),
     company: legal.company,
     companySource: legal.source,
+    periodLabel,
   };
 }

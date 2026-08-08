@@ -1,10 +1,11 @@
 /**
- * P5 — corporate IR readiness smoke against a multipage site tree or zip.
+ * P5/P6 — corporate IR readiness smoke against a multipage site tree or zip.
  * CI-friendly: exit 1 on any failure.
  *
  * Covers: preview vis_text floors, PE/opacity guard, iframe blank-risk,
  * assets, brand fallback, legal name / slug, statement IR fidelity,
- * runtime share chrome, and Gate A/B when building from fixtures.
+ * runtime share chrome, Gate A/B, and P6 delivery-pack (README, export.json,
+ * offline xlsx/pdf, SEO, entrypoint) when the tree looks like a full pack.
  *
  * Usage:
  *   pnpm smoke:corporate-reliability
@@ -38,12 +39,13 @@ async function loadDir(dir: string): Promise<SiteFiles> {
     for (const ent of entries) {
       const child = rel ? `${rel}/${ent.name}` : ent.name;
       if (ent.isDirectory()) {
-        if (ent.name === "_meta" || ent.name === "node_modules") continue;
+        if (ent.name === "node_modules") continue;
         await walk(child);
         continue;
       }
       const buf = await fs.readFile(join(dir, child));
-      if (/\.(html?|js|mjs|css|json|svg|txt|xml)$/i.test(child)) {
+      // P6 — include README.md + _meta/export.json in the delivery-pack audit.
+      if (/\.(html?|js|mjs|css|json|svg|txt|xml|md)$/i.test(child)) {
         files[child] = buf.toString("utf8");
       } else {
         binaries[child] = new Uint8Array(buf);
@@ -62,7 +64,7 @@ async function loadZip(zipPath: string): Promise<SiteFiles> {
   const binaries: Record<string, Uint8Array> = {};
   for (const [path, u8] of Object.entries(entries)) {
     if (path.endsWith("/")) continue;
-    if (/\.(html?|js|mjs|css|json|svg|txt|xml)$/i.test(path)) {
+    if (/\.(html?|js|mjs|css|json|svg|txt|xml|md)$/i.test(path)) {
       files[path] = strFromU8(u8);
     } else {
       binaries[path] = u8;
@@ -164,7 +166,7 @@ async function main() {
     .filter((p) => p.endsWith(".html") && !p.startsWith("prototype/"))
     .sort();
 
-  process.stdout.write(`P5 corporate readiness smoke · ${label}\n`);
+  process.stdout.write(`P5/P6 corporate readiness smoke · ${label}\n`);
   process.stdout.write(`Pages: ${htmlPages.length}\n`);
   if (expectedLegalName) process.stdout.write(`Expect legal name: ${expectedLegalName}\n`);
   if (forbiddenProjectTitles?.length) {

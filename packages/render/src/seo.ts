@@ -127,7 +127,14 @@ export function composeSeo(page: SeoPageInput): SeoHeadParts {
     ? `${shortCompany(company)} Investor Results Centre`
     : "Investor Results Centre";
 
-  const canonicalPath = page.path === "index.html" ? "./" : page.path;
+  // Offline zip has no origin — use a same-directory relative canonical so nested
+  // pages (financials/*.html) do not resolve financials/foo as financials/financials/foo.
+  const canonicalPath =
+    page.path === "index.html"
+      ? "./"
+      : page.path.includes("/")
+        ? page.path.slice(page.path.lastIndexOf("/") + 1)
+        : page.path;
   const origin = page.siteOrigin?.replace(/\/+$/, "") || "";
   const canonicalHref = origin
     ? `${origin}/${page.path === "index.html" ? "" : page.path}`.replace(/\/+$/, "/") || origin + "/"
@@ -146,8 +153,13 @@ export function composeSeo(page: SeoPageInput): SeoHeadParts {
     jsonLd = {
       "@context": "https://schema.org",
       "@type": "Report",
-      name: [company, resultsLabel, period ? `for ${period}` : ""].filter(Boolean).join(" ").replace(/\s+/g, " ").trim(),
+      name: [company, resultsLabel, period ? `for ${period}` : ""]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim(),
       description: reportDesc,
+      inLanguage: "en",
       publisher: {
         "@type": "Organization",
         name: company || "Issuer",
@@ -157,6 +169,7 @@ export function composeSeo(page: SeoPageInput): SeoHeadParts {
         name: company || "Issuer",
         ...(page.currency ? { currency: page.currency } : {}),
       },
+      ...(period ? { temporalCoverage: period } : {}),
     };
   } else {
     jsonLd = {
@@ -164,9 +177,10 @@ export function composeSeo(page: SeoPageInput): SeoHeadParts {
       "@type": "WebPage",
       name: title,
       description,
+      inLanguage: "en",
       isPartOf: {
         "@type": "Report",
-        name: [company, resultsLabel].filter(Boolean).join(" — "),
+        name: [company, resultsLabel, period].filter(Boolean).join(" — "),
         publisher: {
           "@type": "Organization",
           name: company || "Issuer",
@@ -209,6 +223,7 @@ ${canonical}
 <meta property="og:title" content="${escapeHtml(parts.ogTitle)}">
 <meta property="og:description" content="${escapeHtml(parts.ogDescription)}">
 <meta property="og:site_name" content="${escapeHtml(parts.ogSiteName)}">
+<meta property="og:locale" content="en_ZA">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="${escapeHtml(parts.ogTitle)}">
 <meta name="twitter:description" content="${escapeHtml(parts.ogDescription)}">

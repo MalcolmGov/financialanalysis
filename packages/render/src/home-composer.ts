@@ -260,6 +260,32 @@ function coverPeriodPhrase(
   return best;
 }
 
+/**
+ * Best period label for SEO / chrome / delivery meta.
+ * Prefers rich cover phrases over thin project labels like "FY2025".
+ * When meta is a short HY/FY token, combine with the cover end-date phrase.
+ */
+export function resolveDisplayPeriodLabel(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): string {
+  const metaPeriod = docModel.meta.period_label?.trim() || "";
+  const cover = coverPeriodPhrase(docModel, extraction);
+  const thinMeta =
+    !metaPeriod ||
+    metaPeriod.length < 24 ||
+    /^FY\d{4}$/i.test(metaPeriod) ||
+    /^HY\d\s+FY\d{4}$/i.test(metaPeriod);
+  if (cover && thinMeta) {
+    if (metaPeriod && /^HY\d\s+FY\d{4}$/i.test(metaPeriod)) {
+      const bare = cover.replace(/^for the\s+/i, "");
+      return `${metaPeriod} — ${bare}`;
+    }
+    return cover;
+  }
+  return metaPeriod || cover || "";
+}
+
 /** Prefer rich cover period over thin project labels like "FY2025". */
 export function resultsHeadline(
   docModel: FinancialDocModel,
@@ -272,6 +298,7 @@ export function resultsHeadline(
     metaPeriod.length < 24 ||
     /^FY\d{4}$/i.test(metaPeriod) ||
     /^HY\d\s+FY\d{4}$/i.test(metaPeriod);
+  // H1 keeps cover-only for thin labels (editorial); SEO uses resolveDisplayPeriodLabel.
   if (cover && thinMeta) return cover;
   if (metaPeriod) return metaPeriod;
   if (cover) return cover;

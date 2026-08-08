@@ -107,8 +107,11 @@ describe("SeoComposer", () => {
     expect(meta).toContain('type="application/ld+json"');
     expect(meta).toContain('"@type":"Report"');
     expect(meta).toContain('property="og:type"');
+    expect(meta).toContain('property="og:locale"');
     expect(meta).toContain('rel="canonical"');
     expect(meta).toContain('name="twitter:card"');
+    expect(JSON.stringify(seo.jsonLd)).toContain('"inLanguage":"en"');
+    expect(JSON.stringify(seo.jsonLd)).toContain("temporalCoverage");
   });
 
   it("emits WebPage JSON-LD on statement pages", () => {

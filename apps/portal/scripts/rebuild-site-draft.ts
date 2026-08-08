@@ -147,7 +147,9 @@ async function main() {
         ? "application/javascript"
         : path.endsWith(".json")
           ? "application/json"
-          : "application/octet-stream";
+          : path.endsWith(".md")
+            ? "text/markdown; charset=utf-8"
+            : "application/octet-stream";
     await putPrivate(`${prefix}/${path}`, body, contentType);
   }
   for (const path of Object.keys(built.binaries).sort()) {
@@ -183,8 +185,15 @@ async function main() {
     gate_a: { status: built.gateA.status },
     gate_b: { status: built.gateB.status },
     created_at: new Date().toISOString(),
-    note: "rebuilt via scripts/rebuild-site-draft.ts (P5 corporate QA gates)",
+    note: "rebuilt via scripts/rebuild-site-draft.ts (P5/P6 corporate QA + delivery pack)",
     corporate_reliability: built.reliability.ok ? "pass" : "fail",
+    company: built.company,
+    company_source: built.companySource,
+    period_label: built.periodLabel,
+    pdf_bundled: built.pdfBundled,
+    brand_logo: built.brandLogo,
+    brand_banner: built.brandBanner,
+    delivery_pack: "client-delivery",
   };
   const manifestPut = await putPrivate(
     `${prefix}/_meta/draft.json`,

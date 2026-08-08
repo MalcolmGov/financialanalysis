@@ -1315,7 +1315,9 @@ export async function buildSiteDraftArtifact(
           ? "application/javascript"
           : path.endsWith(".json")
             ? "application/json"
-            : "application/octet-stream";
+            : path.endsWith(".md")
+              ? "text/markdown; charset=utf-8"
+              : "application/octet-stream";
     await putPrivate(`${prefix}/${path}`, body, contentType);
   }
   for (const path of Object.keys(built.binaries).sort()) {
@@ -1577,15 +1579,24 @@ export async function buildPrototypeExport(
   }
 
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  // P6 — signed-off delivery manifest (overwrites draft _meta/export.json in the zip).
+  let draftPack: Record<string, unknown> = {};
+  try {
+    draftPack = JSON.parse(built.files["_meta/export.json"] ?? "{}") as Record<string, unknown>;
+  } catch {
+    draftPack = {};
+  }
   const meta = {
+    ...draftPack,
     schema_version: "multipage-export/1",
+    pack: "client-delivery",
     bundle_id: bundleId,
     project_id: projectId,
     run_id: runId,
     company: built.company,
     company_source: built.companySource,
     portal_company_name: project?.companyName ?? null,
-    period_label: project?.periodLabel ?? "",
+    period_label: built.periodLabel || project?.periodLabel || "",
     prototype_version_id: proto?.id ?? null,
     prototype_version_number: proto?.versionNumber ?? null,
     site_plan_id: built.sitePlanId,
@@ -1602,17 +1613,24 @@ export async function buildPrototypeExport(
     pages: built.pages,
     excel_sheets: built.excelSheetNames,
     pdf_bundled: built.pdfBundled,
+    brand_logo: built.brandLogo,
+    brand_banner: built.brandBanner,
+    hosting: draftPack.hosting ?? {
+      offline: "Unzip and open index.html in a modern browser",
+      static_host:
+        "Upload the unzipped folder as a static site root; default document index.html; no server runtime",
+    },
   };
 
-  const zipInput: Record<string, Uint8Array> = {
-    "_meta/export.json": strToU8(JSON.stringify(meta, null, 2)),
-  };
+  const zipInput: Record<string, Uint8Array> = {};
   for (const path of Object.keys(built.files)) {
     zipInput[path] = strToU8(built.files[path]!);
   }
   for (const path of Object.keys(built.binaries)) {
     zipInput[path] = built.binaries[path]!;
   }
+  // Write signed-off manifest last so it wins over the draft copy in built.files.
+  zipInput["_meta/export.json"] = strToU8(JSON.stringify(meta, null, 2));
 
   const zipBytes = zipSync(zipInput, { level: 6 });
   const zipBuf = Buffer.from(zipBytes);

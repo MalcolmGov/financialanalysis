@@ -110,7 +110,8 @@ async function main() {
     // P1 — legal name in chrome (not portal project slug)
     ["legal company resolved", /DRDGOLD/i.test(built.company) && built.companySource !== "project"],
     ["no project slug in nav", !/DRD Gold 1/i.test(home.match(/nav-brand__name[^>]*>([^<]*)/)?.[1] ?? "")],
-    ["no project slug in hero", !/<h1[^>]*>DRD Gold 1</i.test(home) && /<h1[^>]*>[^<]*DRDGOLD/i.test(home)],
+    // P3: H1 is the period/results headline; legal name lives on home-hero__company.
+    ["no project slug in hero", !/<h1[^>]*>DRD Gold 1</i.test(home) && /home-hero__company[^>]*>[^<]*DRDGOLD/i.test(home)],
     ["no project slug in footer", !/site-footer__brand[^>]*>DRD Gold 1/i.test(home)],
     ["no project slug in OG", !/og:title" content="[^"]*DRD Gold 1/i.test(home)],
     ["page hero", bs.includes("page-hero") && bs.includes("page-hero__eyebrow")],
@@ -183,6 +184,13 @@ async function main() {
     ["rs-motion PE CSS", home.includes("html.rs-motion") && home.includes(".reveal")],
     ["reveal default visible", /(?:^|})\s*\.reveal,\s*\.kpi-card\{[^}]*opacity\s*:\s*1/.test(home.replace(/\s+/g, "")) || home.includes(".reveal,.kpi-card{opacity:1")],
     ["brand onerror", home.includes("data-brand-img") ? home.includes("onerror=") : home.includes("nav-brand__name")],
+    // P6 — client delivery pack
+    ["delivery README", !!built.files["README.md"] && /index\.html/i.test(built.files["README.md"]!) && /offline/i.test(built.files["README.md"]!)],
+    ["delivery export.json", !!built.files["_meta/export.json"] && built.files["_meta/export.json"]!.includes('"pack": "client-delivery"')],
+    ["delivery zip README", zipPaths.includes("README.md") && zipPaths.includes("_meta/export.json")],
+    ["delivery entrypoint", built.entrypoint === "index.html" && zipPaths.includes("index.html")],
+    ["delivery SEO locale", home.includes('property="og:locale"') && home.includes("inLanguage")],
+    ["delivery period meta", /HY1 FY2026|31 December 2025/i.test(built.periodLabel)],
   ] as const;
 
   const reliability = built.reliability;

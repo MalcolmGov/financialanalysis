@@ -1,12 +1,16 @@
 /**
- * P0 / P5 — corporate IR reliability gates for multipage HTML.
+ * P0 / P5 / P6 — corporate IR reliability gates for multipage HTML.
  * Fail closed on blank pages, unguarded opacity:0 reveal, missing assets,
  * missing brand text fallback, project-slug leakage into chrome, Gate A/B,
- * or preview-path vis_text floors (the blank-home crisis class of bug).
+ * preview-path vis_text floors, or incomplete client delivery packs.
  */
 
 import type { GateAResult } from "./gate-a.js";
 import type { GateBResult } from "./gate-b.js";
+import {
+  checkDeliveryPack,
+  siteLooksLikeDeliveryPack,
+} from "./delivery-pack.js";
 import {
   extractChromeIdentityText,
   looksLikeProjectSlug,
@@ -485,6 +489,12 @@ export interface CorporateReliabilityOptions {
    * min-content-bytes. Turn off only for narrowly scoped unit fixtures.
    */
   previewVisText?: boolean;
+  /**
+   * P6 — assert offline delivery-pack completeness (README, export.json, xlsx/pdf,
+   * SEO, entrypoint). Default: auto when the tree looks like a full multipage pack.
+   * Pass true from buildMultipageExport; false for minimal unit stubs.
+   */
+  deliveryPack?: boolean;
 }
 
 /** Normalize for chrome presence checks (case/spacing; Limited optional). */
@@ -646,6 +656,14 @@ export function auditCorporateReliability(
   }
 
   findings.push(...checkRuntimeShareChrome(site));
+
+  // P6 — client delivery pack (offline zip / handoff)
+  const wantDelivery =
+    opts.deliveryPack === true ||
+    (opts.deliveryPack !== false && siteLooksLikeDeliveryPack(site));
+  if (wantDelivery) {
+    findings.push(...checkDeliveryPack(site));
+  }
 
   const ok = findings.every((f) => f.ok);
   return { ok, findings };
