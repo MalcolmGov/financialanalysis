@@ -10,6 +10,8 @@ import type { BlockNode, ExtractionResult, FinancialDocModel } from "@rs/contrac
 export interface BrandAssetUris {
   /** Nav / hero logo — only when a real project asset exists. */
   logo?: string;
+  /** Logo format hint for crisp rendering (SVG vs raster PNG/JPEG). */
+  logoKind?: "svg" | "raster";
   /** Home photographic masthead / banner. */
   banner?: string;
   /**

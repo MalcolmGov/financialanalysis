@@ -26,6 +26,10 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain("data-nav-toggle");
     expect(SITE_RUNTIME_JS).toContain("initReveal");
     expect(SITE_RUNTIME_JS).toContain("data-final");
+    expect(SITE_RUNTIME_JS).toContain("showToast");
+    expect(SITE_RUNTIME_JS).toContain('data-share="email"');
+    expect(SITE_RUNTIME_JS).toContain("is-scrolled");
+    expect(SITE_RUNTIME_JS).toContain("Escape");
   });
 });
 
@@ -47,6 +51,7 @@ describe("mobile nav chrome", () => {
     expect(renderSelectionTooltip()).toContain("sel-share-copy");
     expect(renderSelectionTooltip()).toContain("sel-share-mark");
     expect(renderSelectionTooltip()).toContain("sel-share-linkedin");
+    expect(renderSelectionTooltip()).toContain("share-tip__label");
   });
 });
 

@@ -156,22 +156,27 @@ function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): s
   const meta = listingMeta(docModel, opts.extraction);
   const banner = opts.brandAssets?.banner;
   const logo = opts.brandAssets?.logo;
+  const logoKind = opts.brandAssets?.logoKind ?? (logo?.endsWith(".svg") ? "svg" : "raster");
   const bannerKind = opts.brandAssets?.bannerKind ?? (banner ? "photo" : undefined);
-  const photoClass = banner
+  const modeClass = banner
     ? ` home-hero--photo home-hero--${bannerKind ?? "photo"}`
-    : "";
+    : " home-hero--atmosphere";
   const photo = banner
-    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}">`
+    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" fetchpriority="high" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}">`
     : "";
+  // DNA-token atmosphere always present — designed plane when banner missing;
+  // subtle underlay when photographic strip/photo exists.
+  const atmosphere = `<div class="home-hero__atmosphere" aria-hidden="true"><div class="home-hero__mesh"></div><div class="home-hero__beam"></div><div class="home-hero__orb home-hero__orb--a"></div><div class="home-hero__orb home-hero__orb--b"></div><div class="home-hero__grain"></div></div>`;
   const lockup = logo
-    ? `<div class="home-hero__lockup"><img class="home-hero__logo" src="${escapeHtml(logo)}" alt="" width="220" height="52" decoding="async"></div>`
+    ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high"></div>`
     : "";
-  return `<header class="home-hero${photoClass}" data-dna-component="home-hero">
-${photo}<div class="home-hero__mast"></div>
+  return `<header class="home-hero${modeClass}" data-dna-component="home-hero">
+${atmosphere}${photo}<div class="home-hero__mast"></div>
 <div class="home-hero__inner">
 ${lockup}<p class="home-kicker">${kind}</p>
 <h1 data-allow-number>${company}</h1>
 ${periodHtml}
+<span class="home-hero__rule" aria-hidden="true"></span>
 <p class="home-lede">Investor results centre — key figures, commentary, condensed consolidated statements, notes, and downloads.</p>
 ${meta}
 <p class="home-cta"><a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a></p>

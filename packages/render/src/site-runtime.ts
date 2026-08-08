@@ -28,6 +28,66 @@ export const SITE_RUNTIME_JS = `
     return 'rs-marks-' + pageKey();
   }
 
+  function pageTitle(){
+    var h = document.querySelector('.page-hero h1, .home-hero h1, title');
+    return (h && (h.textContent || '').trim()) || document.title || 'Results';
+  }
+
+  /* ── Toast ── */
+  var toastTimer = null;
+  function showToast(msg){
+    var el = document.getElementById('share-toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    el.classList.add('is-visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      el.classList.remove('is-visible');
+      setTimeout(function(){ el.hidden = true; }, 220);
+    }, 1800);
+  }
+
+  function copyText(text, okMsg){
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function(){
+        showToast(okMsg || 'Copied');
+      }).catch(function(){
+        fallbackCopy(text, okMsg);
+      });
+    } else {
+      fallbackCopy(text, okMsg);
+    }
+  }
+
+  function fallbackCopy(text, okMsg){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly','');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(okMsg || 'Copied');
+    } catch(e) {}
+  }
+
+  /* ── Sticky nav scroll state ── */
+  function initNavScroll(){
+    var nav = document.querySelector('.site-nav');
+    if (!nav) return;
+    var onScroll = function(){
+      if (window.scrollY > 8) nav.classList.add('is-scrolled');
+      else nav.classList.remove('is-scrolled');
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
   /* ── Mobile nav ── */
   function initMobileNav(){
     var btn = document.querySelector('[data-nav-toggle]');
@@ -77,13 +137,17 @@ export const SITE_RUNTIME_JS = `
     document.querySelectorAll('[data-share="copy"]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var url = location.href;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(url).then(function(){
-            var prev = btn.textContent;
-            btn.textContent = 'Copied';
-            setTimeout(function(){ btn.textContent = prev; }, 1600);
-          });
-        }
+        var txt = btn.querySelector('.share-bar__txt');
+        var prev = txt ? txt.textContent : btn.textContent;
+        copyText(url, 'Link copied');
+        btn.classList.add('is-active');
+        if (txt) txt.textContent = 'Copied';
+        else btn.textContent = 'Copied';
+        setTimeout(function(){
+          btn.classList.remove('is-active');
+          if (txt) txt.textContent = prev;
+          else btn.textContent = prev;
+        }, 1600);
       });
     });
     document.querySelectorAll('[data-share="linkedin"]').forEach(function(a){
@@ -91,6 +155,13 @@ export const SITE_RUNTIME_JS = `
         e.preventDefault();
         var u = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(location.href);
         window.open(u, '_blank', 'noopener,noreferrer');
+      });
+    });
+    document.querySelectorAll('[data-share="email"]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var subject = encodeURIComponent(pageTitle());
+        var body = encodeURIComponent(pageTitle() + '\\n\\n' + location.href);
+        location.href = 'mailto:?subject=' + subject + '&body=' + body;
       });
     });
   }
@@ -129,10 +200,10 @@ export const SITE_RUNTIME_JS = `
         var prefix = el.dataset.prefix || '';
         var suffix = el.dataset.suffix || '';
         var t0 = performance.now();
-        var dur = 1100;
+        var dur = 1200;
         function step(t){
           var p = Math.min((t - t0) / dur, 1);
-          var ease = 1 - Math.pow(1 - p, 4);
+          var ease = 1 - Math.pow(1 - p, 5);
           var cur = end * ease;
           if (p < 1) {
             el.textContent = prefix + formatCount(cur, decimals, sep) + suffix;
@@ -144,7 +215,7 @@ export const SITE_RUNTIME_JS = `
         }
         requestAnimationFrame(step);
       });
-    }, { threshold: 0.3 });
+    }, { threshold: 0.28 });
     targets.forEach(function(el){
       if (!el.getAttribute('data-final')) {
         el.setAttribute('data-final', el.textContent || '');
@@ -167,14 +238,21 @@ export const SITE_RUNTIME_JS = `
         entry.target.classList.add('is-visible', 'revealed');
         io.unobserve(entry.target);
       });
-    }, { threshold: 0.12 });
+    }, { threshold: 0.1, rootMargin: '0px 0px -4% 0px' });
     items.forEach(function(el){ io.observe(el); });
   }
 
   /* ── Selection mark / share tooltip ── */
   function hideSelTooltip(){
     var tip = document.getElementById('share-tooltip');
-    if (tip) tip.classList.remove('is-visible');
+    if (!tip) return;
+    tip.classList.remove('is-visible');
+    tip.hidden = true;
+  }
+
+  function showSelTooltip(tip){
+    tip.hidden = false;
+    tip.classList.add('is-visible');
   }
 
   function saveMarks(){
@@ -192,6 +270,7 @@ export const SITE_RUNTIME_JS = `
       mark.className = 'user-mark';
       range.surroundContents(mark);
       saveMarks();
+      showToast('Highlight saved');
     } catch(e) {
       // Partial-node selections can throw; ignore rather than break the page.
     }
@@ -213,11 +292,15 @@ export const SITE_RUNTIME_JS = `
         var val = node.nodeValue || '';
         var idx = val.indexOf(text);
         if (idx === -1) continue;
-        if (node.parentElement && node.parentElement.closest && node.parentElement.closest('mark.user-mark, script, style, .site-nav, #share-tooltip')) continue;
+        if (node.parentElement && node.parentElement.closest && node.parentElement.closest('mark.user-mark, script, style, .site-nav, #share-tooltip, .share-bar')) continue;
         var range = document.createRange();
         range.setStart(node, idx);
         range.setEnd(node, idx + text.length);
-        wrapRange(range);
+        try {
+          var mark = document.createElement('mark');
+          mark.className = 'user-mark';
+          range.surroundContents(mark);
+        } catch(e) {}
         break;
       }
     });
@@ -235,11 +318,11 @@ export const SITE_RUNTIME_JS = `
         var range = sel.getRangeAt(0);
         var rect = range.getBoundingClientRect();
         if (!rect.width && !rect.height) { hideSelTooltip(); return; }
-        tip.style.top = (rect.top + window.scrollY - 48) + 'px';
+        tip.style.top = (rect.top + window.scrollY - 56) + 'px';
         tip.style.left = (rect.left + window.scrollX + rect.width / 2) + 'px';
         tip._selectedText = text;
         tip._selectedRange = range.cloneRange();
-        tip.classList.add('is-visible');
+        showSelTooltip(tip);
       } catch(e) { hideSelTooltip(); }
     });
 
@@ -248,10 +331,14 @@ export const SITE_RUNTIME_JS = `
       hideSelTooltip();
     });
 
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') hideSelTooltip();
+    });
+
     var copyBtn = document.getElementById('sel-share-copy');
     if (copyBtn) copyBtn.addEventListener('click', function(){
       var t = tip._selectedText || '';
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
+      copyText(t, 'Selection copied');
       hideSelTooltip();
     });
 
@@ -273,6 +360,7 @@ export const SITE_RUNTIME_JS = `
   }
 
   function boot(){
+    initNavScroll();
     initMobileNav();
     initNavDropdown();
     initShareBar();

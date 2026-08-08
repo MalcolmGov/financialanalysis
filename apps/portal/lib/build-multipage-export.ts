@@ -91,12 +91,14 @@ function materializeBrandAssets(
 ): BrandAssetUris {
   const uris: BrandAssetUris = {};
   if (brand?.logo?.bytes?.byteLength) {
-    const ext = extForMime(brand.logo.mime || "image/png", "png");
+    const mime = brand.logo.mime || "image/png";
+    const ext = extForMime(mime, "png");
     const path = `assets/brand/logo.${ext}`;
     binaries[path] = brand.logo.bytes instanceof Uint8Array
       ? brand.logo.bytes
       : Uint8Array.from(brand.logo.bytes);
     uris.logo = path;
+    uris.logoKind = mime.includes("svg") || ext === "svg" ? "svg" : "raster";
   }
   if (brand?.banner?.bytes?.byteLength) {
     const ext = extForMime(brand.banner.mime || "image/png", "png");

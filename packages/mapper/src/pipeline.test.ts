@@ -185,7 +185,9 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(files["financials/income-statement.html"]).toContain("page-hero");
     expect(files["financials/income-statement.html"]).toContain('class="note-ref"');
     expect(files["financials/income-statement.html"]).toContain("notes.html#note-");
-    expect(files["financials/income-statement.html"]).toMatch(/class="r-(section|line|subtotal|total)"/);
+    expect(files["financials/income-statement.html"]).toMatch(
+      /class="[^"]*\br-(?:section|line|subtotal|total)\b/,
+    );
   });
 
   it("Gate B catches a MAPPER bug (a mis-copied number) against the source extraction", () => {

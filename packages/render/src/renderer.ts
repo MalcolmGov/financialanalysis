@@ -409,35 +409,34 @@ ${STATEMENT_IR_CSS}
 
 /** WW-grade row taxonomy + note-ref + banding (safe to append after any .fin-table base). */
 const STATEMENT_IR_CSS = `
-/* rs-statement-ir */
-.statement-table{overflow-x:auto;margin:.15rem 0 1.25rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 14%,transparent);background:var(--dna-paper,#fff);padding:0 2px}
-.fin-table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12.5px}
+/* rs-statement-ir — dense IR table skin */
+.statement-table{overflow-x:auto;margin:.1rem 0 1.35rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 13%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:0 1px 0 color-mix(in srgb,var(--dna-ink,#111) 4%,transparent)}
+.fin-table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12.5px;letter-spacing:-.01em}
 .fin-table col.c-label{width:auto}
-.fin-table col.c-note{width:3.6em}
-.fin-table col.c-cur,.fin-table col.c-cmp{width:7.25em}
-.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.02em;font-size:11px;font-weight:700;padding:11px 10px;vertical-align:bottom;line-height:1.3}
-.fin-table thead th.h-title{text-align:left;font-size:12px;letter-spacing:.01em}
-.fin-table thead th.h-notes{text-align:center;font-size:10px;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom}
+.fin-table col.c-note{width:3.5em}
+.fin-table col.c-cur,.fin-table col.c-cmp{width:7.35em}
+.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.015em;font-size:11px;font-weight:700;padding:12px 10px 11px;vertical-align:bottom;line-height:1.28;background:color-mix(in srgb,var(--dna-paper,#fff) 92%,var(--dna-shading,#F2F2F2));backdrop-filter:blur(4px)}
+.fin-table thead th.h-title{text-align:left;font-size:12px;letter-spacing:.005em;font-weight:800}
+.fin-table thead th.h-notes{text-align:center;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;vertical-align:bottom;font-weight:800}
 .fin-table thead th.h-fig{text-align:right;font-weight:700}
-.fin-table thead th.h-fig .h-fig__date{display:inline-block;font-weight:800}
-.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:inline-block;font-weight:600;opacity:.92;font-size:10.5px}
-.fin-table td{padding:5px 10px;vertical-align:middle;line-height:1.35}
-.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#231F20);padding-left:8px}
-.fin-table td.cell-num,.fin-table td.cmp{text-align:right;white-space:nowrap;padding-right:10px}
+.fin-table thead th.h-fig .h-fig__date{display:inline-block;font-weight:800;letter-spacing:-.01em}
+.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:inline-block;font-weight:600;opacity:.9;font-size:10.5px}
+.fin-table td{padding:5.5px 10px;vertical-align:middle;line-height:1.32}
+.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#231F20);padding-left:10px}
+.fin-table td.cell-num,.fin-table td.cmp{text-align:right;white-space:nowrap;padding-right:11px}
 .fin-table td.cur{font-weight:700}
-.fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
-.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:15px;padding-bottom:5px;color:var(--dna-masthead,#0F3B2E);font-size:12.5px;letter-spacing:.02em;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important;border-top:1px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,transparent)}
-.fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important}
-.fin-table tr.r-subtotal td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff))!important}
-.fin-table tr.r-subtotal td.cur{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 78%,var(--dna-paper,#fff))!important}
-.fin-table tr.r-total td{font-weight:700;border-top:2px solid var(--dna-masthead,#0F3B2E);border-bottom:2px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 65%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 10%,var(--dna-paper,#fff))!important;padding-top:9px;padding-bottom:9px}
-.fin-table tr.r-total td.cur{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 16%,var(--dna-shading,#F2F2F2))!important}
+.fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 30%,var(--dna-paper,#fff))}
+.fin-table tr.r-section td{font-weight:800;border-bottom:none;padding-top:16px;padding-bottom:6px;color:var(--dna-masthead,#0F3B2E);font-size:12.5px;letter-spacing:.015em;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5.5%,var(--dna-paper,#fff))!important;border-top:1px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 58%,transparent)}
+.fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5.5%,var(--dna-paper,#fff))!important}
+.fin-table tr.r-subtotal td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 58%,var(--dna-paper,#fff))!important}
+.fin-table tr.r-subtotal td.cur{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 80%,var(--dna-paper,#fff))!important}
+.fin-table tr.r-total td{font-weight:800;border-top:2px solid var(--dna-masthead,#0F3B2E);border-bottom:2px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 68%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 11%,var(--dna-paper,#fff))!important;padding-top:10px;padding-bottom:10px}
+.fin-table tr.r-total td.cur{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 18%,var(--dna-shading,#F2F2F2))!important}
 .fin-table tr.r-line td.cell-num.cur{font-weight:700}
-.fin-table[data-cur-col] tbody td.cur{box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dna-ink,#111) 18%,transparent)}
-.fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 80%,transparent);padding:0 1px}
+.fin-table[data-cur-col] tbody td.cur{box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dna-ink,#111) 16%,transparent)}
+.fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:800;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 80%,transparent);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
-.fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.6em;font-size:11.5px}
-/* WW grp/cmp column frames + row border density */
+.fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.5em;font-size:11.5px}
 .fin-table tr.bd-tan>td{border-top:1.5px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,#CDAE86)}
 .fin-table tr.bd-blue>td{border-top:1px solid #BAC4CA}
 .fin-table tr.grp td.cur{border-left:1px solid #6C6C6C}
@@ -445,8 +444,8 @@ const STATEMENT_IR_CSS = `
 .fin-table tr.grp-top td.cur,.fin-table tr.grp-top td.cmp,.fin-table tr.grp-top td.cell-num{border-top:1px solid #6C6C6C}
 .fin-table tr.grp-bot td.cur,.fin-table tr.grp-bot td.cmp,.fin-table tr.grp-bot td.cell-num{border-bottom:1px solid #6C6C6C}
 .fin-table tbody tr{transition:background-color .15s ease}
-.fin-table tbody tr:hover td{background-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 4%,transparent)!important}
-.fin-table tbody tr:hover td.cur{background-color:color-mix(in srgb,var(--dna-shading,#F2F2F2) 85%,var(--dna-brand,#FCAF17))!important}
+.fin-table tbody tr:hover td{background-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 5%,transparent)!important}
+.fin-table tbody tr:hover td.cur{background-color:color-mix(in srgb,var(--dna-shading,#F2F2F2) 82%,var(--dna-brand,#FCAF17))!important}
 @media (max-width:720px){
   .fin-table{table-layout:auto;font-size:11.5px}
   .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}

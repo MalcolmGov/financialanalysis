@@ -142,7 +142,10 @@ describe("HomeComposer", () => {
     const home = composeHome(plan(), docModel());
     expect(home.kpis.length).toBeGreaterThanOrEqual(5);
     expect(home.heroHtml).toContain("home-hero");
+    expect(home.heroHtml).toContain("home-hero--atmosphere");
+    expect(home.heroHtml).toContain("home-hero__atmosphere");
     expect(home.heroHtml).toContain("home-hero__mast");
+    expect(home.heroHtml).toContain("home-hero__rule");
     expect(home.heroHtml).toContain("DRDGOLD Limited");
     expect(home.heroHtml).toContain("home-lede");
     expect(home.heroHtml).toContain("Condensed Consolidated Unaudited Interim Results");
@@ -187,15 +190,18 @@ describe("HomeComposer", () => {
     const home = composeHome(plan(), docModel(), {
       brandAssets: {
         logo: "assets/brand/logo.png",
+        logoKind: "raster",
         banner: "assets/brand/banner.jpg",
         bannerKind: "strip",
       },
     });
     expect(home.heroHtml).toContain("home-hero--photo");
     expect(home.heroHtml).toContain("home-hero--strip");
+    expect(home.heroHtml).not.toContain("home-hero--atmosphere");
+    expect(home.heroHtml).toContain("home-hero__atmosphere");
     expect(home.heroHtml).toContain('src="assets/brand/banner.jpg"');
     expect(home.heroHtml).toContain('data-banner-kind="strip"');
-    expect(home.heroHtml).toContain("home-hero__logo");
+    expect(home.heroHtml).toContain("home-hero__logo--raster");
     expect(home.heroHtml).toContain('src="assets/brand/logo.png"');
   });
 

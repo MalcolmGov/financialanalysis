@@ -139,7 +139,10 @@ function injectInto(html: string, markerClass: string, content: string): string 
 
 function replaceHomeHero(html: string, hero: string): string {
   if (/class="[^"]*\bhome-hero\b/.test(html)) {
-    return html.replace(/<header class="home-hero"[\s\S]*?<\/header>/i, () => hero);
+    return html.replace(
+      /<header class="[^"]*\bhome-hero\b[^"]*"[\s\S]*?<\/header>/i,
+      () => hero,
+    );
   }
   return html.replace(
     /(<main[^>]*class="[^"]*\bpage-home\b[^"]*"[^>]*>)/i,
@@ -159,7 +162,7 @@ function pageHero(opts: {
   const sub = opts.periodLabel?.trim()
     ? `<p class="page-hero__sub" data-allow-number>${escapeHtml(opts.periodLabel.trim())}</p>`
     : "";
-  return `<header class="page-hero" data-dna-component="page-hero">${crumb}<p class="page-hero__eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(opts.title)}</h1>${sub}</header>`;
+  return `<header class="page-hero" data-dna-component="page-hero"><div class="page-hero__rail" aria-hidden="true"></div><div class="page-hero__inner">${crumb}<p class="page-hero__eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(opts.title)}</h1>${sub}</div></header>`;
 }
 
 /** Map table src → note number from section metadata + table title cells. */
