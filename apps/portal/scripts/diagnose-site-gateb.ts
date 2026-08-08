@@ -94,8 +94,8 @@ async function main() {
       if (NUMERIC_TOKEN.test(text) && !hasTraceable(node as { parentElement: Element | null })) {
         const toks = text
           .split(/\s+/)
-          .map((t) => t.trim())
-          .filter((t) => t.length > 0 && NUMERIC_TOKEN.test(t));
+          .map((t: string) => t.trim())
+          .filter((t: string) => t.length > 0 && NUMERIC_TOKEN.test(t));
         const parent = (node as unknown as { parentElement: Element | null }).parentElement;
         console.log(
           "FOUND",
