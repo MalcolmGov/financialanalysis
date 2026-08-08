@@ -505,13 +505,14 @@ export function renderSiteFooter(
     ? `<div class="site-footer__col"><p class="site-footer__heading" data-allow-number>${escapeHtml(companyHeading)}</p><ul class="site-footer__links">${companyLinks.join("")}</ul></div>`
     : "";
 
-  const year = copyrightYear(opts.publishedLine, period, opts.resultsLine);
+  const year = copyrightYear(opts.publishedLine, opts.resultsLine, period);
   const listingBit = (opts.listingCodes ?? []).length
     ? ` ${(opts.listingCodes ?? []).map((c) => escapeHtml(c)).join(" | ")}`
     : "";
-  const copyLeft = `<p class="site-footer__copy">© ${
+  // Entire copy line is identity chrome (year + tickers) — allow-number for Gate B.
+  const copyLeft = `<p class="site-footer__copy" data-allow-number>© ${
     year ? `${escapeHtml(year)} ` : ""
-  }<span class="site-footer__brand" data-allow-number>${escapeHtml(brand)}</span>. All rights reserved.${
+  }<span class="site-footer__brand">${escapeHtml(brand)}</span>. All rights reserved.${
     listingBit ? ` ${listingBit}` : ""
   }</p>`;
 
