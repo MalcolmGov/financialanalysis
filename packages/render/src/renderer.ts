@@ -465,7 +465,7 @@ function hrefFromPage(fromPath: string, toPath: string): string {
 const STATEMENT_BASE_CSS = `
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.9375rem;line-height:1.45;letter-spacing:-.005em}
-main[data-dna-component="page-shell"]{max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem) 2rem;display:grid;gap:1.5rem}
+main[data-dna-component="page-shell"]{max-width:none;width:100%;margin:0;padding:0 0 2rem;display:block}
 .statement-table{overflow-x:auto;margin:.35rem 0 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
 .fin-table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);letter-spacing:-.01em}
 .fin-table thead th{position:relative;z-index:1}

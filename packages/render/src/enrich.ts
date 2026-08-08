@@ -351,15 +351,20 @@ export function enrichMultiPageFiles(
       ),
     ].map((m) => m[0]);
     const prose = composeCommentaryBody(docModel, { opsTablesHtml });
-    const content =
-      pageHero({
-        path: "commentary.html",
-        title: "Commentary",
-        company,
-        periodLabel,
-        eyebrow: "Shareholder letter & operations",
-      }) + prose;
-    out["commentary.html"] = injectInto(out["commentary.html"], "prose-body", content);
+    const hero = pageHero({
+      path: "commentary.html",
+      title: "Commentary",
+      company,
+      periodLabel,
+      eyebrow: "Shareholder letter & operations",
+    });
+    // Hero sits outside .prose-body so the band can full-bleed; body keeps the rail.
+    let html = out["commentary.html"].replace(
+      /<header class="page-hero"[\s\S]*?<\/header>/i,
+      "",
+    );
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    out["commentary.html"] = injectInto(html, "prose-body", prose);
   }
 
   if (out["administration.html"]) {
@@ -373,30 +378,37 @@ export function enrichMultiPageFiles(
         "forwardLooking",
       ]),
     );
-    const content =
-      pageHero({
-        path: "administration.html",
-        title: "Administration",
-        company,
-        periodLabel,
-        eyebrow: "Corporate information",
-      }) +
-      (prose || `<p class="prose-p">Administration details from the results announcement.</p>`);
-    out["administration.html"] = injectInto(out["administration.html"], "prose-body", content);
+    const hero = pageHero({
+      path: "administration.html",
+      title: "Administration",
+      company,
+      periodLabel,
+      eyebrow: "Corporate information",
+    });
+    const body =
+      prose || `<p class="prose-p">Administration details from the results announcement.</p>`;
+    let html = out["administration.html"].replace(
+      /<header class="page-hero"[\s\S]*?<\/header>/i,
+      "",
+    );
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    out["administration.html"] = injectInto(html, "prose-body", body);
   }
 
   if (out["downloads.html"]) {
-    out["downloads.html"] = injectInto(
-      out["downloads.html"],
-      "prose-body",
-      pageHero({
-        path: "downloads.html",
-        title: "Downloads",
-        company,
-        periodLabel,
-        eyebrow: "Source documents",
-      }) + downloadsHtml(docModel, downloadOpts),
+    const hero = pageHero({
+      path: "downloads.html",
+      title: "Downloads",
+      company,
+      periodLabel,
+      eyebrow: "Source documents",
+    });
+    let html = out["downloads.html"].replace(
+      /<header class="page-hero"[\s\S]*?<\/header>/i,
+      "",
     );
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    out["downloads.html"] = injectInto(html, "prose-body", downloadsHtml(docModel, downloadOpts));
   }
 
   if (out["financials/notes.html"]) {
@@ -469,16 +481,24 @@ export function applyDownloadArtifacts(
         () => downloadsHtml(docModel, downloadOpts),
       );
     } else {
+      const hero = pageHero({
+        path: "downloads.html",
+        title: "Downloads",
+        company: docModel.meta.company,
+        periodLabel: docModel.meta.period_label,
+        eyebrow: "Source documents",
+      });
+      let html = out["downloads.html"].replace(
+        /<header class="page-hero"[\s\S]*?<\/header>/i,
+        "",
+      );
+      if (!/page-hero/.test(html)) {
+        html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+      }
       out["downloads.html"] = injectInto(
-        out["downloads.html"],
+        html,
         "prose-body",
-        pageHero({
-          path: "downloads.html",
-          title: "Downloads",
-          company: docModel.meta.company,
-          periodLabel: docModel.meta.period_label,
-          eyebrow: "Source documents",
-        }) + downloadsHtml(docModel, downloadOpts),
+        downloadsHtml(docModel, downloadOpts),
       );
     }
   }

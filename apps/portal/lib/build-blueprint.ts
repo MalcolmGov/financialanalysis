@@ -39,7 +39,7 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const STATEMENT_BASE_CSS = `
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#111);font-family:var(--dna-font-body,system-ui,sans-serif);line-height:1.45}
-main[data-dna-component="page-shell"]{max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem) 2rem;display:grid;gap:1.5rem}
+main[data-dna-component="page-shell"]{max-width:none;width:100%;margin:0;padding:0 0 2rem;display:block}
 .statement-table{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .fin-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-family:var(--dna-font-heading,inherit);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 18%,transparent);vertical-align:bottom}

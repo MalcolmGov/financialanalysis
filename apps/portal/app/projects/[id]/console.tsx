@@ -304,7 +304,7 @@ export function ProjectConsole(props: {
     sizeBytes: number | null;
   } | null>(null);
   const [prototypeError, setPrototypeError] = useState<string | null>(null);
-  const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
+  const [previewWidth, setPreviewWidth] = useState<number | "full">("full");
   /** Cache-bust iframe after Studio chat applies edits. */
   const [previewBust, setPreviewBust] = useState(0);
   const [now, setNow] = useState(() => Date.now());

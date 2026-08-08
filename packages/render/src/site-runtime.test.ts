@@ -108,6 +108,19 @@ describe("mobile nav chrome", () => {
     expect(CHROME_CSS).toContain("html.rs-motion .nav-mobile.is-open");
     expect(CHROME_CSS).toContain("html.nav-mobile-open");
   });
+
+  it("full-bleeds page-shell / heroes while keeping content rails", () => {
+    expect(CHROME_CSS).toMatch(
+      /main\[data-dna-component="page-shell"\]\{[^}]*max-width:none/,
+    );
+    expect(CHROME_CSS).toMatch(/\.home-hero\{[^}]*max-width:none/);
+    expect(CHROME_CSS).toMatch(/\.page-hero\{[^}]*max-width:none/);
+    expect(CHROME_CSS).toMatch(/\.page-statement\{[^}]*max-width:none/);
+    expect(CHROME_CSS).toMatch(/\.home-body,\.prose-body\{[^}]*max-width:1120px/);
+    expect(CHROME_CSS).not.toMatch(
+      /\.home-body,\.prose-body,\.page-statement\{[^}]*max-width:1120px/,
+    );
+  });
 });
 
 describe("share chrome", () => {
