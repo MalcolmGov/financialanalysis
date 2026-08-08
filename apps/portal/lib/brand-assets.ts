@@ -1,4 +1,5 @@
-import type { BrandAssetBundle, ExtractionResult } from "@rs/contracts";
+import type { BrandAssetBundle, ExtractionResult, ProjectBrandKit } from "@rs/contracts";
+import { applyClientBrandKit, loadProjectBrandKit } from "./brand-kit";
 
 type ExtractionFigure = ExtractionResult["figures"][string];
 
@@ -275,6 +276,10 @@ export async function resolveAssetUris(opts: {
   getPrivate: (path: string) => Promise<Buffer>;
   /** When true, always re-pick from extraction (improves strip/logo selection). */
   refreshPick?: boolean;
+  /** Preloaded client brand kit; when omitted, loads from project brand-kit path. */
+  clientKit?: ProjectBrandKit | null;
+  /** Skip loading/merging client kit (tests / extraction-only smokes). */
+  skipClientKit?: boolean;
 }): Promise<{ bundle: BrandAssetBundle | null; uris: AssetUris }> {
   let bundle: BrandAssetBundle | null = null;
   if (
@@ -286,11 +291,31 @@ export async function resolveAssetUris(opts: {
     if (b.schema_version === "assets/1" && Array.isArray(b.assets)) bundle = b;
   }
   if (opts.refreshPick && opts.extractionJson && typeof opts.extractionJson === "object") {
-    // Re-score figures so cinematic strips win over stale page_render picks.
+    // Re-score figures so cinematic strips / SVG wordmarks win over stale picks.
     bundle = pickBrandAssets(opts.extractionJson as ExtractionResult, opts.projectId);
   } else if (!bundle && opts.extractionJson && typeof opts.extractionJson === "object") {
     bundle = pickBrandAssets(opts.extractionJson as ExtractionResult, opts.projectId);
   }
+
+  let clientKit = opts.clientKit;
+  if (clientKit === undefined && !opts.skipClientKit) {
+    clientKit = await loadProjectBrandKit(opts.projectId);
+  }
+  if (bundle && clientKit) {
+    bundle = applyClientBrandKit(bundle, clientKit);
+  } else if (!bundle && clientKit?.logo?.blob_path) {
+    // Client kit alone is enough for a minimal bundle (text fallbacks still apply).
+    bundle = applyClientBrandKit(
+      {
+        schema_version: "assets/1",
+        project_id: opts.projectId,
+        assets: [],
+        embed_budget_bytes: DEFAULT_EMBED_BUDGET,
+      },
+      clientKit,
+    );
+  }
+
   if (!bundle) return { bundle: null, uris: {} };
   return { bundle, uris: await loadAssetUris(bundle, opts.getPrivate) };
 }

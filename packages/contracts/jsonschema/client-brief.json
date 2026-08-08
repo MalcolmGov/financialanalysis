@@ -62,6 +62,17 @@
         }
       ]
     },
+    "hero_blob_path": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "language": {
       "default": "en-ZA",
       "type": "string"
@@ -78,6 +89,7 @@
     "theme_preference",
     "reference_sites",
     "logo_blob_path",
+    "hero_blob_path",
     "language"
   ],
   "additionalProperties": false

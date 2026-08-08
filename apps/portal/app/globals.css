@@ -1148,6 +1148,126 @@ textarea.rs-field:focus {
   color: var(--ink-2);
 }
 
+/* P7 — brand kit + publish readiness (IR / CFO sign-off) */
+.rs-brand-kit,
+.rs-publish-ready {
+  display: grid;
+  gap: 14px;
+  padding: 18px 0 4px;
+  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+}
+
+.rs-brand-kit__head,
+.rs-publish-ready__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rs-brand-kit__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 720px) {
+  .rs-brand-kit__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rs-brand-kit__slot {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.rs-brand-kit__thumb {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px solid var(--rule);
+}
+
+.rs-brand-kit__thumb--hero {
+  max-height: 140px;
+  object-fit: cover;
+  aspect-ratio: 21 / 9;
+}
+
+.rs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 650;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.rs-pill--pass {
+  color: var(--signal);
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--rule));
+}
+
+.rs-pill--warn {
+  color: var(--warn, #b45309);
+  border-color: color-mix(in srgb, var(--warn, #b45309) 40%, var(--rule));
+}
+
+.rs-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.rs-checklist__item {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.rs-checklist__mark {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.rs-checklist__item--pass .rs-checklist__mark {
+  color: var(--signal);
+}
+
+.rs-checklist__item--fail .rs-checklist__mark {
+  color: var(--danger);
+}
+
+.rs-checklist__item--warn .rs-checklist__mark {
+  color: var(--warn, #b45309);
+}
+
+.rs-checklist__detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.rs-checklist__item strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .rs-stack {
   display: grid;
   gap: 16px;

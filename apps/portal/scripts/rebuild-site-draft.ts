@@ -223,6 +223,9 @@ async function main() {
       gateB: built.gateB.status,
       corporateReliability: built.reliability.ok ? "pass" : "fail",
       fileCount: built.paths.length,
+      company: built.company,
+      brandLogo: built.brandLogo,
+      brandBanner: built.brandBanner,
       rebuiltOffline: true,
     },
   });

@@ -19,6 +19,7 @@
         "step.progress",
         "step.completed",
         "step.failed",
+        "awaiting.extraction",
         "awaiting.dna",
         "awaiting.review",
         "awaiting.lock",

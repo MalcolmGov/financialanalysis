@@ -21,6 +21,57 @@ type SiteDraft = {
   gateA: string | null;
   gateB: string | null;
   fileCount: number;
+  corporateReliability: string | null;
+  brandLogo: boolean | null;
+  brandBanner: boolean | null;
+  company: string | null;
+};
+
+type ChecklistItem = {
+  id: string;
+  label: string;
+  status: "pass" | "fail" | "warn" | "na";
+  detail?: string;
+  critical?: boolean;
+};
+
+type PublishReadiness = {
+  draftId: string;
+  draftVersion: number;
+  checklist: ChecklistItem[];
+  blockers: string[];
+  canSignOff: boolean;
+  signoff: {
+    signed_off_by_email?: string;
+    signed_off_by: string;
+    signed_off_at: string;
+    draft_version: number;
+  } | null;
+  signoffStale: boolean;
+  corporateReliability: string | null;
+  brand: {
+    logoOrigin: string | null;
+    bannerOrigin: string | null;
+    clientLogo: boolean;
+    clientHero: boolean;
+  };
+};
+
+type BrandKitState = {
+  logoPreviewUrl: string | null;
+  heroPreviewUrl: string | null;
+  effective: {
+    logoOrigin: string | null;
+    bannerOrigin: string | null;
+    logoIsClient: boolean;
+    bannerIsClient: boolean;
+    logoIsSvg: boolean;
+  };
+  kit: {
+    logo: { filename?: string; mime?: string } | null;
+    hero: { filename?: string; mime?: string } | null;
+    updated_at: string | null;
+  };
 };
 
 /** Soft typical durations for operator wait copy (not hard SLAs). */
@@ -237,7 +288,13 @@ export function ProjectConsole(props: {
   const [dnaError, setDnaError] = useState<string | null>(null);
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
   const [siteError, setSiteError] = useState<string | null>(null);
+  const [publishReady, setPublishReady] = useState<PublishReadiness | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [brandKit, setBrandKit] = useState<BrandKitState | null>(null);
+  const [brandKitNote, setBrandKitNote] = useState<string | null>(null);
   const [selectedPagePath, setSelectedPagePath] = useState<string>("index.html");
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const heroInputRef = useRef<HTMLInputElement>(null);
   const [prototype, setPrototype] = useState<{
     versionId: string;
     versionNumber: number;
@@ -301,6 +358,10 @@ export function ProjectConsole(props: {
           pages?: SitePage[];
           gateA?: string | null;
           gateB?: string | null;
+          corporateReliability?: string | null;
+          brandLogo?: boolean | null;
+          brandBanner?: boolean | null;
+          company?: string | null;
           fileCount?: number;
           sourcePdfUrl?: string | null;
           error?: string;
@@ -319,6 +380,10 @@ export function ProjectConsole(props: {
           pages: data.pages,
           gateA: data.gateA ?? null,
           gateB: data.gateB ?? null,
+          corporateReliability: data.corporateReliability ?? null,
+          brandLogo: data.brandLogo ?? null,
+          brandBanner: data.brandBanner ?? null,
+          company: data.company ?? null,
           fileCount: data.fileCount ?? data.pages.length,
         });
         setSelectedPagePath((prev) =>
@@ -336,6 +401,34 @@ export function ProjectConsole(props: {
       cancelled = true;
     };
   }, [showSiteReview, props.projectId, events.length]);
+
+  const refreshPublishAndBrand = useCallback(async () => {
+    try {
+      const [pubRes, brandRes] = await Promise.all([
+        fetch(`/api/projects/${props.projectId}/publish-signoff`),
+        fetch(`/api/projects/${props.projectId}/brand-kit`),
+      ]);
+      const pub = (await pubRes.json().catch(() => ({}))) as PublishReadiness & { error?: string };
+      const brand = (await brandRes.json().catch(() => ({}))) as BrandKitState & { error?: string };
+      if (pubRes.ok) {
+        setPublishReady(pub);
+        setPublishError(null);
+      } else {
+        setPublishReady(null);
+        setPublishError(pub.error ?? pubRes.statusText);
+      }
+      if (brandRes.ok) {
+        setBrandKit(brand);
+      }
+    } catch (err) {
+      setPublishError((err as Error).message);
+    }
+  }, [props.projectId]);
+
+  useEffect(() => {
+    if (!showSiteReview) return;
+    void refreshPublishAndBrand();
+  }, [showSiteReview, refreshPublishAndBrand, siteDraft?.draftId, siteDraft?.version]);
 
   useEffect(() => {
     if (!showSiteReview) return;
@@ -546,6 +639,10 @@ export function ProjectConsole(props: {
       setSiteError(null);
       setPrototype(null);
       setPrototypeError(null);
+      setPublishReady(null);
+      setPublishError(null);
+      setBrandKit(null);
+      setBrandKitNote(null);
       setNote(
         data.documentId
           ? "Ready to run again with the current PDF, or upload a new one first."
@@ -689,13 +786,97 @@ export function ProjectConsole(props: {
     }
   }
 
+  async function uploadBrandAsset(role: "logo" | "hero", file: File) {
+    setBusy(true);
+    setBrandKitNote(null);
+    try {
+      const form = new FormData();
+      form.append(role, file);
+      const res = await fetch(`/api/projects/${props.projectId}/brand-kit`, {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        rebuildHint?: string;
+      };
+      if (!res.ok) {
+        setBrandKitNote(data.error ?? res.statusText);
+        return;
+      }
+      setBrandKitNote(
+        `${role === "logo" ? "Logo" : "Hero photo"} uploaded. ${data.rebuildHint ?? "Rebuild the site draft to apply in preview."}`,
+      );
+      await refreshPublishAndBrand();
+    } catch (err) {
+      setBrandKitNote((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signOffPublish() {
+    setBusy(true);
+    setPublishError(null);
+    try {
+      const res = await fetch(`/api/projects/${props.projectId}/publish-signoff`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        blockers?: string[];
+        signoff?: PublishReadiness["signoff"];
+      };
+      if (!res.ok) {
+        setPublishError(
+          data.error ??
+            (data.blockers?.length ? data.blockers.join("; ") : res.statusText),
+        );
+        await refreshPublishAndBrand();
+        return;
+      }
+      setNote("Publish sign-off recorded — Approve & export is unlocked.");
+      await refreshPublishAndBrand();
+    } catch (err) {
+      setPublishError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function approveExport() {
+    const gatesOk =
+      siteDraft?.gateA === "pass" &&
+      siteDraft?.gateB === "pass" &&
+      (siteDraft?.corporateReliability == null || siteDraft.corporateReliability === "pass");
+    if (!gatesOk) {
+      setNote(
+        "Approve & export blocked — Gate A/B or corporate reliability failed. Fix the draft first.",
+      );
+      return;
+    }
+    if (!publishReady?.signoff || publishReady.signoffStale) {
+      setNote(
+        "Complete Sign off for publish on the readiness checklist before Approve & export.",
+      );
+      return;
+    }
     await gate(
       "review",
       { type: "approve", prototype_version_id: "", actor_user_id: "operator" },
       "Approve & export",
     );
   }
+
+  const exportBlocked =
+    !siteDraft ||
+    siteDraft.gateA !== "pass" ||
+    siteDraft.gateB !== "pass" ||
+    (siteDraft.corporateReliability != null && siteDraft.corporateReliability !== "pass") ||
+    !publishReady?.signoff ||
+    publishReady.signoffStale;
 
   const progressPct =
     currentStepIndex <= 0 ? 0 : Math.min(100, (currentStepIndex / (STEPS.length - 1)) * 100);
@@ -804,8 +985,13 @@ export function ProjectConsole(props: {
               <button
                 type="button"
                 className="rs-btn rs-btn--primary"
-                disabled={busy || !siteDraft}
+                disabled={busy || exportBlocked}
                 onClick={() => void approveExport()}
+                title={
+                  exportBlocked
+                    ? "Complete publish sign-off and ensure Gate A/B + reliability pass"
+                    : "Package the multipage zip"
+                }
               >
                 Approve &amp; export site
               </button>
@@ -1296,18 +1482,187 @@ export function ProjectConsole(props: {
             </>
           ) : null}
 
-          {status === "in_review" ? (
-            <div className="rs-row" style={{ marginTop: 16 }}>
-              <button
-                type="button"
-                className="rs-btn rs-btn--primary"
-                disabled={busy || !siteDraft}
-                onClick={() => void approveExport()}
-              >
-                Approve &amp; export multipage site
-              </button>
+          <div className="rs-brand-kit">
+            <div className="rs-brand-kit__head">
+              <div>
+                <p className="rs-kicker">Brand kit</p>
+                <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.15rem" }}>
+                  Official logo &amp; hero photo
+                </h3>
+                <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+                  Client SVG/PNG wordmark and full-bleed hero override extraction figures. Without
+                  uploads we keep text wordmark + extraction strip / atmosphere fallbacks.
+                </p>
+              </div>
             </div>
-          ) : null}
+            <div className="rs-brand-kit__grid">
+              <div className="rs-brand-kit__slot">
+                <span className="rs-stat-label">Logo (SVG preferred)</span>
+                {brandKit?.logoPreviewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brandKit.logoPreviewUrl}
+                    alt="Uploaded logo"
+                    className="rs-brand-kit__thumb rs-brand-kit__thumb--logo"
+                  />
+                ) : (
+                  <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0" }}>
+                    {brandKit?.effective.logoOrigin
+                      ? `Using extraction · ${brandKit.effective.logoOrigin}`
+                      : "No logo yet — text wordmark fallback"}
+                  </p>
+                )}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadBrandAsset("logo", f);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  className="rs-btn rs-btn--ghost"
+                  disabled={busy}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  Upload logo
+                </button>
+              </div>
+              <div className="rs-brand-kit__slot">
+                <span className="rs-stat-label">Hero photo (full-bleed)</span>
+                {brandKit?.heroPreviewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brandKit.heroPreviewUrl}
+                    alt="Uploaded hero"
+                    className="rs-brand-kit__thumb rs-brand-kit__thumb--hero"
+                  />
+                ) : (
+                  <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0" }}>
+                    {brandKit?.effective.bannerOrigin
+                      ? `Using extraction · ${brandKit.effective.bannerOrigin}`
+                      : "No hero — atmosphere fallback"}
+                  </p>
+                )}
+                <input
+                  ref={heroInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadBrandAsset("hero", f);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  className="rs-btn rs-btn--ghost"
+                  disabled={busy}
+                  onClick={() => heroInputRef.current?.click()}
+                >
+                  Upload hero
+                </button>
+              </div>
+            </div>
+            {brandKitNote ? <p className="rs-note">{brandKitNote}</p> : null}
+          </div>
+
+          <div className="rs-publish-ready">
+            <div className="rs-publish-ready__head">
+              <div>
+                <p className="rs-kicker">IR / CFO</p>
+                <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.15rem" }}>
+                  Publish readiness checklist
+                </h3>
+                <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+                  Formal accept of the multipage pack. Sign-off unlocks Approve &amp; export when
+                  critical gates pass.
+                </p>
+              </div>
+              {publishReady?.signoff && !publishReady.signoffStale ? (
+                <span className="rs-pill rs-pill--pass">
+                  Signed off · {publishReady.signoff.signed_off_by_email ?? publishReady.signoff.signed_off_by}
+                </span>
+              ) : (
+                <span className="rs-pill rs-pill--warn">Awaiting sign-off</span>
+              )}
+            </div>
+            {publishError ? (
+              <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>{publishError}</p>
+            ) : null}
+            {publishReady ? (
+              <ul className="rs-checklist">
+                {publishReady.checklist.map((item) => (
+                  <li
+                    key={item.id}
+                    className={`rs-checklist__item rs-checklist__item--${item.status}`}
+                  >
+                    <span className="rs-checklist__mark" aria-hidden="true">
+                      {item.status === "pass"
+                        ? "✓"
+                        : item.status === "fail"
+                          ? "✗"
+                          : item.status === "warn"
+                            ? "!"
+                            : "·"}
+                    </span>
+                    <span>
+                      <strong>{item.label}</strong>
+                      {item.detail ? (
+                        <span className="rs-checklist__detail">{item.detail}</span>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+                Loading readiness…
+              </p>
+            )}
+            {publishReady?.blockers?.length ? (
+              <p className="rs-note rs-note--danger" style={{ margin: 0 }}>
+                Blockers: {publishReady.blockers.join("; ")}
+              </p>
+            ) : null}
+            {status === "in_review" ? (
+              <div className="rs-row">
+                <button
+                  type="button"
+                  className="rs-btn rs-btn--primary"
+                  disabled={busy || !publishReady?.canSignOff || Boolean(publishReady.signoff && !publishReady.signoffStale)}
+                  onClick={() => void signOffPublish()}
+                >
+                  Sign off for publish
+                </button>
+                <button
+                  type="button"
+                  className="rs-btn rs-btn--primary"
+                  disabled={busy || exportBlocked}
+                  onClick={() => void approveExport()}
+                  title={
+                    exportBlocked
+                      ? "Sign off required; critical gates must pass"
+                      : undefined
+                  }
+                >
+                  Approve &amp; export multipage site
+                </button>
+              </div>
+            ) : null}
+            {publishReady?.signoff ? (
+              <p className="rs-tiny rs-muted" style={{ margin: 0 }}>
+                Last sign-off {new Date(publishReady.signoff.signed_off_at).toLocaleString()}
+                {publishReady.signoffStale ? " · stale after new draft — re-sign" : ""}
+                {" · "}draft v{publishReady.signoff.draft_version}
+              </p>
+            ) : null}
+          </div>
         </section>
       ) : null}
 

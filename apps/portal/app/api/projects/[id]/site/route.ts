@@ -76,6 +76,10 @@ export async function GET(
     sitePlanId?: string;
     draftId?: string;
     fileCount?: number;
+    corporateReliability?: string;
+    brandLogo?: boolean;
+    brandBanner?: boolean;
+    company?: string;
   };
 
   const prefix = meta.prefix;
@@ -122,9 +126,15 @@ export async function GET(
     })),
     gateA: meta.gateA ?? null,
     gateB: meta.gateB ?? null,
+    corporateReliability: meta.corporateReliability ?? null,
+    brandLogo: meta.brandLogo ?? null,
+    brandBanner: meta.brandBanner ?? null,
+    company: meta.company ?? null,
     fileCount: meta.fileCount ?? pages.length,
     createdAt: art.createdAt?.toISOString() ?? null,
     sourcePdfUrl,
     manifestUrl: toBlobUrl(art.blobPath),
+    publishSignoffUrl: `/api/projects/${projectId}/publish-signoff`,
+    brandKitUrl: `/api/projects/${projectId}/brand-kit`,
   });
 }

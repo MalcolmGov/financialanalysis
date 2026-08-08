@@ -96,6 +96,30 @@ describe("pickBrandAssets", () => {
     expect(banner?.background).toBe("strip");
   });
 
+  it("prefers SVG wordmark figures when present in extraction", () => {
+    const png = fig("logo-png", { page: 1, w: 180, h: 60, t: 10 });
+    const svgFig = {
+      ...fig("logo-svg", { page: 1, w: 220, h: 56, t: 8 }),
+      image: {
+        blob_path: "figures/logo.svg",
+        mime: "image/svg+xml",
+        width_px: 220,
+        height_px: 56,
+      },
+    };
+    const ex = extraction({
+      figures: {
+        "logo-png": png,
+        "logo-svg": svgFig,
+        banner: fig("banner", { page: 1, w: 1100, h: 220, t: 80 }),
+      },
+    });
+    const bundle = pickBrandAssets(ex, "proj");
+    const logo = bundle.assets.find((a) => a.role === "logo");
+    expect(logo?.blob_path).toBe("figures/logo.svg");
+    expect(logo?.origin).toBe("extraction_figure_svg");
+  });
+
   it("prefers cinematic ultra-wide strip over squat wide photo", () => {
     const ex = extraction({
       figures: {

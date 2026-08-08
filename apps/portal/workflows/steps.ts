@@ -337,7 +337,9 @@ export async function generatePrototypeArtifact(
   if (kpiUsage) await persistModelCall(runId, "extract_kpis", MODELS.classify, kpiUsage);
   const content = buildContentSample(docModel, extractionJson, { kpis });
 
-  const brandBundle = pickBrandAssets(extractionJson, projectId);
+  const { applyClientBrandKit, loadProjectBrandKit } = await import("../lib/brand-kit");
+  const clientKit = await loadProjectBrandKit(projectId);
+  const brandBundle = applyClientBrandKit(pickBrandAssets(extractionJson, projectId), clientKit);
   const brandPath = `runs/${runId}/assets/brand_assets.json`;
   const brandPut = await putPrivate(brandPath, JSON.stringify(brandBundle), "application/json");
   await db()
@@ -1334,7 +1336,9 @@ export async function buildSiteDraftArtifact(
               ? "image/jpeg"
               : path.endsWith(".webp")
                 ? "image/webp"
-                : "application/octet-stream";
+                : path.endsWith(".svg")
+                  ? "image/svg+xml"
+                  : "application/octet-stream";
     await putPrivate(`${prefix}/${path}`, body, contentType);
   }
 
@@ -1361,6 +1365,8 @@ export async function buildSiteDraftArtifact(
     gate_a: { status: built.gateA.status },
     gate_b: { status: built.gateB.status },
     corporate_reliability: built.reliability.ok ? "pass" : "fail",
+    company: built.company,
+    company_source: built.companySource,
     brand_logo: built.brandLogo,
     brand_banner: built.brandBanner,
     created_at: new Date().toISOString(),
@@ -1392,6 +1398,9 @@ export async function buildSiteDraftArtifact(
       gateA: built.gateA.status,
       gateB: built.gateB.status,
       corporateReliability: built.reliability.ok ? "pass" : "fail",
+      company: built.company,
+      brandLogo: built.brandLogo,
+      brandBanner: built.brandBanner,
       fileCount: built.paths.length,
     },
   });
@@ -1578,6 +1587,15 @@ export async function buildPrototypeExport(
     );
   }
 
+  // P7 — require IR/CFO publish sign-off on the current draft before zip export.
+  const { loadPublishSignoff } = await import("../lib/publish-signoff");
+  const publishSignoff = await loadPublishSignoff(projectId);
+  if (!publishSignoff) {
+    throw new Error(
+      "Publish sign-off required — complete the Publish readiness checklist (Sign off for publish) before Approve & export",
+    );
+  }
+
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
   // P6 — signed-off delivery manifest (overwrites draft _meta/export.json in the zip).
   let draftPack: Record<string, unknown> = {};
@@ -1604,6 +1622,13 @@ export async function buildPrototypeExport(
     refinement_mode: proto?.refinementMode ?? "multipage_draft",
     created_at: new Date().toISOString(),
     signed_off_by: signoff.actorUserId,
+    publish_signoff: {
+      by: publishSignoff.signed_off_by_email ?? publishSignoff.signed_off_by,
+      at: publishSignoff.signed_off_at,
+      draft_id: publishSignoff.draft_id,
+      draft_version: publishSignoff.draft_version,
+      checklist: publishSignoff.checklist,
+    },
     entrypoint: built.entrypoint,
     mode: built.mode,
     gate_a: built.gateA.status,

@@ -186,6 +186,66 @@ export const ClientBrief = z.object({
   reference_sites: z.array(z.string()).default([]),
   /** Official logo upload (recommended path — removes the weakest extraction link). */
   logo_blob_path: z.string().nullable().default(null),
+  /** Commissioned / official hero photography (full-bleed masthead). */
+  hero_blob_path: z.string().nullable().default(null),
   language: z.string().default("en-ZA"),
 });
 export type ClientBrief = z.infer<typeof ClientBrief>;
+
+const BrandKitAsset = z.object({
+  blob_path: z.string().min(1),
+  mime: z.string().min(1),
+  filename: z.string().optional(),
+  uploaded_at: IsoDateTime,
+  uploaded_by: z.string().optional(),
+  bytes: z.number().int().nonnegative().optional(),
+});
+
+/**
+ * Operator/client brand kit — official SVG/PNG wordmark + full-bleed hero photo.
+ * Prefer these over extraction-heuristic figures when present.
+ */
+export const ProjectBrandKit = z.object({
+  schema_version: z.literal("brand-kit/1"),
+  project_id: z.string(),
+  logo: BrandKitAsset.nullable().default(null),
+  hero: BrandKitAsset.extend({
+    /** Client hero is always treated as full-bleed photo (not PDF strip). */
+    kind: z.literal("photo").default("photo"),
+  })
+    .nullable()
+    .default(null),
+  updated_at: IsoDateTime,
+});
+export type ProjectBrandKit = z.infer<typeof ProjectBrandKit>;
+
+export const PublishChecklistItem = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["pass", "fail", "warn", "na"]),
+  detail: z.string().optional(),
+  critical: z.boolean().default(false),
+});
+export type PublishChecklistItem = z.infer<typeof PublishChecklistItem>;
+
+/** IR head / CFO formal acceptance of the multipage delivery pack. */
+export const PublishSignoff = z.object({
+  schema_version: z.literal("publish-signoff/1"),
+  project_id: z.string(),
+  draft_id: z.string(),
+  draft_version: z.number().int().positive(),
+  signed_off_by: z.string(),
+  signed_off_by_email: z.string().optional(),
+  signed_off_at: IsoDateTime,
+  checklist: z.array(PublishChecklistItem),
+  blockers: z.array(z.string()).default([]),
+  corporate_reliability: z.enum(["pass", "fail"]),
+  gate_a: z.string(),
+  gate_b: z.string(),
+  company: z.string().optional(),
+  brand_logo: z.boolean().optional(),
+  brand_banner: z.boolean().optional(),
+  logo_origin: z.string().optional(),
+  banner_origin: z.string().optional(),
+});
+export type PublishSignoff = z.infer<typeof PublishSignoff>;

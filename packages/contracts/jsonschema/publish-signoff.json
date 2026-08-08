@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "publish-signoff/1"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "draft_id": {
+      "type": "string"
+    },
+    "draft_version": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "signed_off_by": {
+      "type": "string"
+    },
+    "signed_off_by_email": {
+      "type": "string"
+    },
+    "signed_off_at": {
+      "type": "string"
+    },
+    "checklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "warn",
+              "na"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "critical": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "critical"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "blockers": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "corporate_reliability": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "gate_a": {
+      "type": "string"
+    },
+    "gate_b": {
+      "type": "string"
+    },
+    "company": {
+      "type": "string"
+    },
+    "brand_logo": {
+      "type": "boolean"
+    },
+    "brand_banner": {
+      "type": "boolean"
+    },
+    "logo_origin": {
+      "type": "string"
+    },
+    "banner_origin": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "project_id",
+    "draft_id",
+    "draft_version",
+    "signed_off_by",
+    "signed_off_at",
+    "checklist",
+    "blockers",
+    "corporate_reliability",
+    "gate_a",
+    "gate_b"
+  ],
+  "additionalProperties": false
+}

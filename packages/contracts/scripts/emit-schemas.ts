@@ -24,6 +24,8 @@ const registry: Record<string, z.ZodType> = {
   "design-dna": C.DesignDNA,
   "dna-correction": C.DnaCorrection,
   "brand-asset-bundle": C.BrandAssetBundle,
+  "project-brand-kit": C.ProjectBrandKit,
+  "publish-signoff": C.PublishSignoff,
   "prototype-spec": C.PrototypeSpec,
   "prototype-artifact": C.PrototypeArtifact,
   blueprint: C.Blueprint,
