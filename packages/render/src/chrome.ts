@@ -746,8 +746,27 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .kpi-band .section-hdr{border-bottom-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 40%,transparent)}
 .highlights .prose-p,.prose-p{margin:.55rem 0;line-height:1.7}
 .prose-lead{font-size:1.18rem;line-height:1.75;letter-spacing:-.01em;color:color-mix(in srgb,var(--dna-ink,#111) 90%,var(--dna-paper,#fff));font-weight:500;margin:0 0 1.15rem}
-.highlights-band .highlight-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));gap:.95rem}
-.highlight-item{padding:1.15rem 1.25rem;border-left:3px solid var(--dna-brand,#FCAF17);background:linear-gradient(90deg,color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff)),var(--dna-paper,#fff));font-size:.95rem;line-height:1.55;letter-spacing:-.005em}
+/* Highlights band: airy 2–3 col IR cards (gold top rule; same figures as KPI stage). */
+.highlights-band{margin:0}
+.section-hdr--highlights{margin:0 0 1.55rem;padding-bottom:.9rem}
+.highlight-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.35rem 1.5rem;margin:0;list-style:none;padding:0}
+.highlight-card{display:flex;flex-direction:column;gap:.55rem;padding:1.75rem 1.6rem 1.45rem;min-height:11.25rem;border:1px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 22%,color-mix(in srgb,var(--dna-ink,#111) 12%,transparent));border-top:3px solid var(--dna-brand,#FCAF17);background:linear-gradient(180deg,var(--dna-paper,#fff),color-mix(in srgb,var(--dna-shading,#F2F2F2) 22%,var(--dna-paper,#fff)));box-shadow:0 1px 0 color-mix(in srgb,var(--dna-ink,#111) 4%,transparent);box-sizing:border-box}
+.highlight-card:nth-child(3n+2){border-top-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 72%,var(--dna-masthead,#0F3B2E))}
+.highlight-card:nth-child(3n){border-top-color:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 55%,var(--dna-brand,#FCAF17))}
+.highlight-card__top{display:flex;align-items:flex-start;justify-content:space-between;gap:.65rem}
+.highlight-card__title{margin:0;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:var(--dna-masthead,#0F3B2E);line-height:1.3}
+.highlight-card__delta{margin:0;flex-shrink:0;font-size:.68rem;font-weight:800;letter-spacing:.03em;color:var(--dna-masthead,#0F3B2E);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 24%,var(--dna-paper,#fff));padding:.22rem .48rem;border-radius:2px;white-space:nowrap}
+.highlight-card__value{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(1.45rem,2.4vw,1.85rem);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em;color:var(--dna-ink,#231F20);line-height:1.08}
+.highlight-card__caption{margin:0;font-size:.8rem;line-height:1.48;letter-spacing:-.005em;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff))}
+.highlight-card--prose{min-height:8.5rem;justify-content:flex-start}
+.highlight-card--prose .highlight-card__caption{font-size:.92rem;line-height:1.55;color:color-mix(in srgb,var(--dna-ink,#111) 78%,var(--dna-paper,#fff))}
+@media (max-width:960px){
+  .highlight-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2rem}
+}
+@media (max-width:560px){
+  .highlight-grid{grid-template-columns:1fr;gap:1.05rem}
+  .highlight-card{padding:1.45rem 1.35rem 1.25rem;min-height:0}
+}
 /* Explore: full-bleed paper band + airy 3-col IR cards (desktop). */
 .explore{width:100vw;max-width:100vw;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);padding:clamp(2.5rem,5vw,3.5rem) 0 clamp(2.75rem,5.5vw,3.75rem);background:linear-gradient(180deg,color-mix(in srgb,var(--dna-shading,#F2F2F2) 62%,var(--dna-paper,#fff)) 0%,color-mix(in srgb,var(--dna-shading,#F2F2F2) 38%,var(--dna-paper,#fff)) 55%,var(--dna-paper,#fff) 100%);border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent);box-sizing:border-box}
 .explore__rail{max-width:1120px;width:100%;margin:0 auto;padding:0 clamp(1rem,3vw,2rem);box-sizing:border-box}

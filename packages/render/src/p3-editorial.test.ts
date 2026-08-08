@@ -170,6 +170,12 @@ describe("HomeComposer", () => {
     expect(home.heroHtml).toContain("2 712.8");
     expect(home.bodyHtml).not.toContain('data-dna-component="kpi-band"');
     expect(home.bodyHtml).toContain("highlights-band");
+    expect(home.bodyHtml).toContain("highlight-card");
+    expect(home.bodyHtml).toContain("highlight-card__value");
+    expect(home.bodyHtml).toContain("highlight-card__delta");
+    expect(home.bodyHtml).toContain("Operating Profit");
+    expect(home.bodyHtml).toContain("2 712.8");
+    expect(home.bodyHtml).not.toContain("highlight-item");
     expect(home.bodyHtml).toContain("explore-desc");
     expect(home.bodyHtml).toContain("Explore the report");
     expect(home.bodyHtml).toContain("Shareholder letter");

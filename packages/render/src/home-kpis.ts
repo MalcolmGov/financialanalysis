@@ -292,29 +292,54 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Format display value with stable prefix/suffix around the numeric core. */
+function formatKpiValueHtml(c: HomeKpiCard, animated: boolean): string {
+  const prefixOutside = c.prefix ? escapeHtml(c.prefix) : "";
+  const suf = c.suffix.replace(/^\s+/, "");
+  // Keep % glued; put a space before word suffixes (million, SA cps, kilograms).
+  const suffixOutside = !suf
+    ? ""
+    : suf.startsWith("%")
+      ? escapeHtml(suf)
+      : ` ${escapeHtml(suf)}`;
+  if (!animated) {
+    return `${prefixOutside}<span data-allow-number>${escapeHtml(c.valueText)}</span>${suffixOutside}`;
+  }
+  const sepAttr = c.sep === "" ? ' data-sep=""' : ` data-sep="${escapeHtml(c.sep)}"`;
+  const span = `<span data-countup="${c.countup}" data-decimals="${c.decimals}"${sepAttr} data-final="${escapeHtml(c.valueText)}" data-allow-number>${escapeHtml(c.valueText)}</span>`;
+  return `${prefixOutside}${span}${suffixOutside}`;
+}
+
 /** Render KPI grid HTML. Values use data-allow-number + data-countup; digits from source. */
 export function renderKpiCardsHtml(cards: HomeKpiCard[]): string {
   if (!cards.length) return "";
   const items = cards
     .map((c) => {
-      const sepAttr = c.sep === "" ? ' data-sep=""' : ` data-sep="${escapeHtml(c.sep)}"`;
-      const prefixOutside = c.prefix ? escapeHtml(c.prefix) : "";
-      const suf = c.suffix.replace(/^\s+/, "");
-      // Keep % glued; put a space before word suffixes (million, SA cps, kilograms).
-      const suffixOutside = !suf
-        ? ""
-        : suf.startsWith("%")
-          ? escapeHtml(suf)
-          : ` ${escapeHtml(suf)}`;
-      // Animate only the numeric core; prefix/suffix stay stable around it.
-      const span = `<span data-countup="${c.countup}" data-decimals="${c.decimals}"${sepAttr} data-final="${escapeHtml(c.valueText)}" data-allow-number>${escapeHtml(c.valueText)}</span>`;
       const from = c.fromSrc ? ` data-kpi-from="${escapeHtml(c.fromSrc)}"` : "";
       const delta = c.delta
         ? `<p class="kpi-delta" data-allow-number>${escapeHtml(c.delta)}</p>`
         : "";
       // Caption is the complete source highlight sentence (not a mid-phrase stub).
-      return `<article class="kpi-card reveal"${from}><div class="kpi-card__top"><p class="kpi-title">${escapeHtml(c.shortTitle)}</p>${delta}</div><p class="kpi-value">${prefixOutside}${span}${suffixOutside}</p><p class="kpi-label" data-allow-number>${escapeHtml(c.caption)}</p></article>`;
+      return `<article class="kpi-card reveal"${from}><div class="kpi-card__top"><p class="kpi-title">${escapeHtml(c.shortTitle)}</p>${delta}</div><p class="kpi-value">${formatKpiValueHtml(c, true)}</p><p class="kpi-label" data-allow-number>${escapeHtml(c.caption)}</p></article>`;
     })
     .join("");
   return `<section class="kpi-grid" aria-label="Key figures" data-dna-component="kpi-grid">${items}</section>`;
+}
+
+/**
+ * Body highlights band — same verbatim KPI segmentation, explore-aligned
+ * card chrome (gold top rule, airy 2–3 col grid). No count-up (hero owns that).
+ */
+export function renderHighlightCardsHtml(cards: HomeKpiCard[]): string {
+  if (!cards.length) return "";
+  const items = cards
+    .map((c) => {
+      const from = c.fromSrc ? ` data-kpi-from="${escapeHtml(c.fromSrc)}"` : "";
+      const delta = c.delta
+        ? `<p class="highlight-card__delta" data-allow-number>${escapeHtml(c.delta)}</p>`
+        : "";
+      return `<article class="highlight-card reveal"${from}><div class="highlight-card__top"><p class="highlight-card__title">${escapeHtml(c.shortTitle)}</p>${delta}</div><p class="highlight-card__value">${formatKpiValueHtml(c, false)}</p><p class="highlight-card__caption" data-allow-number>${escapeHtml(c.caption)}</p></article>`;
+    })
+    .join("");
+  return `<div class="highlight-grid" data-dna-component="highlight-grid">${items}</div>`;
 }

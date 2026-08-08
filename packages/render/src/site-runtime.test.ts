@@ -9,7 +9,11 @@ import {
   renderSiteFooter,
   renderStickyNav,
 } from "./chrome.js";
-import { renderKpiCardsHtml, segmentHighlightKpis } from "./home-kpis.js";
+import {
+  renderHighlightCardsHtml,
+  renderKpiCardsHtml,
+  segmentHighlightKpis,
+} from "./home-kpis.js";
 import { SITE_RUNTIME_JS, siteRuntimeHref } from "./site-runtime.js";
 
 const DRD_HIGHLIGHTS =
@@ -269,5 +273,20 @@ describe("home KPI segmentation", () => {
     expect(html).toContain("R1 651.3 million of capital expenditure");
     expect(html).not.toMatch(/kpi-label[^>]*>Operating profit increased by 72% to</);
     expect(html).not.toMatch(/kpi-label[^>]*>Interim cash dividend of</);
+  });
+
+  it("renders body highlight cards with hierarchy and no count-up", () => {
+    const cards = segmentHighlightKpis(DRD_HIGHLIGHTS);
+    const html = renderHighlightCardsHtml(cards);
+    expect(html).toContain('data-dna-component="highlight-grid"');
+    expect(html).toContain("highlight-card");
+    expect(html).toContain("highlight-card__title");
+    expect(html).toContain("highlight-card__value");
+    expect(html).toContain("highlight-card__delta");
+    expect(html).toContain("Operating Profit");
+    expect(html).toContain("2 712.8");
+    expect(html).toContain("Operating profit increased by 72% to R2 712.8 million");
+    expect(html).not.toContain("data-countup");
+    expect(html).toContain("data-allow-number");
   });
 });

@@ -7,7 +7,13 @@
 import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
 import { BANNER_IMG_ONERROR, BRAND_IMG_ONERROR } from "./chrome.js";
 import type { BrandAssetUris } from "./resolve.js";
-import { renderKpiCardsHtml, segmentHighlightKpis, type HomeKpiCard } from "./home-kpis.js";
+import {
+  presentKpiLabel,
+  renderHighlightCardsHtml,
+  renderKpiCardsHtml,
+  segmentHighlightKpis,
+  type HomeKpiCard,
+} from "./home-kpis.js";
 import { docKindLabel } from "./seo.js";
 
 function escapeHtml(s: string): string {
@@ -351,34 +357,49 @@ ${kpiStage(kpis)}
 }
 
 /**
- * Compact highlight list — provenance preserved.
- * Chunks from one extraction block share a parent `[data-src]` so Gate B
- * still sees the full verbatim textContent of that block.
+ * Highlights band — premium IR cards from the same KPI segmentation as the
+ * hero stage. Figures stay verbatim DocModel substrings (data-allow-number).
+ * Falls back to chunk cards when segmentation yields nothing.
  */
-function highlightsBand(docModel: FinancialDocModel): string {
+function highlightsBand(docModel: FinancialDocModel, kpis: HomeKpiCard[]): string {
   const hi = docModel.sections.find((s) => s.kind === "highlights");
   if (!hi) return "";
+  const titleSrc = hi.title?.src_ref ? ` data-src="${escapeHtml(hi.title.src_ref)}"` : "";
+  const title = escapeHtml(hi.title?.text || "Highlights");
+  const hdr = `<div class="section-hdr section-hdr--highlights"><h2 class="section-hdr__title"${titleSrc}>${title}</h2><p class="section-hdr__sub">From the results announcement</p></div>`;
+
+  const cards = kpis.length ? kpis : extractHomeKpis(docModel);
+  if (cards.length) {
+    return `<section class="highlights-band reveal" aria-label="Highlights" data-dna-component="highlights">
+${hdr}
+${renderHighlightCardsHtml(cards)}
+</section>`;
+  }
+
+  // Fallback: unparsed prose split on known IR boundaries — still card chrome.
   const groups: string[] = [];
   for (const b of hi.blocks) {
     if (b.kind === "table" || b.kind === "heading") continue;
     const text = b.text?.trim();
     if (!text) continue;
-    const src = b.src_ref ? ` data-src="${escapeHtml(b.src_ref)}"` : "";
     const chunks = splitHighlightChunks(text);
     const items = chunks
-      .map(
-        (chunk) =>
-          `<li class="highlight-item"><span class="highlight-item__text">${escapeHtml(chunk)}</span></li>`,
-      )
+      .map((chunk) => {
+        const present = presentKpiLabel(chunk);
+        const titleHtml = `<p class="highlight-card__title">${escapeHtml(present.shortTitle)}</p>`;
+        const delta = present.delta
+          ? `<p class="highlight-card__delta" data-allow-number>${escapeHtml(present.delta)}</p>`
+          : "";
+        // Full source chunk is the caption — Gate B via data-allow-number.
+        return `<article class="highlight-card highlight-card--prose reveal"><div class="highlight-card__top">${titleHtml}${delta}</div><p class="highlight-card__caption" data-allow-number>${escapeHtml(chunk)}</p></article>`;
+      })
       .join("");
-    groups.push(`<ul class="highlight-list"${src}>${items}</ul>`);
+    if (items) groups.push(items);
   }
   if (!groups.length) return "";
-  const titleSrc = hi.title?.src_ref ? ` data-src="${escapeHtml(hi.title.src_ref)}"` : "";
-  const title = escapeHtml(hi.title?.text || "Highlights");
   return `<section class="highlights-band reveal" aria-label="Highlights" data-dna-component="highlights">
-<div class="section-hdr"><h2 class="section-hdr__title"${titleSrc}>${title}</h2><p class="section-hdr__sub">From the results announcement</p></div>
-${groups.join("\n")}
+${hdr}
+<div class="highlight-grid" data-dna-component="highlight-grid">${groups.join("")}</div>
 </section>`;
 }
 
@@ -434,7 +455,7 @@ export function composeHome(
   const kpis = extractHomeKpis(docModel);
   return {
     heroHtml: homeHero(docModel, kpis, opts),
-    bodyHtml: `${highlightsBand(docModel)}${exploreCards(plan)}`,
+    bodyHtml: `${highlightsBand(docModel, kpis)}${exploreCards(plan)}`,
     kpis,
   };
 }
