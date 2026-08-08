@@ -93,6 +93,8 @@ export function renderStickyNav(
   nav: Array<{ label: string; href: string }>,
   currentPath: string,
   company?: string,
+  /** Real brand logo URI (data: or relative). Absent → DNA mark fallback. */
+  logoHref?: string,
 ): string {
   const grouped = groupNav(nav);
   const items = grouped
@@ -142,7 +144,10 @@ export function renderStickyNav(
 
   const homeHref = hrefFrom(currentPath, "index.html");
   const brandLabel = (company?.trim() || "Results").toUpperCase();
-  const brand = `<a class="nav-brand" href="${escapeHtml(homeHref)}" data-allow-number><span class="nav-brand__mark" aria-hidden="true"></span><span class="nav-brand__name">${escapeHtml(brandLabel)}</span></a>`;
+  const mark = logoHref
+    ? `<img class="nav-brand__logo" src="${escapeHtml(logoHref)}" alt="" width="140" height="36" decoding="async">`
+    : `<span class="nav-brand__mark" aria-hidden="true"></span>`;
+  const brand = `<a class="nav-brand${logoHref ? " nav-brand--logo" : ""}" href="${escapeHtml(homeHref)}" data-allow-number>${mark}<span class="nav-brand__name">${escapeHtml(brandLabel)}</span></a>`;
 
   return `<nav class="site-nav" data-dna-component="sticky-nav" aria-label="Primary"><div class="nav-inner">${brand}<ul class="nav-row">${items}</ul><button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="nav-mobile" aria-label="Open menu"><span></span><span></span><span></span></button></div><div class="nav-mobile" id="nav-mobile">${mobileLinks}</div></nav>`;
 }
@@ -193,10 +198,17 @@ export function renderPrevNext(
 }
 
 /** Site-wide identity footer — company / period only (no invented figures). */
-export function renderSiteFooter(company?: string, periodLabel?: string): string {
+export function renderSiteFooter(
+  company?: string,
+  periodLabel?: string,
+  logoHref?: string,
+): string {
   const brand = company?.trim() || "Investor results";
   const period = periodLabel?.trim();
-  return `<footer class="site-footer" data-dna-component="site-footer"><div class="site-footer__accent" aria-hidden="true"></div><div class="site-footer__inner"><p class="site-footer__brand" data-allow-number>${escapeHtml(brand)}</p>${
+  const logo = logoHref
+    ? `<img class="site-footer__logo" src="${escapeHtml(logoHref)}" alt="" width="120" height="32" decoding="async">`
+    : "";
+  return `<footer class="site-footer" data-dna-component="site-footer"><div class="site-footer__accent" aria-hidden="true"></div><div class="site-footer__inner">${logo}<p class="site-footer__brand" data-allow-number>${escapeHtml(brand)}</p>${
     period
       ? `<p class="site-footer__period" data-allow-number>${escapeHtml(period)}</p>`
       : ""
@@ -230,6 +242,8 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .site-nav .nav-inner{display:flex;align-items:center;gap:1rem;max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem);min-height:4.25rem}
 .nav-brand{display:flex;align-items:center;gap:.65rem;text-decoration:none;flex-shrink:0;padding:.35rem 0;margin-right:.35rem}
 .nav-brand__mark{width:10px;height:28px;background:linear-gradient(180deg,var(--dna-brand,#FCAF17),color-mix(in srgb,var(--dna-brand,#FCAF17) 40%,#000));border-radius:1px}
+.nav-brand__logo{display:block;height:36px;width:auto;max-width:160px;object-fit:contain;filter:brightness(0) invert(1)}
+.nav-brand--logo .nav-brand__name{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .nav-brand__name{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:.78rem;font-weight:800;letter-spacing:.08em;color:var(--dna-paper,#fff);line-height:1.15;max-width:14ch}
 .site-nav .nav-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;list-style:none;margin:0;padding:0;flex:1;justify-content:flex-end}
 .site-nav .nav-row>li{display:flex;align-items:stretch}
@@ -287,6 +301,7 @@ mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 32%,transpa
 .site-footer{margin-top:0;background:var(--dna-masthead,#0F3B2E);color:rgba(255,255,255,.82)}
 .site-footer__accent{height:3px;background:linear-gradient(90deg,var(--dna-footer-accent,var(--dna-brand,#FCAF17)) 0%,var(--dna-footer-accent,var(--dna-brand,#FCAF17)) 28%,transparent 28%)}
 .site-footer__inner{max-width:1120px;margin:0 auto;padding:1.75rem clamp(1rem,3vw,2rem) 2.25rem;display:grid;gap:.35rem}
+.site-footer__logo{display:block;height:32px;width:auto;max-width:140px;object-fit:contain;margin-bottom:.35rem;filter:brightness(0) invert(1);opacity:.92}
 .site-footer__brand{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.05rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--dna-brand,#FCAF17)}
 .site-footer__period{margin:0;font-size:.92rem;font-weight:600;color:rgba(255,255,255,.9)}
 .site-footer__note{margin:.35rem 0 0;font-size:.78rem;letter-spacing:.04em;color:rgba(255,255,255,.5)}
@@ -296,9 +311,14 @@ mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 32%,transpa
 .page-hero__sub{margin:0;font-size:.95rem;color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff));max-width:42rem}
 .page-title-banner{max-width:1120px;margin:0 auto;padding:1.25rem clamp(1rem,3vw,2rem) .5rem}
 .page-title-banner h1{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(1.35rem,2.4vw,1.85rem);font-weight:700;color:var(--dna-masthead,#0F3B2E)}
-.home-hero{position:relative;max-width:none;margin:0;padding:0;background:linear-gradient(135deg,var(--dna-masthead,#0F3B2E) 0%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 82%,#000) 48%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 70%,var(--dna-brand,#FCAF17)) 100%);color:var(--dna-paper,#fff);border-bottom:0}
-.home-hero__mast{height:5px;background:linear-gradient(90deg,var(--dna-brand,#FCAF17) 0%,var(--dna-brand,#FCAF17) 36%,rgba(255,255,255,.35) 36%,rgba(255,255,255,.35) 100%)}
-.home-hero__inner{max-width:1120px;margin:0 auto;padding:3.6rem clamp(1rem,3vw,2rem) 3.1rem}
+.home-hero{position:relative;max-width:none;margin:0;padding:0;background:linear-gradient(135deg,var(--dna-masthead,#0F3B2E) 0%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 82%,#000) 48%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 70%,var(--dna-brand,#FCAF17)) 100%);color:var(--dna-paper,#fff);border-bottom:0;overflow:hidden}
+.home-hero--photo{background:var(--dna-masthead,#0F3B2E)}
+.home-hero__photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.42;pointer-events:none}
+.home-hero--photo::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 92%,#000) 0%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 55%,transparent) 55%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 35%,transparent) 100%);pointer-events:none}
+.home-hero__mast{height:5px;background:linear-gradient(90deg,var(--dna-brand,#FCAF17) 0%,var(--dna-brand,#FCAF17) 36%,rgba(255,255,255,.35) 36%,rgba(255,255,255,.35) 100%);position:relative;z-index:1}
+.home-hero__lockup{display:flex;align-items:center;gap:.85rem;margin:0 0 1.1rem}
+.home-hero__logo{display:block;height:48px;width:auto;max-width:200px;object-fit:contain;filter:brightness(0) invert(1)}
+.home-hero__inner{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:3.6rem clamp(1rem,3vw,2rem) 3.1rem}
 .home-kicker{margin:0 0 .7rem;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dna-brand,#FCAF17);font-weight:700;max-width:40rem}
 .home-hero h1{margin:0 0 .75rem;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(2.55rem,5.4vw,3.75rem);line-height:1.02;letter-spacing:-.03em;color:#fff;font-weight:800;max-width:12ch}
 .home-period{margin:0 0 1.1rem;font-size:clamp(1.08rem,2vw,1.3rem);color:rgba(255,255,255,.86);max-width:38rem;font-weight:600}

@@ -9,10 +9,47 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getPrivate, putPrivate } from "../lib/blob";
-import { buildMultipageExport } from "../lib/build-multipage-export";
+import { resolveAssetUris } from "../lib/brand-assets";
+import { buildMultipageExport, type BrandAssetBytes } from "../lib/build-multipage-export";
 import { db, schema } from "../lib/db";
 
 const PROJECT_ID = process.argv[2] ?? "444cd443-97cc-4b9c-b0f6-eef4f65c2f98";
+
+async function loadBrandBytes(
+  arts: Array<{ kind: string; blobPath: string }>,
+  projectId: string,
+  extraction: unknown,
+): Promise<BrandAssetBytes | null> {
+  const brandRow = arts.find((a) => a.kind === "brand_assets");
+  let bundleJson: unknown | null = null;
+  if (brandRow) {
+    try {
+      bundleJson = JSON.parse((await getPrivate(brandRow.blobPath)).toString("utf8"));
+    } catch (err) {
+      console.warn("brand_assets artifact unreadable:", err);
+    }
+  }
+  const { bundle, uris } = await resolveAssetUris({
+    projectId,
+    bundleJson,
+    extractionJson: extraction,
+    getPrivate,
+  });
+  if (!bundle || (!uris.logo && !uris.banner)) return null;
+
+  const out: BrandAssetBytes = {};
+  for (const role of ["logo", "banner"] as const) {
+    const asset = bundle.assets.find((a) => a.role === role);
+    if (!asset?.blob_path || !uris[role]) continue;
+    try {
+      const bytes = await getPrivate(asset.blob_path);
+      out[role] = { bytes: new Uint8Array(bytes), mime: asset.mime || "image/png" };
+    } catch (err) {
+      console.warn(`brand ${role} bytes unavailable:`, err);
+    }
+  }
+  return out.logo || out.banner ? out : null;
+}
 
 async function main() {
   const [project] = await db()
@@ -61,6 +98,8 @@ async function main() {
     }
   }
 
+  const brandAssets = await loadBrandBytes(arts, PROJECT_ID, extraction);
+
   const built = buildMultipageExport({
     dna,
     extraction,
@@ -68,6 +107,7 @@ async function main() {
     company: project.companyName ?? extraction.source?.pdf_meta?.title ?? "Company",
     periodLabel: project.periodLabel ?? "",
     sourcePdfBytes,
+    brandAssets,
   });
 
   const existing = await db()
@@ -173,6 +213,8 @@ async function main() {
         gateB: built.gateB.status,
         excelSheets: built.excelSheetNames,
         pdfBundled: built.pdfBundled,
+        brandLogo: built.brandLogo,
+        brandBanner: built.brandBanner,
         entrypoint: built.entrypoint,
       },
       null,

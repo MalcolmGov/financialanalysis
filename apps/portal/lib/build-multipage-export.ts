@@ -5,14 +5,21 @@ import { buildSitePlan, mapToDocModel } from "@rs/mapper";
 import {
   applyDownloadArtifacts,
   exportExcelFromDocModel,
+  fontAssetBinaries,
   gateA,
   gateB,
   renderSitePlan,
   SOURCE_PDF_HREF,
+  type BrandAssetUris,
   type GateAResult,
   type GateBResult,
 } from "@rs/render";
 import { buildBlueprintV1 } from "./build-blueprint";
+
+export interface BrandAssetBytes {
+  logo?: { bytes: Uint8Array; mime: string };
+  banner?: { bytes: Uint8Array; mime: string };
+}
 
 export interface MultipageExportInput {
   dna: DesignDNA;
@@ -29,6 +36,11 @@ export interface MultipageExportInput {
    * Offline JSON-only smokes may omit this — downloads page notes the skip.
    */
   sourcePdfBytes?: Uint8Array | Buffer | null;
+  /**
+   * Real brand imagery from BrandAssetBundle / extraction figures.
+   * Written under assets/brand/ — never invents logos when absent.
+   */
+  brandAssets?: BrandAssetBytes | null;
 }
 
 export interface MultipagePageMeta {
@@ -52,10 +64,44 @@ export interface MultipageExportResult {
   gateB: GateBResult;
   excelSheetNames: string[];
   pdfBundled: boolean;
+  brandLogo: boolean;
+  brandBanner: boolean;
 }
 
 function sha256Hex(body: string | Buffer): string {
   return createHash("sha256").update(body).digest("hex");
+}
+
+function extForMime(mime: string, fallback: string): string {
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("svg")) return "svg";
+  if (mime.includes("png")) return "png";
+  return fallback;
+}
+
+function materializeBrandAssets(
+  brand: BrandAssetBytes | null | undefined,
+  binaries: Record<string, Uint8Array>,
+): BrandAssetUris {
+  const uris: BrandAssetUris = {};
+  if (brand?.logo?.bytes?.byteLength) {
+    const ext = extForMime(brand.logo.mime || "image/png", "png");
+    const path = `assets/brand/logo.${ext}`;
+    binaries[path] = brand.logo.bytes instanceof Uint8Array
+      ? brand.logo.bytes
+      : Uint8Array.from(brand.logo.bytes);
+    uris.logo = path;
+  }
+  if (brand?.banner?.bytes?.byteLength) {
+    const ext = extForMime(brand.banner.mime || "image/png", "png");
+    const path = `assets/brand/banner.${ext}`;
+    binaries[path] = brand.banner.bytes instanceof Uint8Array
+      ? brand.banner.bytes
+      : Uint8Array.from(brand.banner.bytes);
+    uris.banner = path;
+  }
+  return uris;
 }
 
 /**
@@ -85,12 +131,22 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   };
   const docModel = mapToDocModel(input.extraction, meta);
   const sitePlan = buildSitePlan(docModel, blueprint);
-  const ctx = { extraction: input.extraction, docModel };
+
+  const binaries: Record<string, Uint8Array> = {
+    ...fontAssetBinaries(),
+  };
+  const brandUris = materializeBrandAssets(input.brandAssets, binaries);
+
+  const ctx = {
+    extraction: input.extraction,
+    docModel,
+    brandAssets: brandUris,
+  };
   const a = gateA(sitePlan, ctx);
   const { files } = renderSitePlan(sitePlan, blueprint, ctx);
 
   const excel = exportExcelFromDocModel(docModel);
-  const binaries: Record<string, Uint8Array> = { ...excel.files };
+  Object.assign(binaries, excel.files);
 
   let pdfBundled = false;
   if (input.sourcePdfBytes && input.sourcePdfBytes.byteLength > 0) {
@@ -141,5 +197,7 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     gateB: b,
     excelSheetNames: excel.workbookSheetNames,
     pdfBundled,
+    brandLogo: Boolean(brandUris.logo),
+    brandBanner: Boolean(brandUris.banner),
   };
 }

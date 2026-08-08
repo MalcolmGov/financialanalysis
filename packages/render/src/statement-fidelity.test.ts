@@ -11,7 +11,9 @@ describe("row taxonomy", () => {
     expect(classifyStatementRow("Total assets", true)).toBe("total");
     expect(classifyStatementRow("Total equity and liabilities", true)).toBe("total");
     expect(classifyStatementRow("Property plant and equipment", true)).toBe("line");
-    expect(rowRoleClass("subtotal")).toBe("r-subtotal");
+    expect(rowRoleClass("subtotal")).toBe("r-subtotal bd-blue");
+    expect(rowRoleClass("section")).toBe("r-section bd-tan");
+    expect(rowRoleClass("total")).toBe("r-total");
   });
 });
 

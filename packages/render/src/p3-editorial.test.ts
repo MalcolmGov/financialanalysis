@@ -162,6 +162,40 @@ describe("HomeComposer", () => {
     expect(home.bodyHtml).not.toMatch(/R2\.3bn|R428/);
   });
 
+  it("pulls listing chips from extraction cover text when not in DocModel", () => {
+    const extraction = {
+      body: [
+        {
+          id: "blk-0012",
+          type: "paragraph",
+          text: "JSE and A2X share code: DRD NYSE trading symbol: DRD ISIN: ZAE000058723",
+          children: [],
+        },
+      ],
+      furniture: [],
+    } as unknown as ExtractionResult;
+    const home = composeHome(plan(), docModel(), { extraction });
+    expect(home.heroHtml).toContain("home-meta__chip");
+    expect(home.heroHtml).toContain("JSE and A2X share code: DRD");
+    expect(home.heroHtml).toContain("ISIN: ZAE000058723");
+    expect(home.heroHtml).toContain("data-allow-number");
+    // Substring chips must not carry data-src (Gate B verbatim rule).
+    expect(home.heroHtml).not.toMatch(/home-meta__chip"[^>]*data-src=/);
+  });
+
+  it("wires real brand assets into hero when provided", () => {
+    const home = composeHome(plan(), docModel(), {
+      brandAssets: {
+        logo: "assets/brand/logo.png",
+        banner: "assets/brand/banner.jpg",
+      },
+    });
+    expect(home.heroHtml).toContain("home-hero--photo");
+    expect(home.heroHtml).toContain('src="assets/brand/banner.jpg"');
+    expect(home.heroHtml).toContain("home-hero__logo");
+    expect(home.heroHtml).toContain('src="assets/brand/logo.png"');
+  });
+
   it("allow-lists digits in company identity chrome for Gate B", () => {
     const dm = docModel();
     dm.meta.company = "DRD Gold 1";

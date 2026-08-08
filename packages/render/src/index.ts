@@ -15,3 +15,4 @@ export * from "./gate-a.js";
 export * from "./gate-b.js";
 export * from "./color.js";
 export * from "./linter.js";
+export * from "./fonts.js";

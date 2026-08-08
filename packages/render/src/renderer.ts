@@ -19,8 +19,10 @@ import { enrichMultiPageFiles } from "./enrich.js";
 import { extractHomeKpis } from "./home-composer.js";
 import { linkNoteRefHtml, notesBaseHref } from "./notes-linker.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
+import { fontFaceCss } from "./fonts.js";
 import {
   classifyStatementRow,
+  groupBorderClass,
   rowHasNumeric,
   rowRoleClass,
 } from "./row-taxonomy.js";
@@ -153,10 +155,15 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
     })
     .join("");
 
+  const roles = table.rows.map((row) =>
+    classifyStatementRow(row.cells[0]?.raw ?? "", rowHasNumeric(row.cells)),
+  );
   const body = table.rows
-    .map((row) => {
-      const label = row.cells[0]?.raw ?? "";
-      const role = classifyStatementRow(label, rowHasNumeric(row.cells));
+    .map((row, rowIdx) => {
+      const role = roles[rowIdx]!;
+      const prev = rowIdx > 0 ? roles[rowIdx - 1]! : null;
+      const next = rowIdx < roles.length - 1 ? roles[rowIdx + 1]! : null;
+      const trClass = `${rowRoleClass(role)}${groupBorderClass(role, prev, next)}`;
       let col = 0;
       const cells = row.cells
         .map((cell, cellIdx) => {
@@ -186,7 +193,7 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           return `<td class="cell-${cell.kind}${labelCls}${noteEmpty}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
         })
         .join("");
-      return `<tr class="${rowRoleClass(role)}">${cells}</tr>`;
+      return `<tr class="${trClass}">${cells}</tr>`;
     })
     .join("");
 
@@ -301,7 +308,11 @@ export function renderSitePlan(
         .join("\n");
     });
 
-    const css = ensureStatementCss(blueprint.tokens.css ?? "") + (multiPage ? `\n${CHROME_CSS}` : "");
+    const fonts = multiPage ? `${fontFaceCss(page.path)}\n` : "";
+    const css =
+      fonts +
+      ensureStatementCss(blueprint.tokens.css ?? "") +
+      (multiPage ? `\n${CHROME_CSS}` : "");
     const head = multiPage
       ? composeSeoHead(
           {
@@ -317,13 +328,16 @@ export function renderSitePlan(
         )
       : `<meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style>`;
 
+    const logoHref = ctx.brandAssets?.logo
+      ? hrefFromPage(page.path, ctx.brandAssets.logo)
+      : undefined;
     const chromeTop = multiPage
-      ? `${renderStickyNav(plan.nav, page.path, company)}${renderShareBar()}${
+      ? `${renderStickyNav(plan.nav, page.path, company, logoHref)}${renderShareBar()}${
           crumbInHero ? "" : renderBreadcrumb(page.path, page.title, company)
         }`
       : "";
     const chromeBottom = multiPage
-      ? `${renderPrevNext(pageOrder, page.path)}${renderSiteFooter(company, periodLabel)}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
+      ? `${renderPrevNext(pageOrder, page.path)}${renderSiteFooter(company, periodLabel, logoHref)}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
       : "";
 
     // Prefer injecting chrome around main; otherwise wrap body content.
@@ -345,9 +359,25 @@ export function renderSitePlan(
   }
 
   if (multiPage && ctx.docModel) {
-    return { files: enrichMultiPageFiles(files, plan, ctx.docModel) };
+    return {
+      files: enrichMultiPageFiles(files, plan, ctx.docModel, undefined, {
+        brandAssets: ctx.brandAssets,
+        extraction: ctx.extraction,
+      }),
+    };
   }
   return { files };
+}
+
+/** Resolve a site-root asset path (assets/…) relative to the current page. */
+function hrefFromPage(fromPath: string, toPath: string): string {
+  if (toPath.startsWith("data:") || toPath.startsWith("http") || toPath.startsWith("//")) {
+    return toPath;
+  }
+  const fromDir = fromPath.includes("/") ? fromPath.replace(/\/[^/]+$/, "/") : "";
+  if (!fromDir) return toPath;
+  const depth = fromDir.split("/").filter(Boolean).length;
+  return `${"../".repeat(depth)}${toPath}`;
 }
 
 /** Older blueprints only locked :root tokens — inject baseline + IR table skin. */
@@ -407,6 +437,16 @@ const STATEMENT_IR_CSS = `
 .fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 80%,transparent);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
 .fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.6em;font-size:11.5px}
+/* WW grp/cmp column frames + row border density */
+.fin-table tr.bd-tan>td{border-top:1.5px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,#CDAE86)}
+.fin-table tr.bd-blue>td{border-top:1px solid #BAC4CA}
+.fin-table tr.grp td.cur{border-left:1px solid #6C6C6C}
+.fin-table tr.grp td.cmp:last-child,.fin-table tr.grp td.cell-num.cmp:last-child{border-right:1px solid #6C6C6C}
+.fin-table tr.grp-top td.cur,.fin-table tr.grp-top td.cmp,.fin-table tr.grp-top td.cell-num{border-top:1px solid #6C6C6C}
+.fin-table tr.grp-bot td.cur,.fin-table tr.grp-bot td.cmp,.fin-table tr.grp-bot td.cell-num{border-bottom:1px solid #6C6C6C}
+.fin-table tbody tr{transition:background-color .15s ease}
+.fin-table tbody tr:hover td{background-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 4%,transparent)!important}
+.fin-table tbody tr:hover td.cur{background-color:color-mix(in srgb,var(--dna-shading,#F2F2F2) 85%,var(--dna-brand,#FCAF17))!important}
 @media (max-width:720px){
   .fin-table{table-layout:auto;font-size:11.5px}
   .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}

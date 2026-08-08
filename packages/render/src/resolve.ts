@@ -6,9 +6,19 @@ import type { BlockNode, ExtractionResult, FinancialDocModel } from "@rs/contrac
  * value — it supplies the pointer, and this is where the pointer is followed.
  */
 
+/** Optional brand imagery for multipage chrome (relative paths or data-URIs). */
+export interface BrandAssetUris {
+  /** Nav / hero logo — only when a real project asset exists. */
+  logo?: string;
+  /** Home photographic masthead / banner. */
+  banner?: string;
+}
+
 export interface ResolveContext {
   extraction: ExtractionResult;
   docModel: FinancialDocModel;
+  /** Present when BrandAssetBundle figures were resolved for this render. */
+  brandAssets?: BrandAssetUris;
 }
 
 const CELL_REF = /^ext:(.+):r(\d+)c(\d+)$/;

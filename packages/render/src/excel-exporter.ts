@@ -186,7 +186,7 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
   return sheets;
 }
 
-/** Style indexes in STYLES_XML: 0 default, 1 header, 2 section, 3 subtotal, 4 total, 5 number. */
+/** Style indexes in STYLES_XML: 0 default, 1 header, 2 section, 3 subtotal, 4 total, 5 number, 6 numberCur. */
 const STYLE = {
   default: 0,
   header: 1,
@@ -194,38 +194,43 @@ const STYLE = {
   subtotal: 3,
   total: 4,
   number: 5,
+  numberCur: 6,
 } as const;
 
 const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <fonts count="5">
-    <font><sz val="11"/><name val="Calibri"/></font>
-    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
-    <font><b/><sz val="11"/><name val="Calibri"/></font>
-    <font><b/><sz val="11"/><name val="Calibri"/></font>
-    <font><b/><sz val="11"/><name val="Calibri"/></font>
+    <font><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FF0F3B2E"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>
   </fonts>
-  <fills count="6">
+  <fills count="7">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF839097"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF0"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFFFF3D6"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF7F7F7"/></patternFill></fill>
   </fills>
-  <borders count="3">
+  <borders count="5">
     <border><left/><right/><top/><bottom/><diagonal/></border>
     <border><left/><right/><top/><bottom style="thin"><color rgb="FF839097"/></bottom><diagonal/></border>
     <border><left/><right/><top style="medium"><color rgb="FF0F3B2E"/></top><bottom style="medium"><color rgb="FFFCAF17"/></bottom><diagonal/></border>
+    <border><left style="thin"><color rgb="FF6C6C6C"/></left><right style="thin"><color rgb="FF6C6C6C"/></right><top style="thin"><color rgb="FF6C6C6C"/></top><bottom style="thin"><color rgb="FF6C6C6C"/></bottom><diagonal/></border>
+    <border><left/><right/><top style="thin"><color rgb="FFBAC4CA"/></top><bottom/><diagonal/></border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="6">
+  <cellXfs count="7">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="bottom" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="4" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
     <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
     <xf numFmtId="0" fontId="4" fillId="5" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="right"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="3" xfId="0" applyAlignment="1" applyBorder="1"><alignment horizontal="right"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="6" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
   </cellXfs>
 </styleSheet>`;
 
@@ -264,10 +269,33 @@ function rowHasNumber(row: FinTable["rows"][number]): boolean {
   return row.cells.some((c) => c.kind === "number" && c.raw.trim() !== "");
 }
 
+/** Latest-year column (0-based) — mirrors renderer current-period shading. */
+function findCurrentPeriodCol(table: FinTable): number | null {
+  let bestCol: number | null = null;
+  let bestYear = -1;
+  for (const row of table.header_matrix) {
+    let col = 0;
+    for (const h of row) {
+      const years = [...h.raw.matchAll(/\b((?:19|20)\d{2})\b/g)].map((m) => Number(m[1]));
+      const y = years.length ? Math.max(...years) : null;
+      if (
+        y != null &&
+        (bestCol == null || y > bestYear || (y === bestYear && col < bestCol))
+      ) {
+        bestYear = y;
+        bestCol = col;
+      }
+      col += Math.max(1, h.col_span ?? 1);
+    }
+  }
+  return bestCol;
+}
+
 function sheetXml(table: FinTable): string {
   const rows: string[] = [];
   let r = 1;
   const headerCount = table.header_matrix.length;
+  const curCol = findCurrentPeriodCol(table);
   for (const headerRow of table.header_matrix) {
     let c = 0;
     const cells: string[] = [];
@@ -292,15 +320,19 @@ function sheetXml(table: FinTable): string {
             : STYLE.default;
     const cells = row.cells.map((cell, c) => {
       const ref = `${colLetter(c)}${r}`;
+      const isCur = curCol != null && c === curCol;
       const style: number =
         roleStyle !== STYLE.default
           ? roleStyle
           : cell.kind === "number" || c > 0
-            ? STYLE.number
+            ? isCur
+              ? STYLE.numberCur
+              : STYLE.number
             : STYLE.default;
       return inlineStrCell(ref, cell.raw, style);
     });
-    rows.push(`<row r="${r}">${cells.join("")}</row>`);
+    const ht = role === "total" ? ' ht="20" customHeight="1"' : "";
+    rows.push(`<row r="${r}"${ht}>${cells.join("")}</row>`);
     r++;
   }
 

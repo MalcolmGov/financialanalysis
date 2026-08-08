@@ -41,6 +41,36 @@ export function classifyStatementRow(
   return "line";
 }
 
+/**
+ * WW-style row classes: semantic role + border density helpers.
+ * - section → r-section bd-tan (gold-muted rule)
+ * - subtotal → r-subtotal bd-blue
+ * - total → r-total
+ * - line → r-line (hover handled in CSS)
+ */
 export function rowRoleClass(role: RowRole): string {
-  return `r-${role}`;
+  switch (role) {
+    case "section":
+      return "r-section bd-tan";
+    case "subtotal":
+      return "r-subtotal bd-blue";
+    case "total":
+      return "r-total";
+    default:
+      return "r-line";
+  }
+}
+
+/** Mark first/last numeric group edges for WW grp / grp-top / grp-bot column frames. */
+export function groupBorderClass(
+  role: RowRole,
+  prev: RowRole | null,
+  next: RowRole | null,
+): string {
+  if (role === "total") return " grp grp-bot";
+  if (role !== "line" && role !== "subtotal") return "";
+  const parts = ["grp"];
+  if (prev == null || prev === "section" || prev === "total") parts.push("grp-top");
+  if (next == null || next === "section" || next === "total") parts.push("grp-bot");
+  return ` ${parts.join(" ")}`;
 }

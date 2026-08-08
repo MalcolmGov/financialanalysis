@@ -1251,6 +1251,43 @@ export async function buildSiteDraftArtifact(
     }
   }
 
+  const runArts = await db()
+    .select()
+    .from(schema.artifacts)
+    .where(eq(schema.artifacts.runId, runId))
+    .orderBy(desc(schema.artifacts.createdAt));
+  const brandRow = runArts.find((a) => a.kind === "brand_assets");
+  let brandAssets: import("../lib/build-multipage-export").BrandAssetBytes | null = null;
+  try {
+    const { resolveAssetUris } = await import("../lib/brand-assets");
+    let bundleJson: unknown | null = null;
+    if (brandRow) {
+      bundleJson = JSON.parse((await getPrivate(brandRow.blobPath)).toString("utf8"));
+    }
+    const { bundle, uris } = await resolveAssetUris({
+      projectId,
+      bundleJson,
+      extractionJson,
+      getPrivate,
+    });
+    if (bundle && (uris.logo || uris.banner)) {
+      brandAssets = {};
+      for (const role of ["logo", "banner"] as const) {
+        const asset = bundle.assets.find((a) => a.role === role);
+        if (!asset?.blob_path || !uris[role]) continue;
+        try {
+          const bytes = await getPrivate(asset.blob_path);
+          brandAssets[role] = { bytes: new Uint8Array(bytes), mime: asset.mime || "image/png" };
+        } catch (err) {
+          console.warn(`[run ${runId}] brand ${role} unavailable:`, err);
+        }
+      }
+      if (!brandAssets.logo && !brandAssets.banner) brandAssets = null;
+    }
+  } catch (err) {
+    console.warn(`[run ${runId}] brand assets resolve failed:`, err);
+  }
+
   const built = buildMultipageExport({
     dna,
     extraction: extractionJson,
@@ -1258,6 +1295,7 @@ export async function buildSiteDraftArtifact(
     company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
     periodLabel: project?.periodLabel ?? "",
     sourcePdfBytes,
+    brandAssets,
   });
 
   const existing = await db()
@@ -1288,7 +1326,15 @@ export async function buildSiteDraftArtifact(
       ? "application/pdf"
       : path.endsWith(".xlsx")
         ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        : "application/octet-stream";
+        : path.endsWith(".woff2")
+          ? "font/woff2"
+          : path.endsWith(".png")
+            ? "image/png"
+            : path.endsWith(".jpg") || path.endsWith(".jpeg")
+              ? "image/jpeg"
+              : path.endsWith(".webp")
+                ? "image/webp"
+                : "application/octet-stream";
     await putPrivate(`${prefix}/${path}`, body, contentType);
   }
 
@@ -1314,6 +1360,8 @@ export async function buildSiteDraftArtifact(
     files: built.paths,
     gate_a: { status: built.gateA.status },
     gate_b: { status: built.gateB.status },
+    brand_logo: built.brandLogo,
+    brand_banner: built.brandBanner,
     created_at: new Date().toISOString(),
   };
   const manifestPut = await putPrivate(
@@ -1363,7 +1411,7 @@ export async function buildSiteDraftArtifact(
   });
 
   console.log(
-    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} excelSheets=${built.excelSheetNames.length} pdf=${built.pdfBundled} prefix=${prefix}`,
+    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} excelSheets=${built.excelSheetNames.length} pdf=${built.pdfBundled} logo=${built.brandLogo} banner=${built.brandBanner} prefix=${prefix}`,
   );
   return {
     schema: "ArtifactRef@1",
@@ -1472,6 +1520,38 @@ export async function buildPrototypeExport(
     }
   }
 
+  let brandAssets: import("../lib/build-multipage-export").BrandAssetBytes | null = null;
+  try {
+    const { resolveAssetUris } = await import("../lib/brand-assets");
+    const brandRow = [...runArtifacts].reverse().find((a) => a.kind === "brand_assets");
+    let bundleJson: unknown | null = null;
+    if (brandRow) {
+      bundleJson = JSON.parse((await getPrivate(brandRow.blobPath)).toString("utf8"));
+    }
+    const { bundle, uris } = await resolveAssetUris({
+      projectId,
+      bundleJson,
+      extractionJson: extraction,
+      getPrivate,
+    });
+    if (bundle && (uris.logo || uris.banner)) {
+      brandAssets = {};
+      for (const role of ["logo", "banner"] as const) {
+        const asset = bundle.assets.find((a) => a.role === role);
+        if (!asset?.blob_path || !uris[role]) continue;
+        try {
+          const bytes = await getPrivate(asset.blob_path);
+          brandAssets[role] = { bytes: new Uint8Array(bytes), mime: asset.mime || "image/png" };
+        } catch (err) {
+          console.warn(`[run ${runId}] export brand ${role} unavailable:`, err);
+        }
+      }
+      if (!brandAssets.logo && !brandAssets.banner) brandAssets = null;
+    }
+  } catch (err) {
+    console.warn(`[run ${runId}] export brand assets resolve failed:`, err);
+  }
+
   const built = buildMultipageExport({
     dna,
     extraction,
@@ -1482,6 +1562,7 @@ export async function buildPrototypeExport(
     sourcePrototypeVersionId: proto?.id ?? "multipage-export",
     sourcePrototypeSha256: proto?.sha256 ?? "0".repeat(64),
     sourcePdfBytes,
+    brandAssets,
   });
 
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;

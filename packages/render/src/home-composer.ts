@@ -3,7 +3,8 @@
  * KPI figures are verbatim substrings of DocModel highlights (via home-kpis).
  */
 
-import type { FinancialDocModel, SitePlan } from "@rs/contracts";
+import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
+import type { BrandAssetUris } from "./resolve.js";
 import { renderKpiCardsHtml, segmentHighlightKpis, type HomeKpiCard } from "./home-kpis.js";
 import { docKindLabel } from "./seo.js";
 
@@ -65,44 +66,107 @@ export function extractHomeKpis(docModel: FinancialDocModel): HomeKpiCard[] {
   return segmentHighlightKpis(text, src);
 }
 
-/** Pull listing / ISIN chips — verbatim substrings from any section (cover often holds them). */
-function listingMeta(docModel: FinancialDocModel): string {
-  const chips: string[] = [];
-  const seen = new Set<string>();
+type ListingHit = { text: string; src?: string };
+
+/** Walk extraction body/furniture for cover listing furniture (ISIN / JSE / NYSE). */
+function walkExtractionTexts(
+  nodes: ExtractionResult["body"],
+  out: ListingHit[],
+): void {
+  for (const n of nodes) {
+    const text = n.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (text && /JSE|ISIN|NYSE|A2X|share code|trading symbol/i.test(text)) {
+      out.push({ text, src: n.id ? `ext:${n.id}` : undefined });
+    }
+    if (n.children?.length) walkExtractionTexts(n.children, out);
+  }
+}
+
+/**
+ * Pull listing / ISIN chips — verbatim substrings from DocModel sections
+ * and extraction cover blocks (often not mapped into a section).
+ */
+export function listingMeta(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): string {
+  const sources: ListingHit[] = [];
   for (const sec of docModel.sections) {
     for (const b of sec.blocks) {
       const text = b.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
       if (!text) continue;
-      const src = b.src_ref ? ` data-src="${escapeHtml(b.src_ref)}"` : "";
-      const jse = text.match(/JSE and A2X share code:\s*[A-Z0-9]+/i)?.[0];
-      const nyse = text.match(/NYSE trading symbol:\s*[A-Z0-9]+/i)?.[0];
-      const isin = text.match(/ISIN:\s*[A-Z0-9]+/i)?.[0];
-      for (const p of [jse, nyse, isin].filter(Boolean) as string[]) {
-        const key = p.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        chips.push(
-          `<span class="home-meta__chip" data-allow-number${src}>${escapeHtml(p)}</span>`,
-        );
+      sources.push({ text, src: b.src_ref });
+    }
+  }
+  if (extraction) {
+    walkExtractionTexts(extraction.body ?? [], sources);
+    walkExtractionTexts(extraction.furniture ?? [], sources);
+  }
+
+  const chips: string[] = [];
+  const seen = new Set<string>();
+  // Prefer specific IR listing phrases — never invent tickers.
+  // data-allow-number (not data-src): chips are substrings of a cover block;
+  // Gate B requires data-src textContent === full source verbatim.
+  const patterns = [
+    /JSE and A2X share code:\s*[A-Z0-9]+/i,
+    /JSE\s*(?:&|and)\s*A2X(?:\s*share code)?:\s*[A-Z0-9]+/i,
+    /NYSE trading symbol:\s*[A-Z0-9]+/i,
+    /NYSE:\s*[A-Z0-9]+/i,
+    /ISIN:\s*[A-Z0-9]+/i,
+  ];
+
+  for (const { text } of sources) {
+    for (const re of patterns) {
+      const m = text.match(re)?.[0];
+      if (!m) continue;
+      const key = m.toLowerCase();
+      if (seen.has(key)) continue;
+      // Skip shorter duplicates already covered (e.g. NYSE: DRD vs trading symbol).
+      let covered = false;
+      for (const s of seen) {
+        if (s.includes(key) || key.includes(s)) {
+          covered = true;
+          break;
+        }
       }
+      if (covered) continue;
+      seen.add(key);
+      chips.push(
+        `<span class="home-meta__chip" data-allow-number>${escapeHtml(m)}</span>`,
+      );
     }
   }
   if (!chips.length) return "";
   return `<div class="home-meta" data-dna-component="home-meta">${chips.join("")}</div>`;
 }
 
-function homeHero(docModel: FinancialDocModel): string {
+export interface HomeComposeOptions {
+  brandAssets?: BrandAssetUris;
+  extraction?: ExtractionResult | null;
+}
+
+function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): string {
   const company = escapeHtml(docModel.meta.company || "Results");
   const period = docModel.meta.period_label?.trim() || "";
   const kind = escapeHtml(docKindLabel(docModel.meta.doc_kind));
   const periodHtml = period
     ? `<p class="home-period" data-allow-number>${escapeHtml(period)}</p>`
     : "";
-  const meta = listingMeta(docModel);
-  return `<header class="home-hero" data-dna-component="home-hero">
-<div class="home-hero__mast"></div>
+  const meta = listingMeta(docModel, opts.extraction);
+  const banner = opts.brandAssets?.banner;
+  const logo = opts.brandAssets?.logo;
+  const photoClass = banner ? " home-hero--photo" : "";
+  const photo = banner
+    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async">`
+    : "";
+  const lockup = logo
+    ? `<div class="home-hero__lockup"><img class="home-hero__logo" src="${escapeHtml(logo)}" alt="" width="200" height="48" decoding="async"></div>`
+    : "";
+  return `<header class="home-hero${photoClass}" data-dna-component="home-hero">
+${photo}<div class="home-hero__mast"></div>
 <div class="home-hero__inner">
-<p class="home-kicker">${kind}</p>
+${lockup}<p class="home-kicker">${kind}</p>
 <h1 data-allow-number>${company}</h1>
 ${periodHtml}
 <p class="home-lede">Investor results centre — key figures, commentary, condensed consolidated statements, notes, and downloads.</p>
@@ -197,11 +261,15 @@ export interface HomeComposition {
   kpis: HomeKpiCard[];
 }
 
-export function composeHome(plan: SitePlan, docModel: FinancialDocModel): HomeComposition {
+export function composeHome(
+  plan: SitePlan,
+  docModel: FinancialDocModel,
+  opts: HomeComposeOptions = {},
+): HomeComposition {
   const kpis = extractHomeKpis(docModel);
   const bodyHtml = `${kpiBand(kpis)}${highlightsBand(docModel)}${exploreCards(plan)}`;
   return {
-    heroHtml: homeHero(docModel),
+    heroHtml: homeHero(docModel, opts),
     bodyHtml,
     kpis,
   };

@@ -1,4 +1,4 @@
-import type { FinancialDocModel, SitePlan } from "@rs/contracts";
+import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
 import { renderBreadcrumb } from "./chrome.js";
 import { composeCommentaryBody } from "./commentary-composer.js";
 import {
@@ -10,6 +10,7 @@ import {
 } from "./excel-exporter.js";
 import { composeHome } from "./home-composer.js";
 import { noteAnchorId, noteNumberFromTitle } from "./notes-linker.js";
+import type { BrandAssetUris } from "./resolve.js";
 
 /** Optional binary download wiring (Excel always; PDF when bundled). */
 export interface DownloadEnrichOptions {
@@ -17,6 +18,12 @@ export interface DownloadEnrichOptions {
   /** When true, downloads.html links to assets/source.pdf. */
   pdfBundled?: boolean;
   pdfHref?: string;
+}
+
+/** Optional brand / extraction context for home enrichment. */
+export interface EnrichContext {
+  brandAssets?: BrandAssetUris;
+  extraction?: ExtractionResult | null;
 }
 
 /**
@@ -284,13 +291,17 @@ export function enrichMultiPageFiles(
   plan: SitePlan,
   docModel: FinancialDocModel,
   downloadOpts: DownloadEnrichOptions = {},
+  enrichCtx: EnrichContext = {},
 ): Record<string, string> {
   const out = { ...files };
   const company = docModel.meta.company;
   const periodLabel = docModel.meta.period_label;
 
   if (out["index.html"]) {
-    const home = composeHome(plan, docModel);
+    const home = composeHome(plan, docModel, {
+      brandAssets: enrichCtx.brandAssets,
+      extraction: enrichCtx.extraction,
+    });
     let html = replaceHomeHero(out["index.html"], home.heroHtml);
     html = injectInto(html, "home-body", home.bodyHtml);
     out["index.html"] = html;
