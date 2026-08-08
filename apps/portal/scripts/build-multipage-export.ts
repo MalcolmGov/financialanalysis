@@ -11,7 +11,6 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { zipSync, strToU8, unzipSync, strFromU8 } from "fflate";
 import type { DesignDNA, ExtractionResult } from "@rs/contracts";
-import { auditCorporateReliability } from "@rs/render";
 import { buildMultipageExport } from "../lib/build-multipage-export";
 
 async function main() {
@@ -186,14 +185,11 @@ async function main() {
     ["brand onerror", home.includes("data-brand-img") ? home.includes("onerror=") : home.includes("nav-brand__name")],
   ] as const;
 
-  const reliability = auditCorporateReliability({
-    files: built.files,
-    binaries: built.binaries,
-  });
+  const reliability = built.reliability;
   for (const [name, ok] of checks) {
     process.stdout.write(`${ok ? "✓" : "✗"} ${name}\n`);
   }
-  process.stdout.write(`\nCorporate reliability audit:\n`);
+  process.stdout.write(`\nCorporate reliability audit (P5):\n`);
   for (const f of reliability.findings) {
     process.stdout.write(`${f.ok ? "✓" : "✗"} ${f.code}${f.path ? ` [${f.path}]` : ""}: ${f.message}\n`);
   }

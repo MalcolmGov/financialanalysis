@@ -4,16 +4,19 @@ import { Blueprint as BlueprintSchema } from "@rs/contracts";
 import { buildSitePlan, mapToDocModel } from "@rs/mapper";
 import {
   applyDownloadArtifacts,
+  auditCorporateReliability,
   exportExcelFromDocModel,
   fontAssetBinaries,
   gateA,
   gateB,
   renderSitePlan,
+  looksLikeProjectSlug,
   resolveLegalCompanyName,
   SOURCE_PDF_HREF,
   type BrandAssetUris,
   type GateAResult,
   type GateBResult,
+  type ReliabilityFinding,
 } from "@rs/render";
 import { buildBlueprintV1 } from "./build-blueprint";
 
@@ -68,6 +71,8 @@ export interface MultipageExportResult {
   mode: "multipage";
   gateA: GateAResult;
   gateB: GateBResult;
+  /** P5 corporate readiness rollup (vis_text, PE, brand, Gate A/B, …). */
+  reliability: { ok: boolean; findings: ReliabilityFinding[] };
   excelSheetNames: string[];
   pdfBundled: boolean;
   brandLogo: boolean;
@@ -206,6 +211,23 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     .filter((p) => p.path.endsWith(".html"))
     .map((p) => ({ path: p.path, title: p.title }));
 
+  const forbidden = [
+    ...(legal.ignoredProjectSlug ? [legal.ignoredProjectSlug] : []),
+    ...(looksLikeProjectSlug(input.company) && input.company.trim() !== legal.company
+      ? [input.company.trim()]
+      : []),
+  ];
+
+  const reliability = auditCorporateReliability(
+    { files, binaries },
+    {
+      expectedLegalName: legal.company,
+      forbiddenProjectTitles: forbidden.length ? forbidden : undefined,
+      gateA: a,
+      gateB: b,
+    },
+  );
+
   const paths = [...Object.keys(files), ...Object.keys(binaries)].sort();
   return {
     files,
@@ -219,6 +241,7 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     mode: "multipage",
     gateA: a,
     gateB: b,
+    reliability,
     excelSheetNames: excel.workbookSheetNames,
     pdfBundled,
     brandLogo: Boolean(brandUris.logo),

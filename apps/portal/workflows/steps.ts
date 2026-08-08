@@ -1358,6 +1358,7 @@ export async function buildSiteDraftArtifact(
     files: built.paths,
     gate_a: { status: built.gateA.status },
     gate_b: { status: built.gateB.status },
+    corporate_reliability: built.reliability.ok ? "pass" : "fail",
     brand_logo: built.brandLogo,
     brand_banner: built.brandBanner,
     created_at: new Date().toISOString(),
@@ -1388,6 +1389,7 @@ export async function buildSiteDraftArtifact(
       files: built.paths.filter((p) => p.endsWith(".html")),
       gateA: built.gateA.status,
       gateB: built.gateB.status,
+      corporateReliability: built.reliability.ok ? "pass" : "fail",
       fileCount: built.paths.length,
     },
   });
@@ -1404,12 +1406,19 @@ export async function buildSiteDraftArtifact(
       draftId,
       gateA: built.gateA.status,
       gateB: built.gateB.status,
+      corporateReliability: built.reliability.ok ? "pass" : "fail",
       sitePlanId: built.sitePlanId,
     },
   });
 
+  if (!built.reliability.ok || built.gateA.status !== "pass" || built.gateB.status !== "pass") {
+    console.warn(
+      `[run ${runId}] site draft v${draftVersion} persisted with corporate gate warnings gateA=${built.gateA.status} gateB=${built.gateB.status} reliability=${built.reliability.ok ? "pass" : "fail"}`,
+    );
+  }
+
   console.log(
-    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} excelSheets=${built.excelSheetNames.length} pdf=${built.pdfBundled} logo=${built.brandLogo} banner=${built.brandBanner} prefix=${prefix}`,
+    `[run ${runId}] site draft v${draftVersion} pages=${built.pages.length} gateA=${built.gateA.status} gateB=${built.gateB.status} reliability=${built.reliability.ok ? "pass" : "fail"} excelSheets=${built.excelSheetNames.length} pdf=${built.pdfBundled} logo=${built.brandLogo} banner=${built.brandBanner} prefix=${prefix}`,
   );
   return {
     schema: "ArtifactRef@1",
@@ -1554,6 +1563,19 @@ export async function buildPrototypeExport(
     brandAssets,
   });
 
+  // P5 — hard-block zip export when Gate A/B or corporate readiness fails.
+  if (
+    built.gateA.status !== "pass" ||
+    built.gateB.status !== "pass" ||
+    !built.reliability.ok
+  ) {
+    const { formatReliabilityFailures } = await import("@rs/render");
+    const fails = formatReliabilityFailures(built.reliability.findings);
+    throw new Error(
+      `Corporate readiness gates failed — export blocked (gateA=${built.gateA.status} gateB=${built.gateB.status} reliability=${built.reliability.ok ? "pass" : "fail"})${fails ? `\n${fails}` : ""}`,
+    );
+  }
+
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const meta = {
     schema_version: "multipage-export/1",
@@ -1575,6 +1597,7 @@ export async function buildPrototypeExport(
     mode: built.mode,
     gate_a: built.gateA.status,
     gate_b: built.gateB.status,
+    corporate_reliability: "pass",
     files: built.paths,
     pages: built.pages,
     excel_sheets: built.excelSheetNames,

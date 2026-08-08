@@ -1,9 +1,12 @@
 /**
  * P0 / P5 — corporate IR reliability gates for multipage HTML.
  * Fail closed on blank pages, unguarded opacity:0 reveal, missing assets,
- * missing brand text fallback, or project-slug leakage into chrome.
+ * missing brand text fallback, project-slug leakage into chrome, Gate A/B,
+ * or preview-path vis_text floors (the blank-home crisis class of bug).
  */
 
+import type { GateAResult } from "./gate-a.js";
+import type { GateBResult } from "./gate-b.js";
 import {
   extractChromeIdentityText,
   looksLikeProjectSlug,
@@ -32,6 +35,10 @@ export const MIN_VISIBLE_TEXT_BYTES = 280;
 
 /** Home / commentary carry denser editorial — slightly higher floor. */
 export const MIN_VISIBLE_TEXT_BYTES_EDITORIAL = 420;
+
+/** Alias used by preview/iframe CI reporting. */
+export const MIN_PREVIEW_VIS_TEXT_BYTES = MIN_VISIBLE_TEXT_BYTES;
+export const MIN_PREVIEW_VIS_TEXT_BYTES_EDITORIAL = MIN_VISIBLE_TEXT_BYTES_EDITORIAL;
 
 const REQUIRED_ASSETS = [
   "assets/site.js",
@@ -129,6 +136,124 @@ export function checkPageMinContent(
     path,
     message: `${path}: visible text ${bytes}B ≥ ${floor}B`,
   };
+}
+
+/**
+ * P5 — iframe / preview vis_text gate.
+ * Same floor as min-content, but coded for preview-path CI reporting so a full
+ * HTML byte count can never be confused with “content visible in the iframe”.
+ */
+export function checkPreviewVisText(
+  html: string,
+  path: string,
+  minBytes?: number,
+): ReliabilityFinding {
+  const editorial = /(?:^|\/)(index|commentary)\.html$/i.test(path);
+  const floor =
+    minBytes ??
+    (editorial ? MIN_PREVIEW_VIS_TEXT_BYTES_EDITORIAL : MIN_PREVIEW_VIS_TEXT_BYTES);
+  const bytes = visibleTextBytes(html);
+  if (bytes < floor) {
+    return {
+      ok: false,
+      code: "preview-vis-text",
+      path,
+      message: `${path}: preview vis_text ${bytes}B < ${floor}B (would look blank in iframe)`,
+    };
+  }
+  return {
+    ok: true,
+    code: "preview-vis-text",
+    path,
+    message: `${path}: preview vis_text ${bytes}B ≥ ${floor}B`,
+  };
+}
+
+/**
+ * Catch the blank-home crisis class: content hidden by default CSS / baked
+ * rs-motion without JS having a chance to reveal. Complements PE opacity guard.
+ */
+export function checkNoJsContentVisible(html: string, path: string): ReliabilityFinding {
+  // Baked html.rs-motion on the document element would hide .reveal/.kpi-card
+  // until JS adds .is-visible — iframe looks blank if site.js/CSP fails.
+  const htmlOpen = html.match(/<html\b[^>]*>/i)?.[0] ?? "";
+  if (/\brs-motion\b/.test(htmlOpen)) {
+    return {
+      ok: false,
+      code: "iframe-blank-risk",
+      path,
+      message: `${path}: <html> bakes rs-motion — reveal/KPI would stay opacity:0 without runtime`,
+    };
+  }
+
+  const pe = checkRevealProgressiveEnhancement(html);
+  if (!pe.ok) {
+    return {
+      ok: false,
+      code: "iframe-blank-risk",
+      path,
+      message: `${path}: ${pe.message}`,
+    };
+  }
+
+  // Default visible rule must exist when reveal/kpi motion CSS is present.
+  const css = extractStyleBlocks(html).replace(/\/\*[\s\S]*?\*\//g, "");
+  const hasRevealMotion =
+    /\.(?:reveal|kpi-card)\b/.test(css) && /opacity\s*:\s*0\b/.test(css);
+  if (hasRevealMotion) {
+    const defaultVisible =
+      /\.reveal\s*,\s*\.kpi-card\s*\{[^}]*opacity\s*:\s*1/.test(css.replace(/\s+/g, " ")) ||
+      /\.reveal\s*\{[^}]*opacity\s*:\s*1/.test(css) ||
+      /\.kpi-card\s*\{[^}]*opacity\s*:\s*1/.test(css);
+    if (!defaultVisible) {
+      return {
+        ok: false,
+        code: "iframe-blank-risk",
+        path,
+        message: `${path}: reveal/kpi opacity:0 present without default opacity:1 (no-JS blank)`,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    code: "iframe-blank-risk",
+    path,
+    message: `${path}: no-JS / iframe blank-risk checks clear`,
+  };
+}
+
+/** Gate A/B hard findings for the corporate readiness rollup. */
+export function checkGateStatuses(opts: {
+  gateA?: GateAResult | { status: string };
+  gateB?: GateBResult | { status: string };
+}): ReliabilityFinding[] {
+  const findings: ReliabilityFinding[] = [];
+  if (opts.gateA) {
+    const pass = opts.gateA.status === "pass";
+    findings.push({
+      ok: pass,
+      code: "gate-a",
+      message: pass
+        ? "Gate A pass (referential + coverage)"
+        : `Gate A ${opts.gateA.status}`,
+    });
+  }
+  if (opts.gateB) {
+    const pass = opts.gateB.status === "pass";
+    const detail =
+      !pass && "failures" in opts.gateB && Array.isArray(opts.gateB.failures)
+        ? ` (${opts.gateB.failures.length} DOM audit failures)`
+        : "";
+    findings.push({
+      ok: pass,
+      code: "gate-b",
+      message: pass
+        ? "Gate B pass (DOM number audit)"
+        : `Gate B ${opts.gateB.status}${detail}`,
+    });
+  }
+  return findings;
 }
 
 export function checkAssetPresence(site: SiteFiles): ReliabilityFinding[] {
@@ -351,6 +476,15 @@ export interface CorporateReliabilityOptions {
   expectedLegalName?: string;
   /** Project titles / slugs that must not appear in identity chrome. */
   forbiddenProjectTitles?: string[];
+  /** Gate A result — included in the corporate readiness rollup when provided. */
+  gateA?: GateAResult | { status: string };
+  /** Gate B result — included in the corporate readiness rollup when provided. */
+  gateB?: GateBResult | { status: string };
+  /**
+   * When true (default), emit preview-vis-text findings per page in addition to
+   * min-content-bytes. Turn off only for narrowly scoped unit fixtures.
+   */
+  previewVisText?: boolean;
 }
 
 /** Normalize for chrome presence checks (case/spacing; Limited optional). */
@@ -442,6 +576,7 @@ export function auditCorporateReliability(
   findings: ReliabilityFinding[];
 } {
   const findings: ReliabilityFinding[] = [];
+  const wantPreviewVis = opts.previewVisText !== false;
   const htmlPaths = Object.keys(site.files)
     .filter((p) => p.endsWith(".html") && !p.startsWith("prototype/"))
     .sort();
@@ -455,6 +590,7 @@ export function auditCorporateReliability(
     return { ok: false, findings };
   }
 
+  findings.push(...checkGateStatuses({ gateA: opts.gateA, gateB: opts.gateB }));
   findings.push(...checkAssetPresence(site));
 
   const available = new Set([
@@ -466,11 +602,15 @@ export function auditCorporateReliability(
   for (const path of htmlPaths) {
     const html = site.files[path]!;
     findings.push(checkPageMinContent(html, path));
+    if (wantPreviewVis) {
+      findings.push(checkPreviewVisText(html, path));
+    }
     if (!peChecked || path === "index.html") {
       findings.push({
         ...checkRevealProgressiveEnhancement(html),
         path,
       });
+      findings.push(checkNoJsContentVisible(html, path));
       peChecked = true;
     }
     if (path === "index.html" || path.endsWith("/index.html")) {
@@ -509,4 +649,12 @@ export function auditCorporateReliability(
 
   const ok = findings.every((f) => f.ok);
   return { ok, findings };
+}
+
+/** Format failing findings for throw / CLI exit messages. */
+export function formatReliabilityFailures(findings: ReliabilityFinding[]): string {
+  return findings
+    .filter((f) => !f.ok)
+    .map((f) => `${f.code}${f.path ? ` [${f.path}]` : ""}: ${f.message}`)
+    .join("\n");
 }

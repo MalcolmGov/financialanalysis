@@ -9,7 +9,9 @@ import {
   auditCorporateReliability,
   checkBrandFallback,
   checkLegalCompanyChrome,
+  checkNoJsContentVisible,
   checkPageMinContent,
+  checkPreviewVisText,
   checkRevealProgressiveEnhancement,
   checkRuntimeShareChrome,
   visibleTextBytes,
@@ -46,6 +48,88 @@ describe("visibleTextBytes / min content", () => {
   it("fails near-blank pages", () => {
     const r = checkPageMinContent("<html><body><p>x</p></body></html>", "index.html");
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("preview-vis-text / iframe blank-risk (P5)", () => {
+  it("fails preview vis_text on near-blank home", () => {
+    const r = checkPreviewVisText("<html><body><p>x</p></body></html>", "index.html");
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("preview-vis-text");
+  });
+
+  it("passes CHROME_CSS no-JS visibility", () => {
+    const page = `<!doctype html><html lang="en"><head><style>${CHROME_CSS}</style></head><body><main class="reveal">IR</main></body></html>`;
+    expect(checkNoJsContentVisible(page, "index.html").ok).toBe(true);
+  });
+
+  it("fails baked html.rs-motion (blank-home crisis class)", () => {
+    const page = `<!doctype html><html class="rs-motion" lang="en"><head><style>${CHROME_CSS}</style></head><body><main class="reveal">IR</main></body></html>`;
+    const r = checkNoJsContentVisible(page, "index.html");
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("iframe-blank-risk");
+  });
+
+  it("fails unguarded opacity:0 as iframe blank-risk", () => {
+    const page = `<!doctype html><html><head><style>.reveal{opacity:0}</style></head><body><main class="reveal">${"content ".repeat(80)}</main></body></html>`;
+    expect(checkNoJsContentVisible(page, "index.html").ok).toBe(false);
+  });
+
+  it("includes preview-vis-text + gate findings in audit rollup", () => {
+    const nav = renderStickyNav(
+      [{ label: "Home", href: "index.html" }],
+      "index.html",
+      "Acme",
+    );
+    const body =
+      "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
+        8,
+      );
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const audit = auditCorporateReliability(
+      {
+        files: {
+          "index.html": page,
+          "assets/site.js": SITE_RUNTIME_JS,
+        },
+        binaries: {
+          "assets/fonts/open-sans-latin-400-normal.woff2": new Uint8Array(64).fill(1),
+        },
+      },
+      { gateA: { status: "pass" }, gateB: { status: "pass" } },
+    );
+    expect(audit.findings.some((f) => f.code === "preview-vis-text" && f.ok)).toBe(true);
+    expect(audit.findings.some((f) => f.code === "gate-a" && f.ok)).toBe(true);
+    expect(audit.findings.some((f) => f.code === "gate-b" && f.ok)).toBe(true);
+    expect(audit.findings.some((f) => f.code === "iframe-blank-risk" && f.ok)).toBe(true);
+    expect(audit.ok).toBe(true);
+  });
+
+  it("fails audit when Gate B fails", () => {
+    const nav = renderStickyNav(
+      [{ label: "Home", href: "index.html" }],
+      "index.html",
+      "Acme",
+    );
+    const body =
+      "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
+        8,
+      );
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const audit = auditCorporateReliability(
+      {
+        files: {
+          "index.html": page,
+          "assets/site.js": SITE_RUNTIME_JS,
+        },
+        binaries: {
+          "assets/fonts/open-sans-latin-400-normal.woff2": new Uint8Array(64).fill(1),
+        },
+      },
+      { gateA: { status: "pass" }, gateB: { status: "fail", failures: [] } },
+    );
+    expect(audit.ok).toBe(false);
+    expect(audit.findings.some((f) => f.code === "gate-b" && !f.ok)).toBe(true);
   });
 });
 

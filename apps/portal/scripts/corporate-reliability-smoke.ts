@@ -1,10 +1,19 @@
 /**
- * P0 / P5 stub — corporate IR reliability smoke against a multipage site tree
- * or zip. CI-friendly: exit 1 on any failure.
+ * P5 — corporate IR readiness smoke against a multipage site tree or zip.
+ * CI-friendly: exit 1 on any failure.
+ *
+ * Covers: preview vis_text floors, PE/opacity guard, iframe blank-risk,
+ * assets, brand fallback, legal name / slug, statement IR fidelity,
+ * runtime share chrome, and Gate A/B when building from fixtures.
  *
  * Usage:
- *   pnpm exec tsx scripts/corporate-reliability-smoke.ts [/tmp/drd-multipage]
- *   pnpm exec tsx scripts/corporate-reliability-smoke.ts /tmp/drd-multipage.zip
+ *   pnpm smoke:corporate-reliability
+ *   pnpm smoke:corporate-reliability /tmp/drd-multipage
+ *   pnpm smoke:corporate-reliability /tmp/drd-multipage.zip
+ *   pnpm smoke:corporate-reliability --expect=DRDGOLD --forbid=DRD Gold 1 /tmp/drd-multipage
+ *
+ * Live authenticated iframe path (portal session):
+ *   pnpm smoke:preview-vis-text
  *
  * When no path is given, builds from local DRD fixtures (same as build-multipage-export).
  */
@@ -66,6 +75,9 @@ async function buildFromFixtures(): Promise<{
   site: SiteFiles;
   expectedLegalName: string;
   forbiddenProjectTitles: string[];
+  gateA: { status: string };
+  gateB: { status: string };
+  reliabilityOk: boolean;
 }> {
   const extraction = JSON.parse(
     await fs.readFile("/tmp/drd-extraction.json", "utf8"),
@@ -94,21 +106,29 @@ async function buildFromFixtures(): Promise<{
   process.stdout.write(
     `Resolved company: “${built.company}” (${built.companySource}); precheck “${legal.company}”\n`,
   );
+  process.stdout.write(
+    `Gate A: ${built.gateA.status} · Gate B: ${built.gateB.status} · reliability: ${built.reliability.ok ? "pass" : "fail"}\n`,
+  );
   return {
     site: { files: built.files, binaries: built.binaries },
     expectedLegalName: built.company,
     forbiddenProjectTitles: ["DRD Gold 1"],
+    gateA: { status: built.gateA.status },
+    gateB: { status: built.gateB.status },
+    reliabilityOk: built.reliability.ok,
   };
 }
 
 async function main() {
-  const target = process.argv[2];
+  const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+  const target = args[0];
   let site: SiteFiles;
   let label: string;
   let expectedLegalName: string | undefined;
   let forbiddenProjectTitles: string[] | undefined;
+  let gateA: { status: string } | undefined;
+  let gateB: { status: string } | undefined;
 
-  // Optional: --expect=DRDGOLD --forbid=DRD Gold 1
   for (const arg of process.argv.slice(2)) {
     if (arg.startsWith("--expect=")) expectedLegalName = arg.slice("--expect=".length);
     if (arg.startsWith("--forbid=")) {
@@ -122,10 +142,11 @@ async function main() {
     site = built.site;
     expectedLegalName = expectedLegalName ?? built.expectedLegalName;
     forbiddenProjectTitles = forbiddenProjectTitles ?? built.forbiddenProjectTitles;
+    gateA = built.gateA;
+    gateB = built.gateB;
   } else if (target.endsWith(".zip")) {
     label = target;
     site = await loadZip(target);
-    // DRD pilot defaults when auditing a tree without flags
     if (!expectedLegalName && !forbiddenProjectTitles) {
       forbiddenProjectTitles = ["DRD Gold 1"];
       expectedLegalName = "DRDGOLD";
@@ -143,7 +164,7 @@ async function main() {
     .filter((p) => p.endsWith(".html") && !p.startsWith("prototype/"))
     .sort();
 
-  process.stdout.write(`Corporate reliability smoke · ${label}\n`);
+  process.stdout.write(`P5 corporate readiness smoke · ${label}\n`);
   process.stdout.write(`Pages: ${htmlPages.length}\n`);
   if (expectedLegalName) process.stdout.write(`Expect legal name: ${expectedLegalName}\n`);
   if (forbiddenProjectTitles?.length) {
@@ -153,6 +174,8 @@ async function main() {
   const { ok, findings } = auditCorporateReliability(site, {
     expectedLegalName,
     forbiddenProjectTitles,
+    gateA,
+    gateB,
   });
   let failed = 0;
   for (const f of findings) {

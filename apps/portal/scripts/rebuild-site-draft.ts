@@ -9,7 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getPrivate, putPrivate } from "../lib/blob";
-import { resolveLegalCompanyName } from "@rs/render";
+import { formatReliabilityFailures, resolveLegalCompanyName } from "@rs/render";
 import { loadBrandBytes, resolveAssetUris } from "../lib/brand-assets";
 import { buildMultipageExport, type BrandAssetBytes } from "../lib/build-multipage-export";
 import { db, schema } from "../lib/db";
@@ -114,6 +114,22 @@ async function main() {
     console.warn(`build company “${built.company}” ≠ pre-resolve “${legal.company}”`);
   }
 
+  // P5 — hard-fail before persist so a bad draft never becomes the console preview.
+  const gateOk = built.gateA.status === "pass" && built.gateB.status === "pass";
+  if (!gateOk || !built.reliability.ok) {
+    console.error("Corporate readiness gates FAILED — draft not persisted:");
+    console.error(
+      `  Gate A: ${built.gateA.status} · Gate B: ${built.gateB.status} · reliability: ${built.reliability.ok ? "pass" : "fail"}`,
+    );
+    for (const f of built.reliability.findings.filter((x) => !x.ok)) {
+      console.error(`  ✗ ${f.code}${f.path ? ` [${f.path}]` : ""}: ${f.message}`);
+    }
+    if (!built.reliability.ok) {
+      console.error(formatReliabilityFailures(built.reliability.findings));
+    }
+    process.exit(1);
+  }
+
   const existing = await db()
     .select({ version: schema.artifacts.version })
     .from(schema.artifacts)
@@ -167,7 +183,8 @@ async function main() {
     gate_a: { status: built.gateA.status },
     gate_b: { status: built.gateB.status },
     created_at: new Date().toISOString(),
-    note: "rebuilt via scripts/rebuild-site-draft.ts (P4 runtime/share polish)",
+    note: "rebuilt via scripts/rebuild-site-draft.ts (P5 corporate QA gates)",
+    corporate_reliability: built.reliability.ok ? "pass" : "fail",
   };
   const manifestPut = await putPrivate(
     `${prefix}/_meta/draft.json`,
@@ -195,6 +212,7 @@ async function main() {
       files: built.paths.filter((p) => p.endsWith(".html")),
       gateA: built.gateA.status,
       gateB: built.gateB.status,
+      corporateReliability: built.reliability.ok ? "pass" : "fail",
       fileCount: built.paths.length,
       rebuiltOffline: true,
     },
@@ -215,6 +233,7 @@ async function main() {
         pages: built.pages.length,
         gateA: built.gateA.status,
         gateB: built.gateB.status,
+        corporateReliability: built.reliability.ok ? "pass" : "fail",
         excelSheets: built.excelSheetNames,
         pdfBundled: built.pdfBundled,
         brandLogo: built.brandLogo,
