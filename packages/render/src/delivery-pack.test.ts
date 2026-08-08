@@ -66,7 +66,7 @@ describe("checkDeliveryPack", () => {
       "DRDGOLD Limited",
     );
     const seo = `<meta property="og:title" content="DRDGOLD"><meta property="og:description" content="Results"><meta property="og:site_name" content="DRDGOLD Investor Results Centre"><script type="application/ld+json">{"@type":"Report","name":"DRDGOLD Limited"}</script>`;
-    const home = `<!doctype html><html><head>${seo}<style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${padBody()}</main><script src="assets/site.js"></script></body></html>`;
+    const home = `<!doctype html><html><head>${seo}<style>${CHROME_CSS}</style></head><body>${nav}<main class="reveal">${padBody()}</main>${renderShareBar()}<script src="assets/site.js"></script></body></html>`;
     const downloads = `<!doctype html><html><head>${seo.replace("Report", "WebPage")}</head><body><main><section class="downloads" data-dna-component="downloads">
 <a class="dl-link" href="assets/source.pdf">PDF</a>
 <a class="dl-link" href="assets/excel/financial-statements.xlsx">XLSX</a>
@@ -141,7 +141,7 @@ describe("auditCorporateReliability deliveryPack auto", () => {
   it("rolls delivery-pack failures into corporate audit when downloads present", () => {
     const nav = renderStickyNav([{ label: "Home", href: "index.html" }], "index.html", "Acme");
     const body = padBody();
-    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main><script src="assets/site.js"></script></body></html>`;
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}<main class="reveal">${body}</main>${renderShareBar()}<script src="assets/site.js"></script></body></html>`;
     const audit = auditCorporateReliability(
       {
         files: {

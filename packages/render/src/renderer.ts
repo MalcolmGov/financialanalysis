@@ -8,6 +8,7 @@ import type {
 } from "@rs/contracts";
 import {
   CHROME_CSS,
+  collectFooterExtras,
   renderBreadcrumb,
   renderPrevNext,
   renderSelectionTooltip,
@@ -16,7 +17,7 @@ import {
   renderStickyNav,
 } from "./chrome.js";
 import { enrichMultiPageFiles } from "./enrich.js";
-import { extractHomeKpis } from "./home-composer.js";
+import { extractHomeKpis, resolveDisplayPeriodLabel } from "./home-composer.js";
 import { linkNoteRefHtml, notesBaseHref } from "./notes-linker.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
 import { fontFaceCss } from "./fonts.js";
@@ -360,10 +361,15 @@ export function renderSitePlan(
   const files: Record<string, string> = {};
   const multiPage = plan.pages.length > 1 || plan.model === "deterministic-multipage";
   const company = ctx.docModel?.meta?.company;
-  const periodLabel = ctx.docModel?.meta?.period_label;
+  const periodLabel = ctx.docModel
+    ? resolveDisplayPeriodLabel(ctx.docModel, ctx.extraction)
+    : undefined;
   const docKind = ctx.docModel?.meta?.doc_kind;
   const currency = ctx.docModel?.meta?.currency;
   const homeKpis = ctx.docModel ? extractHomeKpis(ctx.docModel) : [];
+  const footerExtras = ctx.docModel
+    ? collectFooterExtras(ctx.docModel, ctx.extraction)
+    : null;
   // Exclude legacy aggregate from prev/next so WW IA pages chain cleanly.
   const pageOrder = plan.pages
     .filter((p) => !p.path.startsWith("statements/"))
@@ -414,12 +420,24 @@ export function renderSitePlan(
       ? hrefFromPage(page.path, ctx.brandAssets.logo)
       : undefined;
     const chromeTop = multiPage
-      ? `${renderStickyNav(plan.nav, page.path, company, logoHref)}${renderShareBar()}${
+      ? `${renderStickyNav(plan.nav, page.path, company, logoHref)}${
           crumbInHero ? "" : renderBreadcrumb(page.path, page.title, company)
         }`
       : "";
     const chromeBottom = multiPage
-      ? `${renderPrevNext(pageOrder, page.path)}${renderSiteFooter(company, periodLabel, logoHref)}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
+      ? `${renderPrevNext(pageOrder, page.path)}${renderShareBar()}${renderSiteFooter({
+          company,
+          periodLabel,
+          logoHref,
+          nav: plan.nav,
+          currentPath: page.path,
+          listingCodes: footerExtras?.listingCodes,
+          website: footerExtras?.website,
+          phone: footerExtras?.phone,
+          blurb: footerExtras?.blurb,
+          publishedLine: footerExtras?.publishedLine,
+          resultsLine: footerExtras?.resultsLine,
+        })}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
       : "";
 
     // Prefer injecting chrome around main; otherwise wrap body content.

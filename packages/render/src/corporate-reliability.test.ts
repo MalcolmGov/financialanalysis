@@ -85,7 +85,7 @@ describe("preview-vis-text / iframe blank-risk (P5)", () => {
       "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
         8,
       );
-    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}<main class="reveal">${body}</main>${renderShareBar()}${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
     const audit = auditCorporateReliability(
       {
         files: {
@@ -115,7 +115,7 @@ describe("preview-vis-text / iframe blank-risk (P5)", () => {
       "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
         8,
       );
-    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}<main class="reveal">${body}</main>${renderShareBar()}${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
     const audit = auditCorporateReliability(
       {
         files: {
@@ -166,7 +166,7 @@ describe("checkRuntimeShareChrome", () => {
       "index.html",
       "Acme",
     );
-    const home = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main>IR</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const home = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}<main>IR</main>${renderShareBar()}${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
     const findings = checkRuntimeShareChrome({
       files: { "index.html": home, "assets/site.js": SITE_RUNTIME_JS },
     });
@@ -186,7 +186,7 @@ describe("auditCorporateReliability", () => {
       "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
         8,
       );
-    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}<main class="reveal">${body}</main>${renderShareBar()}${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
     const site = {
       files: {
         "index.html": page,

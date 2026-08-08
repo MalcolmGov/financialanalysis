@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { FinancialDocModel } from "@rs/contracts";
 import {
   BRAND_IMG_ONERROR,
   CHROME_CSS,
+  collectFooterExtras,
   renderSelectionTooltip,
   renderShareBar,
+  renderSiteFooter,
   renderStickyNav,
 } from "./chrome.js";
 import { renderKpiCardsHtml, segmentHighlightKpis } from "./home-kpis.js";
@@ -140,6 +143,90 @@ describe("share chrome", () => {
     expect(bar).toContain("aria-live");
     // No dead href="#" LinkedIn chrome
     expect(bar).not.toContain('href="#"');
+    // Footer-region full-bleed band with brand top rule (not under masthead).
+    expect(CHROME_CSS).toMatch(
+      /\.share-bar\{[^}]*max-width:none[^}]*border-top:3px solid var\(--dna-brand/,
+    );
+    expect(CHROME_CSS).toContain(".share-bar + .site-footer .site-footer__accent");
+  });
+});
+
+describe("site footer chrome", () => {
+  it("emits full-bleed multi-column footer with nav + copyright bar", () => {
+    const html = renderSiteFooter({
+      company: "DRDGOLD Limited",
+      periodLabel: "HY1 FY2026",
+      nav: [
+        { label: "Home", href: "index.html" },
+        { label: "Commentary", href: "commentary.html" },
+        { label: "Administration", href: "administration.html" },
+        { label: "Downloads", href: "downloads.html" },
+        { label: "Income Statement", href: "financials/income-statement.html" },
+        { label: "Balance Sheet", href: "financials/balance-sheet.html" },
+        { label: "Notes", href: "financials/notes.html" },
+      ],
+      currentPath: "index.html",
+      listingCodes: ["JSE: DRD", "NYSE: DRD"],
+      website: "drdgold.com",
+      phone: "+27 (0)11 470 2600",
+      blurb: "Surface gold retreatment company listed on the JSE and NYSE.",
+      publishedLine: "Published 18 February 2026",
+      resultsLine: "Results for six months ended 31 December 2025",
+    });
+    expect(html).toContain('data-dna-component="site-footer"');
+    expect(html).toContain("site-footer__grid");
+    expect(html).toContain(">Results<");
+    expect(html).toContain(">Financials<");
+    expect(html).toContain(">DRDGOLD<");
+    expect(html).toContain("commentary.html");
+    expect(html).toContain("financials/balance-sheet.html");
+    expect(html).toContain("drdgold.com");
+    expect(html).toContain("+27 (0)11 470 2600");
+    expect(html).toContain("JSE: DRD");
+    expect(html).toContain("NYSE: DRD");
+    expect(html).toContain("Published 18 February 2026");
+    expect(html).toContain('class="site-footer__brand"');
+    expect(CHROME_CSS).toMatch(/\.site-footer__grid\{[^}]*grid-template-columns/);
+  });
+
+  it("collectFooterExtras omits phone when absent and reads listing codes", () => {
+    const dm = {
+      schema_version: "docmodel/1",
+      doc_model_id: "d1",
+      extraction_id: "e1",
+      content_hash: "a".repeat(64),
+      meta: {
+        company: "DRDGOLD Limited",
+        period_label: "HY1 FY2026",
+        doc_kind: "interim_unaudited",
+        currency: "ZAR",
+      },
+      sections: [
+        {
+          id: "doc:sec-cover",
+          kind: "highlights",
+          title: "Cover",
+          blocks: [
+            {
+              kind: "paragraph",
+              text: "JSE and A2X share code: DRD NYSE trading symbol: DRD Published 18 February 2026 for the six months ended 31 December 2025. Visit www.drdgold.com for more.",
+              src_ref: "ext:blk-1",
+            },
+          ],
+        },
+      ],
+      tables: [],
+      footnotes: [],
+      mapping_review: [],
+    } as FinancialDocModel;
+    const extras = collectFooterExtras(dm);
+    expect(extras.listingCodes).toEqual(
+      expect.arrayContaining(["JSE: DRD", "NYSE: DRD"]),
+    );
+    expect(extras.website).toBe("drdgold.com");
+    expect(extras.phone).toBeUndefined();
+    expect(extras.publishedLine).toMatch(/Published 18 February 2026/i);
+    expect(extras.resultsLine).toMatch(/six months ended 31 December 2025/i);
   });
 });
 

@@ -6,6 +6,7 @@
  * Interaction behaviour lives in site-runtime.ts (assets/site.js).
  */
 
+import type { ExtractionResult, FinancialDocModel } from "@rs/contracts";
 import { SITE_RUNTIME_JS } from "./site-runtime.js";
 
 function escapeHtml(s: string): string {
@@ -212,24 +213,318 @@ export function renderPrevNext(
   return parts.join("");
 }
 
-/** Site-wide identity footer — company / period only (no invented figures). */
-export function renderSiteFooter(
-  company?: string,
-  periodLabel?: string,
-  logoHref?: string,
+export interface SiteFooterOptions {
+  company?: string;
+  periodLabel?: string;
+  logoHref?: string;
+  /** Flat site nav — split into Results / Financials columns. */
+  nav?: Array<{ label: string; href: string }>;
+  currentPath?: string;
+  /** Verbatim exchange codes, e.g. "JSE: DRD", "NYSE: DRD". */
+  listingCodes?: string[];
+  /** Host or URL from source (never invented). */
+  website?: string;
+  /** Phone from contacts/extraction (omit when absent). */
+  phone?: string;
+  /** Investor Relations link (defaults to administration.html when present in nav). */
+  irHref?: string;
+  irLabel?: string;
+  /** Short company blurb from source text only. */
+  blurb?: string;
+  /** e.g. "Published 18 February 2026" — verbatim when found. */
+  publishedLine?: string;
+  /** e.g. "Results for six months ended 31 December 2025". */
+  resultsLine?: string;
+}
+
+export interface FooterExtras {
+  listingCodes: string[];
+  website?: string;
+  phone?: string;
+  blurb?: string;
+  publishedLine?: string;
+  resultsLine?: string;
+}
+
+function walkTextNodes(
+  nodes: ExtractionResult["body"] | undefined,
+  out: string[],
+): void {
+  for (const n of nodes ?? []) {
+    const t = n.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (t) out.push(t);
+    if (n.children?.length) walkTextNodes(n.children, out);
+  }
+}
+
+/** Gather source texts for footer contact / listing / period furniture. */
+function footerSourceTexts(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): string[] {
+  const out: string[] = [];
+  for (const sec of docModel.sections) {
+    for (const b of sec.blocks) {
+      const t = b.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      if (t) out.push(t);
+    }
+  }
+  if (extraction) {
+    walkTextNodes(extraction.body, out);
+    walkTextNodes(extraction.furniture, out);
+  }
+  return out;
+}
+
+/**
+ * Pull footer extras from DocModel / extraction — listing codes, contact,
+ * published date, blurb. Never invents phone, tickers, or business description.
+ */
+export function collectFooterExtras(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): FooterExtras {
+  const sources = footerSourceTexts(docModel, extraction);
+  const blob = sources.join("\n");
+
+  const listingCodes: string[] = [];
+  const seen = new Set<string>();
+  const listingPatterns = [
+    /JSE\s*(?:and|&)?\s*A2X\s*share code:\s*([A-Z0-9]+)/i,
+    /JSE(?:\s*share code)?:\s*([A-Z0-9]+)/i,
+    /NYSE\s*trading symbol:\s*([A-Z0-9]+)/i,
+    /NYSE:\s*([A-Z0-9]+)/i,
+  ];
+  for (const text of sources) {
+    for (const re of listingPatterns) {
+      const m = text.match(re);
+      if (!m?.[1]) continue;
+      const exchange = /NYSE/i.test(m[0]) ? "NYSE" : "JSE";
+      const code = `${exchange}: ${m[1].toUpperCase()}`;
+      const key = code.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      listingCodes.push(code);
+    }
+  }
+
+  let website: string | undefined;
+  const webRe =
+    /(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.(?:com|co\.za|net|org))\b/gi;
+  let wm: RegExpExecArray | null;
+  while ((wm = webRe.exec(blob))) {
+    const host = (wm[1] || "").toLowerCase();
+    if (!host || /^(example|google|microsoft|w3|schema)\./i.test(host)) continue;
+    // Prefer issuer-looking domains (contains company token) over generic.
+    const companyTok = (docModel.meta.company || "")
+      .replace(/\b(limited|ltd\.?|plc|inc\.?)\b/gi, "")
+      .replace(/[^a-z0-9]/gi, "")
+      .toLowerCase();
+    if (companyTok && host.replace(/\./g, "").includes(companyTok.slice(0, 6))) {
+      website = host;
+      break;
+    }
+    if (!website) website = host;
+  }
+
+  let phone: string | undefined;
+  const phonePatterns = [
+    /(?:Tel(?:ephone)?|Phone|Call)\s*[:.]?\s*(\+?\d[\d\s()./-]{8,}\d)/i,
+    /(\+27\s*(?:\(\s*0\s*\)\s*)?[\d\s()./-]{7,}\d)/,
+  ];
+  for (const re of phonePatterns) {
+    const m = blob.match(re);
+    if (m?.[1]) {
+      phone = m[1].replace(/\s+/g, " ").trim();
+      break;
+    }
+  }
+
+  let publishedLine: string | undefined;
+  const pub = blob.match(/Published\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}/i)?.[0];
+  if (pub) publishedLine = pub.replace(/\s+/g, " ").trim();
+
+  let resultsLine: string | undefined;
+  const periodRe =
+    /(?:Condensed\s+Consolidated\s+(?:Unaudited\s+)?(?:Interim\s+)?Results\s+for\s+the\s+)?(?:six months|year)\s+ended\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}/i;
+  let bestPeriod = "";
+  for (const text of sources) {
+    const m = text.match(periodRe)?.[0];
+    if (!m) continue;
+    const phrase = m.replace(/\s+/g, " ").trim();
+    if (phrase.length > bestPeriod.length) bestPeriod = phrase;
+  }
+  if (bestPeriod) {
+    resultsLine = /^results\b/i.test(bestPeriod)
+      ? bestPeriod
+      : /^condensed\b/i.test(bestPeriod)
+        ? bestPeriod
+        : `Results for ${bestPeriod.replace(/^for the\s+/i, "")}`;
+  }
+
+  let blurb: string | undefined;
+  const blurbRe =
+    /([^.!?\n]{12,160}?(?:surface gold|retreatment|listed on the (?:JSE|NYSE)|listed on both the JSE)[^.!?\n]{0,80}[.!?]?)/i;
+  const blurbHit = blob.match(blurbRe)?.[1]?.replace(/\s+/g, " ").trim();
+  if (blurbHit && blurbHit.length >= 20 && blurbHit.length <= 180) {
+    blurb = blurbHit;
+  } else if (listingCodes.some((c) => c.startsWith("JSE")) && listingCodes.some((c) => c.startsWith("NYSE"))) {
+    blurb = "Listed on the JSE and NYSE.";
+  } else if (listingCodes.some((c) => c.startsWith("JSE"))) {
+    blurb = "Listed on the JSE.";
+  } else if (listingCodes.some((c) => c.startsWith("NYSE"))) {
+    blurb = "Listed on the NYSE.";
+  }
+
+  return { listingCodes, website, phone, blurb, publishedLine, resultsLine };
+}
+
+function footerColLinks(
+  items: Array<{ label: string; href: string }>,
+  currentPath: string,
 ): string {
-  const brand = company?.trim() || "Investor results";
-  const period = periodLabel?.trim();
+  if (!items.length) return "";
+  const lis = items
+    .map((item) => {
+      const href = hrefFrom(currentPath, item.href);
+      const isCur = item.href === currentPath ? ' aria-current="page"' : "";
+      return `<li><a href="${escapeHtml(href)}"${isCur}>${escapeHtml(item.label)}</a></li>`;
+    })
+    .join("");
+  return `<ul class="site-footer__links">${lis}</ul>`;
+}
+
+function shortBrandHeading(company: string): string {
+  const trimmed = company.trim();
+  if (!trimmed) return "Company";
+  // DRDGOLD Limited → DRDGOLD; keep multi-word brands otherwise.
+  const tok = trimmed.match(/^([A-Z][A-Z0-9]{1,24})\b/);
+  if (tok?.[1] && tok[1].length >= 3) return tok[1];
+  return trimmed.replace(/\b(Limited|Ltd\.?|plc|Inc\.?)\b/gi, "").trim() || trimmed;
+}
+
+function copyrightYear(
+  publishedLine?: string,
+  periodLabel?: string,
+  resultsLine?: string,
+): string {
+  for (const s of [publishedLine, resultsLine, periodLabel]) {
+    if (!s) continue;
+    const years = [...s.matchAll(/\b(20\d{2})\b/g)].map((m) => m[1]!);
+    if (years.length) return years[years.length - 1]!;
+  }
+  return "";
+}
+
+/**
+ * Site-wide identity footer — multi-column Results / Financials / contact
+ * plus copyright bar. Contact phone / website only when found in source.
+ */
+export function renderSiteFooter(
+  companyOrOpts?: string | SiteFooterOptions,
+  periodLabelArg?: string,
+  logoHrefArg?: string,
+): string {
+  const opts: SiteFooterOptions =
+    typeof companyOrOpts === "object" && companyOrOpts !== null
+      ? companyOrOpts
+      : {
+          company: companyOrOpts,
+          periodLabel: periodLabelArg,
+          logoHref: logoHrefArg,
+        };
+
+  const brand = opts.company?.trim() || "Investor results";
+  const period = opts.periodLabel?.trim();
+  const logoHref = opts.logoHref;
+  const currentPath = opts.currentPath || "index.html";
   const logoKind =
     logoHref && /\.svg($|\?)/i.test(logoHref) ? "svg" : logoHref ? "raster" : "";
   const logo = logoHref
-    ? `<div class="site-footer__lockup"><img class="site-footer__logo site-footer__logo--${logoKind}" src="${escapeHtml(logoHref)}" alt="" width="132" height="34" decoding="async" data-brand-img onerror="${BRAND_IMG_ONERROR}"></div>`
-    : "";
-  return `<footer class="site-footer" data-dna-component="site-footer"><div class="site-footer__accent" aria-hidden="true"></div><div class="site-footer__inner">${logo}<p class="site-footer__brand" data-allow-number>${escapeHtml(brand)}</p>${
-    period
-      ? `<p class="site-footer__period" data-allow-number>${escapeHtml(period)}</p>`
+    ? `<div class="site-footer__lockup"><img class="site-footer__logo site-footer__logo--${logoKind}" src="${escapeHtml(logoHref)}" alt="${escapeHtml(brand)}" width="148" height="40" decoding="async" data-brand-img onerror="${BRAND_IMG_ONERROR}"></div>`
+    : `<p class="site-footer__brand site-footer__brand--text" data-allow-number>${escapeHtml(brand)}</p>`;
+
+  const nav = opts.nav ?? [];
+  const financials = nav.filter(
+    (item) =>
+      item.href.startsWith(FINANCIALS_PREFIX) ||
+      /statement|balance|equity|cash|notes/i.test(item.label),
+  );
+  const results = nav.filter((item) => !financials.includes(item));
+
+  const blurb =
+    opts.blurb?.trim() ||
+    (period ? "" : "Condensed consolidated results — interactive microsite");
+  const periodLine = opts.resultsLine?.trim() || period || "";
+
+  const brandCol = `<div class="site-footer__col site-footer__col--brand">${logo}${
+    blurb
+      ? `<p class="site-footer__blurb" data-allow-number>${escapeHtml(blurb)}</p>`
       : ""
-  }<p class="site-footer__note">Condensed consolidated results — interactive microsite</p></div></footer>`;
+  }${
+    periodLine
+      ? `<p class="site-footer__period" data-allow-number>${escapeHtml(periodLine)}</p>`
+      : ""
+  }</div>`;
+
+  const resultsCol = results.length
+    ? `<div class="site-footer__col"><p class="site-footer__heading">Results</p>${footerColLinks(results, currentPath)}</div>`
+    : "";
+  const finCol = financials.length
+    ? `<div class="site-footer__col"><p class="site-footer__heading">Financials</p>${footerColLinks(financials, currentPath)}</div>`
+    : "";
+
+  const companyHeading = shortBrandHeading(brand);
+  const companyLinks: string[] = [];
+  if (opts.website) {
+    const host = opts.website.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+    const href = /^https?:\/\//i.test(opts.website)
+      ? opts.website
+      : `https://${host}`;
+    companyLinks.push(
+      `<li><a href="${escapeHtml(href)}" rel="noopener noreferrer" target="_blank">${escapeHtml(host)}</a></li>`,
+    );
+  }
+  const irHref =
+    opts.irHref ||
+    (nav.some((n) => n.href === "administration.html")
+      ? hrefFrom(currentPath, "administration.html")
+      : undefined);
+  if (irHref) {
+    companyLinks.push(
+      `<li><a href="${escapeHtml(irHref)}">${escapeHtml(opts.irLabel || "Investor Relations")}</a></li>`,
+    );
+  }
+  if (opts.phone) {
+    const tel = opts.phone.replace(/[^\d+]/g, "");
+    companyLinks.push(
+      `<li><a href="tel:${escapeHtml(tel)}" data-allow-number>${escapeHtml(opts.phone)}</a></li>`,
+    );
+  }
+  const companyCol = companyLinks.length
+    ? `<div class="site-footer__col"><p class="site-footer__heading" data-allow-number>${escapeHtml(companyHeading)}</p><ul class="site-footer__links">${companyLinks.join("")}</ul></div>`
+    : "";
+
+  const year = copyrightYear(opts.publishedLine, period, opts.resultsLine);
+  const listingBit = (opts.listingCodes ?? []).length
+    ? ` ${(opts.listingCodes ?? []).map((c) => escapeHtml(c)).join(" | ")}`
+    : "";
+  const copyLeft = `<p class="site-footer__copy">© ${
+    year ? `${escapeHtml(year)} ` : ""
+  }<span class="site-footer__brand" data-allow-number>${escapeHtml(brand)}</span>. All rights reserved.${
+    listingBit ? ` ${listingBit}` : ""
+  }</p>`;
+
+  const rightBits = [opts.publishedLine, opts.resultsLine || period]
+    .filter(Boolean)
+    .map((s) => escapeHtml(s!));
+  // Prefer "Results for …" over raw HY token on the right when both differ.
+  const rightUnique = [...new Set(rightBits)];
+  const copyRight = rightUnique.length
+    ? `<p class="site-footer__meta" data-allow-number>${rightUnique.join(" | ")}</p>`
+    : "";
+
+  return `<footer class="site-footer" data-dna-component="site-footer"><div class="site-footer__accent" aria-hidden="true"></div><div class="site-footer__inner"><div class="site-footer__grid">${brandCol}${resultsCol}${finCol}${companyCol}</div></div><div class="site-footer__bar"><div class="site-footer__bar-inner">${copyLeft}${copyRight}</div></div></footer>`;
 }
 
 export function renderShareBar(): string {
@@ -255,7 +550,7 @@ export const CHROME_CSS = `
 /* rs-ir-chrome — premium DNA-matched type (Open Sans; no Inter CDN) */
 html{scroll-behavior:smooth;font-size:16px}
 body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.9375rem;line-height:1.55;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-optical-sizing:auto}
-/* Full-bleed shell: masthead/share/heroes stretch edge-to-edge. Content rails keep 1120. */
+/* Full-bleed shell: masthead/heroes/share/footer stretch edge-to-edge. Content rails keep 1120. */
 main[data-dna-component="page-shell"]{max-width:none!important;width:100%;margin:0!important;padding:0 0 2rem!important;display:block;box-sizing:border-box}
 .site-nav{position:sticky;top:0;z-index:40;width:100%;max-width:none;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 97%,#000);border-bottom:3px solid var(--dna-brand,#FCAF17);box-shadow:0 10px 32px rgba(15,59,46,.28);transition:box-shadow .25s ease,background-color .25s ease}
 .site-nav.is-scrolled{box-shadow:0 14px 40px rgba(15,59,46,.38);background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 99%,#000)}
@@ -310,13 +605,14 @@ html.nav-mobile-open{overflow:hidden}
   .home-hero__stage .kpi-grid{grid-template-columns:1fr 1fr}
   .kpi-card{min-height:8.5rem;padding:1.15rem 1.05rem 1rem}
 }
-.share-bar{display:flex;flex-wrap:wrap;gap:.55rem 1rem;align-items:center;max-width:none;width:100%;margin:0;padding:.7rem clamp(1rem,3vw,2rem) .8rem;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);background:var(--dna-paper,#fff);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);box-sizing:border-box}
+/* Footer-region share: full-bleed paper band with brand top rule, above the dark footer. */
+.share-bar{display:flex;flex-wrap:wrap;gap:.55rem 1rem;align-items:center;max-width:none;width:100%;margin:0;padding:.75rem clamp(1rem,3vw,2rem) .85rem;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);background:var(--dna-paper,#fff);border-top:3px solid var(--dna-brand,#FCAF17);box-sizing:border-box}
 .share-bar__label{font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--dna-brand,#FCAF17)}
 .share-bar__actions{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;max-width:none}
 .share-bar__btn{display:inline-flex;align-items:center;gap:.4rem;font-family:inherit;font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff));background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff));border:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);padding:.42rem .7rem;cursor:pointer;text-decoration:none;transition:color .15s ease,border-color .15s ease,background .15s ease}
-/* Paper band above the dark hero so Share doesn’t feel jammed into the masthead. */
-.share-bar + .home-hero,.share-bar + main > .home-hero:first-child{border-top:10px solid var(--dna-paper,#fff)}
 .share-bar__btn:hover,.share-bar__btn.is-active{color:var(--dna-masthead,#0F3B2E);border-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 12%,var(--dna-paper,#fff))}
+/* Avoid a double brand rule when share sits directly above the footer accent. */
+.share-bar + .site-footer .site-footer__accent{display:none}
 .share-bar__btn:focus-visible,.share-tip-btn:focus-visible{outline:2px solid var(--dna-brand,#FCAF17);outline-offset:2px}
 .share-bar__ico{display:inline-block;width:12px;height:12px;flex-shrink:0;opacity:.85;background:currentColor;mask-size:contain;mask-repeat:no-repeat;mask-position:center;-webkit-mask-size:contain;-webkit-mask-repeat:no-repeat;-webkit-mask-position:center}
 .share-bar__ico--link{mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23000' d='M6.5 9.5a2.5 2.5 0 0 1 0-3.5l1.8-1.8a2.5 2.5 0 0 1 3.5 3.5L10.5 9a.75.75 0 0 0 1.06 1.06l1.3-1.3a4 4 0 1 0-5.66-5.66L5.4 4.9a4 4 0 0 0 0 5.66.75.75 0 0 0 1.1-1.06zm3 0a2.5 2.5 0 0 1 0 3.5l-1.8 1.8a2.5 2.5 0 0 1-3.5-3.5L5.5 7a.75.75 0 0 0-1.06-1.06l-1.3 1.3a4 4 0 1 0 5.66 5.66l1.8-1.8a4 4 0 0 0 0-5.66.75.75 0 1 0-1.1 1.06z'/%3E%3C/svg%3E");-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23000' d='M6.5 9.5a2.5 2.5 0 0 1 0-3.5l1.8-1.8a2.5 2.5 0 0 1 3.5 3.5L10.5 9a.75.75 0 0 0 1.06 1.06l1.3-1.3a4 4 0 1 0-5.66-5.66L5.4 4.9a4 4 0 0 0 0 5.66.75.75 0 0 0 1.1-1.06zm3 0a2.5 2.5 0 0 1 0 3.5l-1.8 1.8a2.5 2.5 0 0 1-3.5-3.5L5.5 7a.75.75 0 0 0-1.06-1.06l-1.3 1.3a4 4 0 1 0 5.66 5.66l1.8-1.8a4 4 0 0 0 0-5.66.75.75 0 1 0-1.1 1.06z'/%3E%3C/svg%3E")}
@@ -355,18 +651,39 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .page-pager .pager-title{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.05rem;font-weight:800;letter-spacing:-.015em}
 .page-pager .pager-next{text-align:right;margin-left:auto}
 .page-pager .is-empty{flex:1}
-.site-footer{margin-top:0;background:var(--dna-masthead,#0F3B2E);color:rgba(255,255,255,.82)}
+.site-footer{margin-top:0;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 94%,#000);color:rgba(255,255,255,.78)}
 .site-footer__accent{height:3px;background:var(--dna-footer-accent,var(--dna-brand,#FCAF17))}
-.site-footer__inner{max-width:1120px;margin:0 auto;padding:2.35rem clamp(1rem,3vw,2rem) 2.75rem;display:grid;gap:.55rem}
-.site-footer__lockup{display:inline-flex;align-items:center;padding:.2rem 0;margin-bottom:.15rem;width:fit-content;background:transparent;border:0}
+.site-footer__inner{max-width:1120px;margin:0 auto;padding:2.6rem clamp(1rem,3vw,2rem) 1.5rem}
+.site-footer__grid{display:grid;grid-template-columns:1.4fr repeat(3,minmax(0,1fr));gap:2rem 1.75rem;align-items:start}
+.site-footer__col{min-width:0}
+.site-footer__heading{margin:0 0 .9rem;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:rgba(255,255,255,.92)}
+.site-footer__links{list-style:none;margin:0;padding:0;display:grid;gap:.48rem}
+.site-footer__links a{color:rgba(255,255,255,.7);text-decoration:none;font-size:.88rem;letter-spacing:-.01em;line-height:1.35}
+.site-footer__links a:hover,.site-footer__links a:focus-visible{color:var(--dna-brand,#FCAF17)}
+.site-footer__lockup{display:inline-flex;align-items:center;padding:0;margin:0 0 .35rem;width:fit-content;background:transparent;border:0}
 .site-footer__lockup.is-broken,.site-footer__lockup:has(img[hidden]){display:none!important}
 .site-footer__logo[hidden]{display:none!important}
-.site-footer__logo{display:block;height:34px;width:auto;max-width:148px;object-fit:contain;opacity:.95;image-rendering:-webkit-optimize-contrast;background:transparent}
+.site-footer__logo{display:block;height:40px;width:auto;max-width:168px;object-fit:contain;opacity:.96;image-rendering:-webkit-optimize-contrast;background:transparent}
 .site-footer__logo--raster{filter:none}
 .site-footer__logo--svg{filter:brightness(0) invert(1)}
-.site-footer__brand{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.05rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dna-brand,#FCAF17)}
-.site-footer__period{margin:0;font-size:.92rem;font-weight:600;color:rgba(255,255,255,.9);letter-spacing:-.01em}
+.site-footer__brand{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-weight:800;letter-spacing:.04em}
+.site-footer__brand--text{font-size:1.05rem;text-transform:uppercase;color:var(--dna-brand,#FCAF17);margin-bottom:.35rem}
+.site-footer__copy .site-footer__brand{font-size:inherit;font-weight:700;letter-spacing:inherit;text-transform:none;color:inherit}
+.site-footer__blurb{margin:.55rem 0 0;font-size:.82rem;line-height:1.45;color:rgba(255,255,255,.62);max-width:28ch}
+.site-footer__period{margin:.55rem 0 0;font-size:.8rem;line-height:1.45;font-weight:600;color:rgba(255,255,255,.78);max-width:30ch}
 .site-footer__note{margin:.55rem 0 0;font-size:.76rem;letter-spacing:.05em;color:rgba(255,255,255,.48);line-height:1.45}
+.site-footer__bar{border-top:1px solid rgba(255,255,255,.12);padding:0}
+.site-footer__bar-inner{max-width:1120px;margin:0 auto;padding:1.05rem clamp(1rem,3vw,2rem) 1.35rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.65rem 1.5rem;align-items:baseline}
+.site-footer__copy,.site-footer__meta{margin:0;font-size:.72rem;letter-spacing:.01em;color:rgba(255,255,255,.48);line-height:1.45}
+.site-footer__meta{text-align:right}
+@media (max-width:900px){
+  .site-footer__grid{grid-template-columns:1fr 1fr;gap:1.75rem 1.25rem}
+  .site-footer__col--brand{grid-column:1/-1}
+}
+@media (max-width:560px){
+  .site-footer__grid{grid-template-columns:1fr}
+  .site-footer__meta{text-align:left}
+}
 .page-hero{position:relative;max-width:none;width:100%;margin:0;padding:0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 11%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 9%,var(--dna-paper,#fff)),var(--dna-paper,#fff) 78%);box-sizing:border-box}
 .page-hero__rail{position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--dna-brand,#FCAF17),color-mix(in srgb,var(--dna-masthead,#0F3B2E) 70%,var(--dna-brand,#FCAF17)))}
 .page-hero__inner{max-width:1120px;width:100%;margin:0 auto;padding:1.85rem clamp(1rem,3vw,2rem) 1.45rem;box-sizing:border-box}
