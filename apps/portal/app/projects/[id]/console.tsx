@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { upload } from "@vercel/blob/client";
+import { SiteChatPanel } from "./site-chat";
 
 /** Multipage-as-product rail — Opus shell is optional preview only. */
 const STEPS = ["Upload", "Extraction", "Design DNA", "Site", "Export"] as const;
@@ -178,7 +179,7 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "blueprint_proposed":
       return {
         title: "Review multipage site",
-        hint: "Walk the page tree beside the source PDF, then approve & export the multipage zip.",
+        hint: "Walk the page tree, tweak with Studio chat, then approve & export the multipage zip.",
       };
     case "exporting":
       return {
@@ -247,8 +248,8 @@ export function ProjectConsole(props: {
   } | null>(null);
   const [prototypeError, setPrototypeError] = useState<string | null>(null);
   const [previewWidth, setPreviewWidth] = useState<number | "full">(1280);
-  /** Mobile compare tabs — desktop shows both panes. */
-  const [compareTab, setCompareTab] = useState<"site" | "source">("site");
+  /** Cache-bust iframe after Studio chat applies edits. */
+  const [previewBust, setPreviewBust] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   /** Client timestamp when we observed entering a busy wait status. */
   const [clientBusyStartedAt, setClientBusyStartedAt] = useState<number | null>(null);
@@ -266,10 +267,10 @@ export function ProjectConsole(props: {
     siteDraft?.pages.find((p) => p.path === selectedPagePath) ?? siteDraft?.pages[0] ?? null;
 
   useEffect(() => {
-    // Wider stage for side-by-side Source PDF | multipage compare.
+    // Wider stage for page tree + preview + Studio chat.
     document.documentElement.style.setProperty(
       "--max",
-      showSiteReview ? "1560px" : "1240px",
+      showSiteReview ? "1680px" : "1240px",
     );
     return () => {
       document.documentElement.style.removeProperty("--max");
@@ -1145,8 +1146,8 @@ export function ProjectConsole(props: {
         <section className="rs-sheet rs-fade-up-delay">
           <h2 className="rs-section-title">Multipage site draft</h2>
           <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
-            This page tree is the product you sign off. Compare each page to the source PDF, then
-            Approve &amp; export. Entrypoint is <code>index.html</code>.
+            This page tree is the product you sign off. Preview pages here and use Studio chat to
+            tweak HTML quickly, then Approve &amp; export. Entrypoint is <code>index.html</code>.
           </p>
           {siteError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
@@ -1231,7 +1232,7 @@ export function ProjectConsole(props: {
                 </div>
               </div>
 
-              <div className="rs-site-layout">
+              <div className="rs-site-layout rs-site-layout--studio">
                 <nav className="rs-page-tree" aria-label="Site pages">
                   <div className="rs-page-tree__label">Pages</div>
                   <ul>
@@ -1240,7 +1241,9 @@ export function ProjectConsole(props: {
                         <button
                           type="button"
                           className={
-                            selectedPage?.path === p.path ? "rs-page-tree__item is-active" : "rs-page-tree__item"
+                            selectedPage?.path === p.path
+                              ? "rs-page-tree__item is-active"
+                              : "rs-page-tree__item"
                           }
                           onClick={() => setSelectedPagePath(p.path)}
                         >
@@ -1253,66 +1256,39 @@ export function ProjectConsole(props: {
                 </nav>
 
                 <div className="rs-site-preview">
-                  <div
-                    className="rs-compare-tabs"
-                    role="tablist"
-                    aria-label="Compare panes"
-                  >
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={compareTab === "site"}
-                      onClick={() => setCompareTab("site")}
-                    >
-                      Site page
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={compareTab === "source"}
-                      onClick={() => setCompareTab("source")}
-                    >
-                      Source PDF
-                    </button>
+                  <div className="rs-site-preview__label">
+                    {selectedPage ? selectedPage.title : "Site page"}
                   </div>
-                  <div
-                    className={`rs-compare rs-compare--${compareTab === "site" ? "prototype" : "source"}`}
-                    data-active-tab={compareTab === "site" ? "prototype" : "source"}
-                  >
-                    <div className="rs-compare__pane rs-compare__pane--source">
-                      <div className="rs-compare__label">Source PDF</div>
-                      <div className="rs-compare__body">
-                        {sourcePdfUrl ? (
-                          <iframe title="Source PDF" src={`${sourcePdfUrl}#view=FitH`} />
-                        ) : (
-                          <p className="rs-muted rs-compare__empty">
-                            No source PDF on this project yet.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="rs-compare__pane rs-compare__pane--prototype">
-                      <div className="rs-compare__label">
-                        {selectedPage ? selectedPage.title : "Site page"}
-                      </div>
-                      <div className="rs-compare__body rs-preview-frame">
-                        {selectedPage ? (
-                          <iframe
-                            key={selectedPage.path}
-                            title={selectedPage.title}
-                            src={selectedPage.previewUrl}
-                            sandbox="allow-scripts"
-                            style={{
-                              width: previewWidth === "full" ? "100%" : previewWidth,
-                            }}
-                          />
-                        ) : (
-                          <p className="rs-muted rs-compare__empty">Select a page.</p>
-                        )}
-                      </div>
-                    </div>
+                  <div className="rs-preview-frame rs-site-preview__frame">
+                    {selectedPage ? (
+                      <iframe
+                        key={`${selectedPage.path}-${previewBust}`}
+                        title={selectedPage.title}
+                        src={selectedPage.previewUrl}
+                        sandbox="allow-scripts"
+                        style={{
+                          width: previewWidth === "full" ? "100%" : previewWidth,
+                        }}
+                      />
+                    ) : (
+                      <p className="rs-muted rs-site-preview__empty">Select a page.</p>
+                    )}
                   </div>
                 </div>
+
+                <SiteChatPanel
+                  projectId={props.projectId}
+                  pagePath={selectedPage?.path ?? siteDraft.entrypoint}
+                  pageTitle={selectedPage?.title ?? "Page"}
+                  disabled={
+                    busy || (status !== "in_review" && status !== "blueprint_proposed")
+                  }
+                  onPagesUpdated={(pages, bust) => {
+                    setSiteDraft((prev) => (prev ? { ...prev, pages } : prev));
+                    setPreviewBust(bust);
+                    setNote("Studio chat applied edits — preview refreshed.");
+                  }}
+                />
               </div>
             </>
           ) : null}

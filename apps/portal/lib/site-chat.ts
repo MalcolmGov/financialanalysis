@@ -1,0 +1,183 @@
+/**
+ * Multipage site-draft chat: Claude proposes search/replace patches against
+ * a selected page (or shared chrome file). Reuses refine patch apply +
+ * numeral guard so Gate A/B figures stay intact unless the operator opts in.
+ */
+
+import type { RefinePatch } from "./refine";
+
+export const SITE_CHAT_MODEL = "claude-sonnet-5" as const;
+
+export interface SiteChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface SiteChatModelReply {
+  message: string;
+  patches: RefinePatch[];
+  target_path: string;
+  number_change_requested: boolean;
+  number_change_summary: string;
+}
+
+export const SITE_CHAT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "message",
+    "patches",
+    "target_path",
+    "number_change_requested",
+    "number_change_summary",
+  ],
+  properties: {
+    message: {
+      type: "string",
+      description:
+        "Short operator-facing reply: what you changed, or clarifying questions. Plain text, no markdown fences.",
+    },
+    patches: {
+      type: "array",
+      description:
+        "Anchored search/replace patches. Empty when answering without editing HTML.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["search", "replace"],
+        properties: {
+          search: {
+            type: "string",
+            description:
+              "Exact substring copied from the current file. Prefer unique anchors (≥40 chars of surrounding markup).",
+          },
+          replace: {
+            type: "string",
+            description: "Replacement text. Surgical HTML/CSS/JS only.",
+          },
+          occurrence: {
+            type: "integer",
+            description: "1-based match index when search is ambiguous.",
+          },
+        },
+      },
+    },
+    target_path: {
+      type: "string",
+      description:
+        "Which draft file to patch. Usually the selected page path. May be a shared asset (e.g. assets/site.css) when editing site-wide chrome.",
+    },
+    number_change_requested: {
+      type: "boolean",
+      description:
+        "True only when the operator explicitly asked to change a financial figure, date numeral, or percentage.",
+    },
+    number_change_summary: {
+      type: "string",
+      description:
+        "If number_change_requested, briefly name the figures involved; otherwise empty string.",
+    },
+  },
+} as const;
+
+export const SITE_CHAT_SYSTEM = `You are Results Studio's multipage site editor for investor-results HTML microsites.
+
+You help the operator surgically tweak and fix the current site draft AFTER the multipage HTML has been generated. You see one target file (usually a page) plus brand/DNA context.
+
+HARD RULES:
+- Return ONLY JSON matching the schema. No markdown fences.
+- Prefer the smallest patch set that satisfies the request (typically 0–8 patches).
+- search must be copied EXACTLY from the provided file (including whitespace) and be unique, or set occurrence.
+- Apply surgical HTML/CSS/JS fixes only. Preserve structure, navigation, and accessibility unless asked otherwise.
+- NEVER invent financial numbers, KPIs, percentages, or dates. Do not invent external CDNs, fonts, or asset URLs.
+- Preserve Gate A/B number integrity: do not alter digit-bearing figures unless the operator EXPLICITLY asked to change that figure. If they did, set number_change_requested=true and summarize which figures.
+- If the request is ambiguous or unsafe, return patches=[] and ask a short clarifying question in message.
+- target_path must be one of the allowed paths provided by the user message (selected page or listed chrome files).
+- Keep relative links and asset paths working.
+- Speak briefly and concretely about what changed.`;
+
+/** Cap page HTML sent to the model (chars). Prefer head+tail if over. */
+export const SITE_CHAT_HTML_CHAR_BUDGET = 140_000;
+
+export function truncateForModel(html: string, budget = SITE_CHAT_HTML_CHAR_BUDGET): {
+  text: string;
+  truncated: boolean;
+} {
+  if (html.length <= budget) return { text: html, truncated: false };
+  const head = Math.floor(budget * 0.7);
+  const tail = budget - head - 80;
+  return {
+    text: `${html.slice(0, head)}\n\n<!-- … truncated for model context … -->\n\n${html.slice(-tail)}`,
+    truncated: true,
+  };
+}
+
+export function summarizeDnaForChat(dna: Record<string, unknown> | null): string {
+  if (!dna) return "(no design DNA on this run)";
+  const palette = (dna.palette ?? {}) as {
+    roles?: Record<string, { hex?: string; name?: string }>;
+  };
+  const type = (dna.type ?? {}) as {
+    stack?: { heading?: string; body?: string };
+    heading_treatment?: { color?: string; case?: string; weight?: number };
+    scale?: { web_base_px?: number; ratio?: number };
+  };
+  const theme = (dna.theme ?? {}) as { mode?: string; rationale?: string };
+  const table = (dna.table_style ?? {}) as {
+    header_bg?: string;
+    header_text?: string;
+    zebra?: boolean;
+  };
+  const toneWords = Array.isArray(dna.tone_words) ? (dna.tone_words as string[]) : [];
+  const roles = Object.entries(palette.roles ?? {}).map(
+    ([role, entry]) => `${role}: ${entry?.hex ?? "?"}${entry?.name ? ` (${entry.name})` : ""}`,
+  );
+  return [
+    `theme: ${theme.mode ?? "—"} — ${theme.rationale ?? ""}`,
+    `tone: ${toneWords.slice(0, 8).join(", ") || "—"}`,
+    `type: heading=${type.stack?.heading ?? "—"} body=${type.stack?.body ?? "—"} base=${type.scale?.web_base_px ?? "—"}px ratio=${type.scale?.ratio ?? "—"}`,
+    `heading treatment: ${JSON.stringify(type.heading_treatment ?? {})}`,
+    `palette: ${roles.join("; ") || "—"}`,
+    `table: header_bg=${table.header_bg ?? "—"} header_text=${table.header_text ?? "—"} zebra=${table.zebra ?? "—"}`,
+  ].join("\n");
+}
+
+export function buildSiteChatUserPayload(opts: {
+  company: string;
+  periodLabel: string;
+  selectedPagePath: string;
+  allowedPaths: string[];
+  dnaSummary: string;
+  gateA: string | null;
+  gateB: string | null;
+  fileHtml: string;
+  htmlTruncated: boolean;
+  history: SiteChatTurn[];
+  message: string;
+  allowNumberOverride: boolean;
+}): string {
+  const historyBlock =
+    opts.history.length === 0
+      ? "(none)"
+      : opts.history
+          .slice(-8)
+          .map((t) => `${t.role.toUpperCase()}: ${t.content}`)
+          .join("\n\n");
+
+  return [
+    `PROJECT: ${opts.company}${opts.periodLabel ? ` · ${opts.periodLabel}` : ""}`,
+    `GATES: A=${opts.gateA ?? "unknown"} B=${opts.gateB ?? "unknown"}`,
+    `SELECTED PAGE: ${opts.selectedPagePath}`,
+    `ALLOWED TARGET PATHS:\n${opts.allowedPaths.map((p) => `- ${p}`).join("\n")}`,
+    `NUMBER OVERRIDE AUTHORIZED: ${opts.allowNumberOverride ? "yes — operator confirmed" : "no — refuse numeral edits"}`,
+    `\nBRAND / DNA SUMMARY:\n${opts.dnaSummary}`,
+    `\nRECENT CHAT:\n${historyBlock}`,
+    `\nOPERATOR REQUEST:\n${opts.message}`,
+    opts.htmlTruncated
+      ? "\nNOTE: Target file was truncated for context; prefer patches in the visible regions or ask to narrow scope."
+      : "",
+    `\nCURRENT FILE (${opts.selectedPagePath} — patch target_path may differ if editing listed chrome):\n${opts.fileHtml}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
