@@ -116,6 +116,23 @@ function noteColIndex(table: FinTable): number | null {
   return null;
 }
 
+/**
+ * Soft-break jammed OCI / long row labels for readability.
+ * Display-only — data-src still points at the verbatim source cell.
+ */
+function formatLabelCellHtml(raw: string): string {
+  let html = escapeHtml(raw);
+  // Common Docling join: "...net of tax Net fair value..."
+  html = html.replace(/(net of tax)\s+(Net fair value)/gi, "$1<br>$2");
+  // Long run-ons: break once after a mid-label comma before a capital clause.
+  if (html.length > 88 && !html.includes("<br>")) {
+    html = html.replace(/,\s+(?=[A-Z])/g, (m, offset) =>
+      offset > 36 && offset < html.length - 28 ? `,<br>` : m,
+    );
+  }
+  return html;
+}
+
 /** Per-row unit column (ops/KPI / assumptions) — col 1 when most cells look like units. */
 function unitColIndex(table: FinTable): number | null {
   if (noteColIndex(table) === 1) return null;
@@ -165,6 +182,16 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
   const unitCol = unitColIndex(normTable);
   const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
   const colCount = bodyColCount;
+  const figureCols = Array.from({ length: colCount }, (_, i) => i).filter(
+    (i) => i !== 0 && i !== noteCol && i !== unitCol,
+  ).length;
+  // 3+ period columns (typical BS) need denser IR widths so labels/notes breathe.
+  const densityAttr =
+    colCount >= 5 && figureCols >= 3
+      ? ` data-density="periods-3"`
+      : noteCol != null
+        ? ` data-density="notes"`
+        : "";
   const cols = Array.from({ length: colCount }, (_, i) => {
     if (i === 0) return `<col class="c-label">`;
     if (noteCol != null && i === noteCol) return `<col class="c-note">`;
@@ -241,7 +268,11 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           const unitCls = unitCol != null && start === unitCol ? " cell-unit" : "";
           const noteEmpty =
             noteCol != null && start === noteCol ? " cell-noteRef note" : "";
-          return `<td class="cell-${cell.kind}${labelCls}${unitCls}${noteEmpty}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
+          const inner =
+            cellIdx === 0 && cell.raw.trim()
+              ? formatLabelCellHtml(cell.raw)
+              : escapeHtml(cell.raw);
+          return `<td class="cell-${cell.kind}${labelCls}${unitCls}${noteEmpty}${curCls}"${src}>${inner}</td>`;
         })
         .join("");
       return `<tr class="${trClass}">${cells}</tr>`;
@@ -254,7 +285,7 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
     : "";
 
   // Section chrome already provides `.statement-table`; emit unit + table only.
-  return `${unitHtml}<table class="fin-table"${curAttr} data-table-src="${escapeHtml(table.src_table)}"><colgroup>${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  return `${unitHtml}<table class="fin-table"${curAttr}${densityAttr} data-table-src="${escapeHtml(table.src_table)}"><colgroup>${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 function renderSlot(
@@ -474,20 +505,25 @@ const STATEMENT_IR_CSS = `
 .statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:.35rem 0 1.35rem;border:0;border-top:2px solid var(--dna-brand,#FCAF17);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
 .statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 .7rem;padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#FCAF17);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
 .statement-unit__value{color:var(--dna-masthead,#0F3B2E);font-weight:800;letter-spacing:.06em}
-.fin-table{width:100%;min-width:36rem;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.82rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
+.fin-table{width:100%;min-width:34rem;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.82rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
 .fin-table col.c-label{width:auto}
-.fin-table col.c-note{width:54px}
+.fin-table col.c-note{width:3.25rem}
 .fin-table col.c-unit{width:9.5rem}
-.fin-table col.c-cur,.fin-table col.c-cmp{width:165px}
+.fin-table col.c-cur,.fin-table col.c-cmp{width:148px}
+.fin-table[data-density="notes"] col.c-cur,.fin-table[data-density="notes"] col.c-cmp{width:148px}
+.fin-table[data-density="periods-3"]{min-width:44rem}
+.fin-table[data-density="periods-3"] col.c-note{width:3.25rem}
+.fin-table[data-density="periods-3"] col.c-cur,.fin-table[data-density="periods-3"] col.c-cmp{width:118px}
 .fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.35;border:none;border-bottom:2px solid var(--dna-brand,#FCAF17);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
 .fin-table thead th.h-title{text-align:left;font-size:.9rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:#839097}
-.fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F)}
-.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#839097)!important;border-left:1px solid #fff;white-space:normal;padding:8px 10px;line-height:1.5}
+.fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F);width:3.25rem;padding-left:4px;padding-right:4px}
+.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#839097)!important;border-left:1px solid #fff;white-space:normal;padding:8px 10px;line-height:1.45;overflow-wrap:anywhere}
+.fin-table[data-density="periods-3"] thead th.h-fig{padding:7px 8px;font-size:.68rem;line-height:1.4}
 .fin-table thead th.h-fig.cur{filter:brightness(.94)}
 .fin-table thead th.h-fig .h-fig__date{display:block;font-weight:800;letter-spacing:-.01em;line-height:1.3}
 .fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:block;font-weight:600;opacity:.92;font-size:.7rem;margin-top:.1rem}
-.fin-table td{padding:3px 8px;vertical-align:middle;line-height:1.35;border-bottom:none}
-.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px;overflow-wrap:anywhere;hyphens:auto;line-height:1.35;max-width:28rem}
+.fin-table td{padding:4px 8px;vertical-align:middle;line-height:1.4;border-bottom:none;border-left:0;border-right:0}
+.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px;padding-right:10px;white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:auto;line-height:1.42}
 .fin-table td.cell-unit{text-align:left;white-space:nowrap;color:color-mix(in srgb,var(--dna-ink,#221F1F) 72%,var(--dna-paper,#fff));font-size:.78rem;padding-left:6px;padding-right:8px}
 .fin-table td.cell-num,.fin-table td.cmp,.fin-table td.cur{text-align:right;white-space:nowrap;padding-right:10px;font-variant-numeric:tabular-nums}
 .fin-table td.cur{font-weight:700;background:var(--dna-shading,#F2F2F2)}
@@ -503,14 +539,14 @@ const STATEMENT_IR_CSS = `
 .fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
 .fin-table .note-ref{color:color-mix(in srgb,var(--dna-brand,#FCAF17) 35%,var(--dna-masthead,#0F3B2E));text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 70%,#C7B08B);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
-.fin-table .cell-noteRef,.fin-table td.note{text-align:center;font-size:.76rem;color:var(--dna-ink,#221F1F)}
+.fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.25rem;max-width:3.25rem;padding-left:4px;padding-right:4px;font-size:.76rem;color:var(--dna-ink,#221F1F);vertical-align:middle}
 .fin-table tr.bd-tan>td{border-top:1.5px solid #CDAE86}
 .fin-table tr.bd-blue>td{border-top:1px solid #BAC4CA}
 .fin-table tbody tr{transition:background-color .12s ease}
 .fin-table tbody tr:hover td{background-color:#DCE3E7!important}
 .fin-table tbody tr:hover td.cur{background-color:#CBD4D9!important}
 @media (max-width:720px){
-  .fin-table{table-layout:auto;font-size:.72rem;min-width:0}
+  .fin-table,.fin-table[data-density="periods-3"]{table-layout:auto;font-size:.72rem;min-width:0}
   .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}
   .fin-table td.cur,.fin-table td.cmp,.fin-table td.cell-num{padding-left:4px;padding-right:6px}
 }

@@ -1469,6 +1469,7 @@ export function ProjectConsole(props: {
                   projectId={props.projectId}
                   pagePath={selectedPage?.path ?? siteDraft.entrypoint}
                   pageTitle={selectedPage?.title ?? "Page"}
+                  issuerName={siteDraft.company}
                   disabled={
                     busy || (status !== "in_review" && status !== "blueprint_proposed")
                   }

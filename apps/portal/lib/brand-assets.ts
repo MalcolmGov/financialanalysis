@@ -106,8 +106,13 @@ function logoScore(c: FigureCand): number {
   score += Math.max(0, 40 - c.top * 0.05);
   // Prefer sharper mid-size wordmarks over tiny stamps.
   if (c.figure.image.width_px >= 120 && c.figure.image.width_px <= 280) score += 50;
-  if (c.figure.image.height_px > 0 && c.figure.image.height_px <= 100) score += 40;
-  else if (c.figure.image.height_px <= 160) score += 15;
+  // Flat stamp wordmarks (short height) beat taller photo-backed lockups.
+  if (c.figure.image.height_px > 0 && c.figure.image.height_px <= 72) score += 80;
+  else if (c.figure.image.height_px <= 100) score += 40;
+  else if (c.figure.image.height_px <= 160) score += 10;
+  else score -= 50;
+  // Square-ish tall crops often include photo/background noise around the mark.
+  if (c.aspect >= 0.9 && c.aspect <= 1.55 && c.figure.image.height_px >= 110) score -= 70;
   return score;
 }
 

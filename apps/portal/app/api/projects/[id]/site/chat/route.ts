@@ -147,6 +147,9 @@ export async function POST(
     draftId?: string;
     fileCount?: number;
     chatRevision?: number;
+    /** Resolved legal / trading issuer — never the portal project slug. */
+    company?: string;
+    company_source?: string;
   };
 
   const prefix = meta.prefix;
@@ -219,8 +222,14 @@ export async function POST(
     }
   }
 
+  // Prefer draft issuer (DRDGOLD Limited) over portal project.title ("DRD Gold 1").
+  const issuerName =
+    (typeof meta.company === "string" && meta.company.trim()) ||
+    project.companyName ||
+    "Company";
+
   const userPayload = buildSiteChatUserPayload({
-    company: project.companyName ?? "Company",
+    company: issuerName,
     periodLabel: project.periodLabel ?? "",
     selectedPagePath: pagePath,
     allowedPaths,

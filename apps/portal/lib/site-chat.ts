@@ -94,7 +94,8 @@ HARD RULES:
 - If the request is ambiguous or unsafe, return patches=[] and ask a short clarifying question in message.
 - target_path must be one of the allowed paths provided by the user message (selected page or listed chrome files).
 - Keep relative links and asset paths working.
-- Speak briefly and concretely about what changed.`;
+- Speak briefly and concretely about what changed.
+- Always refer to the issuer by the ISSUER / legal company name from the PROJECT line (e.g. DRDGOLD). Never use portal project slugs or internal titles like "DRD Gold 1".`;
 
 /** Cap page HTML sent to the model (chars). Prefer head+tail if over. */
 export const SITE_CHAT_HTML_CHAR_BUDGET = 140_000;
@@ -165,6 +166,7 @@ export function buildSiteChatUserPayload(opts: {
           .join("\n\n");
 
   return [
+    `ISSUER (legal / trading name — use this in replies; never portal project slugs): ${opts.company}`,
     `PROJECT: ${opts.company}${opts.periodLabel ? ` · ${opts.periodLabel}` : ""}`,
     `GATES: A=${opts.gateA ?? "unknown"} B=${opts.gateB ?? "unknown"}`,
     `SELECTED PAGE: ${opts.selectedPagePath}`,

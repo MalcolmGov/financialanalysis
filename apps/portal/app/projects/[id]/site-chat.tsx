@@ -50,15 +50,17 @@ export function SiteChatPanel(props: {
   projectId: string;
   pagePath: string;
   pageTitle: string;
+  /** Legal / trading issuer for greetings — never portal project slug. */
+  issuerName?: string | null;
   disabled?: boolean;
   onPagesUpdated: (pages: SiteChatPage[], bust: number) => void;
 }) {
+  const issuer = (props.issuerName ?? "").trim() || "this issuer";
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: "welcome",
       role: "assistant",
-      content:
-        "Ask me to tweak layout, typography, spacing, nav, or copy on the selected page. Figures stay locked unless you explicitly override.",
+      content: `Ask me to tweak layout, typography, spacing, nav, or copy on the ${issuer} results site. Figures stay locked unless you explicitly override.`,
     },
   ]);
   const [input, setInput] = useState("");

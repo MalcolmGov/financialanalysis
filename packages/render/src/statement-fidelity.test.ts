@@ -346,7 +346,9 @@ describe("P2 statement IR render fidelity", () => {
     expect(html).toContain("@media print");
     expect(html).toContain("print-color-adjust");
     expect(html).toContain("h-fig");
-    expect(html).toMatch(/width:165px|col\.c-cur/);
+    expect(html).toMatch(/width:(?:118|148|165)px|col\.c-cur/);
+    expect(html).toContain('data-density="periods-3"');
+    expect(html).toContain("col.c-note{width:3.25rem}");
     expect(html).not.toContain("border-left:1px solid #6C6C6C");
     expect(html).toContain("border-top:2px solid var(--dna-brand");
 
