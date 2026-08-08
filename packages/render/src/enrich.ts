@@ -438,7 +438,12 @@ export function enrichMultiPageFiles(
       /<nav class="breadcrumb"[\s\S]*?<\/nav>/i,
       "",
     );
-    if (!/<meta\s+name=["']robots["']/i.test(html)) {
+    if (/<meta\s+name=["']robots["'][^>]*>/i.test(html)) {
+      html = html.replace(
+        /<meta\s+name=["']robots["'][^>]*>/i,
+        `<meta name="robots" content="noindex,follow">`,
+      );
+    } else {
       html = html.replace(
         /<head([^>]*)>/i,
         `<head$1><meta name="robots" content="noindex,follow">`,
