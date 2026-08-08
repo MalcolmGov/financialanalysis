@@ -786,12 +786,61 @@ export function ProjectConsole(props: {
     }
   }
 
+  async function refreshSiteDraft() {
+    try {
+      const res = await fetch(`/api/projects/${props.projectId}/site`);
+      const data = (await res.json().catch(() => ({}))) as {
+        draftId?: string;
+        version?: number;
+        entrypoint?: string;
+        pages?: SitePage[];
+        gateA?: string | null;
+        gateB?: string | null;
+        corporateReliability?: string | null;
+        brandLogo?: boolean | null;
+        brandBanner?: boolean | null;
+        company?: string | null;
+        fileCount?: number;
+        sourcePdfUrl?: string | null;
+        error?: string;
+      };
+      if (data.sourcePdfUrl) setSourcePdfUrl(data.sourcePdfUrl);
+      if (!res.ok || !data.pages?.length) {
+        setSiteError(data.error ?? res.statusText);
+        return;
+      }
+      setSiteDraft({
+        draftId: data.draftId ?? "draft",
+        version: data.version ?? 1,
+        entrypoint: data.entrypoint ?? "index.html",
+        pages: data.pages,
+        gateA: data.gateA ?? null,
+        gateB: data.gateB ?? null,
+        corporateReliability: data.corporateReliability ?? null,
+        brandLogo: data.brandLogo ?? null,
+        brandBanner: data.brandBanner ?? null,
+        company: data.company ?? null,
+        fileCount: data.fileCount ?? data.pages.length,
+      });
+      setSelectedPagePath((prev) =>
+        data.pages!.some((p) => p.path === prev) ? prev : (data.entrypoint ?? data.pages![0]!.path),
+      );
+      setSiteError(null);
+    } catch (err) {
+      setSiteError((err as Error).message);
+    }
+  }
+
   async function uploadBrandAsset(role: "logo" | "hero", file: File) {
     setBusy(true);
     setBrandKitNote(null);
     try {
       const form = new FormData();
       form.append(role, file);
+      form.append("rebuild", "1");
+      setBrandKitNote(
+        `${role === "logo" ? "Logo" : "Hero photo"} uploading — rebuilding site draft…`,
+      );
       const res = await fetch(`/api/projects/${props.projectId}/brand-kit`, {
         method: "POST",
         body: form,
@@ -799,15 +848,57 @@ export function ProjectConsole(props: {
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         rebuildHint?: string;
+        rebuilt?: boolean;
+        rebuildError?: string;
+        draft?: { draftVersion?: number; brandLogo?: boolean; brandBanner?: boolean };
+      };
+      if (!res.ok) {
+        setBrandKitNote(data.error ?? res.statusText);
+        return;
+      }
+      const label = role === "logo" ? "Logo" : "Hero photo";
+      if (data.rebuilt && data.draft?.draftVersion != null) {
+        setBrandKitNote(
+          `${label} uploaded · draft v${data.draft.draftVersion} rebuilt` +
+            (data.draft.brandLogo ? " · logo on" : "") +
+            (data.draft.brandBanner ? " · hero on" : "") +
+            ".",
+        );
+      } else {
+        setBrandKitNote(
+          `${label} uploaded. ${data.rebuildHint ?? ""}${
+            data.rebuildError ? ` (${data.rebuildError})` : ""
+          }`.trim(),
+        );
+      }
+      await Promise.all([refreshPublishAndBrand(), refreshSiteDraft()]);
+    } catch (err) {
+      setBrandKitNote((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rebuildSiteFromBrandKit() {
+    setBusy(true);
+    setBrandKitNote("Rebuilding site draft with current brand kit…");
+    try {
+      const res = await fetch(`/api/projects/${props.projectId}/site`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        draft?: { draftVersion?: number; brandLogo?: boolean; brandBanner?: boolean };
       };
       if (!res.ok) {
         setBrandKitNote(data.error ?? res.statusText);
         return;
       }
       setBrandKitNote(
-        `${role === "logo" ? "Logo" : "Hero photo"} uploaded. ${data.rebuildHint ?? "Rebuild the site draft to apply in preview."}`,
+        `Draft v${data.draft?.draftVersion ?? "?"} rebuilt` +
+          (data.draft?.brandLogo ? " · logo on" : "") +
+          (data.draft?.brandBanner ? " · hero on" : "") +
+          ".",
       );
-      await refreshPublishAndBrand();
+      await Promise.all([refreshPublishAndBrand(), refreshSiteDraft()]);
     } catch (err) {
       setBrandKitNote((err as Error).message);
     } finally {
@@ -1491,10 +1582,18 @@ export function ProjectConsole(props: {
                   Official logo &amp; hero photo
                 </h3>
                 <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-                  Client SVG/PNG wordmark and full-bleed hero override extraction figures. Without
-                  uploads we keep text wordmark + extraction strip / atmosphere fallbacks.
+                  Client SVG/PNG wordmark and full-bleed hero override extraction stamps. Upload
+                  auto-rebuilds the multipage draft so nav and hero update in preview.
                 </p>
               </div>
+              <button
+                type="button"
+                className="rs-btn rs-btn--ghost"
+                disabled={busy}
+                onClick={() => void rebuildSiteFromBrandKit()}
+              >
+                Rebuild draft
+              </button>
             </div>
             <div className="rs-brand-kit__grid">
               <div className="rs-brand-kit__slot">
@@ -1513,6 +1612,13 @@ export function ProjectConsole(props: {
                       : "No logo yet — text wordmark fallback"}
                   </p>
                 )}
+                {brandKit?.kit.logo?.filename ? (
+                  <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+                    {brandKit.kit.logo.filename}
+                    {brandKit.effective.logoIsSvg ? " · SVG" : ""}
+                    {brandKit.effective.logoIsClient ? " · client" : ""}
+                  </p>
+                ) : null}
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -1549,6 +1655,12 @@ export function ProjectConsole(props: {
                       : "No hero — atmosphere fallback"}
                   </p>
                 )}
+                {brandKit?.kit.hero?.filename ? (
+                  <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+                    {brandKit.kit.hero.filename}
+                    {brandKit.effective.bannerIsClient ? " · client photo" : ""}
+                  </p>
+                ) : null}
                 <input
                   ref={heroInputRef}
                   type="file"

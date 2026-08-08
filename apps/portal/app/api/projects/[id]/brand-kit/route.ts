@@ -10,6 +10,10 @@ import {
 import { pickBrandAssets } from "../../../../../lib/brand-assets";
 import { db, schema } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
+import {
+  RebuildSiteDraftError,
+  rebuildProjectSiteDraft,
+} from "../../../../../lib/rebuild-site-draft";
 
 function toBlobUrl(path: string): string {
   return `/api/blob/${path
@@ -108,10 +112,15 @@ export async function GET(
       prefersClientHero: origins.bannerIsClient,
     },
     note:
-      "Client SVG/PNG logo and hero photo override extraction figures. Rebuild the site draft after uploading for preview.",
+      "Client SVG/PNG logo and hero photo override extraction figures. Upload auto-rebuilds the site draft preview.",
   });
 }
 
+/**
+ * Upload logo and/or hero. By default rebuilds the multipage site draft so
+ * masthead/hero pick up the kit without a separate script.
+ * Form fields: logo, hero, rebuild ("0"/"false" to skip rebuild).
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -139,6 +148,11 @@ export async function POST(
     const form = await request.formData();
     const logoFile = form.get("logo");
     const heroFile = form.get("hero");
+    const rebuildRaw = form.get("rebuild");
+    const rebuildFlag =
+      typeof rebuildRaw === "string"
+        ? !["0", "false", "no", "off"].includes(rebuildRaw.trim().toLowerCase())
+        : true;
 
     const asUpload = async (value: FormDataEntryValue | null) => {
       if (!value || typeof value === "string") return null;
@@ -160,13 +174,59 @@ export async function POST(
       hero,
     });
 
-    return Response.json({
-      ok: true,
+    const base = {
+      ok: true as const,
       kit,
       logoPreviewUrl: kit.logo?.blob_path ? toBlobUrl(kit.logo.blob_path) : null,
       heroPreviewUrl: kit.hero?.blob_path ? toBlobUrl(kit.hero.blob_path) : null,
-      rebuildHint: "Rebuild the multipage site draft to apply brand kit assets in preview/export.",
-    });
+    };
+
+    if (!rebuildFlag) {
+      return Response.json({
+        ...base,
+        rebuilt: false,
+        rebuildHint: "Upload saved. Rebuild the multipage site draft to apply brand kit in preview.",
+      });
+    }
+
+    try {
+      const draft = await rebuildProjectSiteDraft({
+        projectId,
+        note: `rebuilt after brand-kit upload by ${operator.email}`,
+        hardFailGates: true,
+      });
+      return Response.json({
+        ...base,
+        rebuilt: true,
+        draft,
+        rebuildHint: `Site draft rebuilt to v${draft.draftVersion} with brand kit applied.`,
+      });
+    } catch (err) {
+      if (err instanceof RebuildSiteDraftError) {
+        return Response.json(
+          {
+            ...base,
+            rebuilt: false,
+            rebuildError: err.message,
+            rebuildDetails: err.details ?? null,
+            rebuildHint:
+              "Brand kit saved, but site draft rebuild failed. Fix gates or retry rebuild from the Brand kit panel.",
+          },
+          { status: err.status >= 500 ? 500 : 200 },
+        );
+      }
+      console.error("brand-kit rebuild failed:", err);
+      return Response.json(
+        {
+          ...base,
+          rebuilt: false,
+          rebuildError: (err as Error).message,
+          rebuildHint:
+            "Brand kit saved, but site draft rebuild failed. Retry rebuild from the Brand kit panel.",
+        },
+        { status: 200 },
+      );
+    }
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 400 });
   }

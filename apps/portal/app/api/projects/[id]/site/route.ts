@@ -2,6 +2,10 @@ import { and, desc, eq } from "drizzle-orm";
 import { requireOperator } from "../../../../../lib/authz";
 import { db, schema } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
+import {
+  RebuildSiteDraftError,
+  rebuildProjectSiteDraft,
+} from "../../../../../lib/rebuild-site-draft";
 
 type PageMeta = { path: string; title: string };
 
@@ -137,4 +141,47 @@ export async function GET(
     publishSignoffUrl: `/api/projects/${projectId}/publish-signoff`,
     brandKitUrl: `/api/projects/${projectId}/brand-kit`,
   });
+}
+
+/** Rebuild multipage site draft (applies current brand kit + extraction assets). */
+export async function POST(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  let operator;
+  try {
+    operator = await requireOperator();
+  } catch (res) {
+    return res as Response;
+  }
+
+  const { id: projectId } = await params;
+  if (env.MOCK_BLOB) {
+    return Response.json({ error: "site draft unavailable in MOCK_BLOB mode" }, { status: 404 });
+  }
+
+  const [project] = await db()
+    .select({ id: schema.projects.id })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+  if (!project) return Response.json({ error: "not found" }, { status: 404 });
+
+  try {
+    const draft = await rebuildProjectSiteDraft({
+      projectId,
+      note: `rebuilt via POST /api/projects/.../site by ${operator.email}`,
+      hardFailGates: true,
+    });
+    return Response.json({ ok: true, draft });
+  } catch (err) {
+    if (err instanceof RebuildSiteDraftError) {
+      return Response.json(
+        { error: err.message, details: err.details ?? null },
+        { status: err.status },
+      );
+    }
+    console.error("site rebuild failed:", err);
+    return Response.json({ error: (err as Error).message }, { status: 500 });
+  }
 }
