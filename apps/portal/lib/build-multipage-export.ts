@@ -18,7 +18,12 @@ import { buildBlueprintV1 } from "./build-blueprint";
 
 export interface BrandAssetBytes {
   logo?: { bytes: Uint8Array; mime: string };
-  banner?: { bytes: Uint8Array; mime: string };
+  banner?: {
+    bytes: Uint8Array;
+    mime: string;
+    /** Crop hint from BrandAssetBundle.background / origin. */
+    kind?: "strip" | "photo" | "page";
+  };
 }
 
 export interface MultipageExportInput {
@@ -100,6 +105,7 @@ function materializeBrandAssets(
       ? brand.banner.bytes
       : Uint8Array.from(brand.banner.bytes);
     uris.banner = path;
+    uris.bannerKind = brand.banner.kind ?? "photo";
   }
   return uris;
 }

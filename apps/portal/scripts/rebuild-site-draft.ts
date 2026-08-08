@@ -9,13 +9,13 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getPrivate, putPrivate } from "../lib/blob";
-import { resolveAssetUris } from "../lib/brand-assets";
+import { loadBrandBytes, resolveAssetUris } from "../lib/brand-assets";
 import { buildMultipageExport, type BrandAssetBytes } from "../lib/build-multipage-export";
 import { db, schema } from "../lib/db";
 
 const PROJECT_ID = process.argv[2] ?? "444cd443-97cc-4b9c-b0f6-eef4f65c2f98";
 
-async function loadBrandBytes(
+async function resolveBrand(
   arts: Array<{ kind: string; blobPath: string }>,
   projectId: string,
   extraction: unknown,
@@ -34,21 +34,11 @@ async function loadBrandBytes(
     bundleJson,
     extractionJson: extraction,
     getPrivate,
+    // Re-score figures so cinematic strips / wordmarks win over stale picks.
+    refreshPick: true,
   });
-  if (!bundle || (!uris.logo && !uris.banner)) return null;
-
-  const out: BrandAssetBytes = {};
-  for (const role of ["logo", "banner"] as const) {
-    const asset = bundle.assets.find((a) => a.role === role);
-    if (!asset?.blob_path || !uris[role]) continue;
-    try {
-      const bytes = await getPrivate(asset.blob_path);
-      out[role] = { bytes: new Uint8Array(bytes), mime: asset.mime || "image/png" };
-    } catch (err) {
-      console.warn(`brand ${role} bytes unavailable:`, err);
-    }
-  }
-  return out.logo || out.banner ? out : null;
+  if (!bundle) return null;
+  return loadBrandBytes(bundle, uris, getPrivate);
 }
 
 async function main() {
@@ -98,7 +88,7 @@ async function main() {
     }
   }
 
-  const brandAssets = await loadBrandBytes(arts, PROJECT_ID, extraction);
+  const brandAssets = await resolveBrand(arts, PROJECT_ID, extraction);
 
   const built = buildMultipageExport({
     dna,

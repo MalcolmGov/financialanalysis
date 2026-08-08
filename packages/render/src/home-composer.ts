@@ -156,12 +156,15 @@ function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): s
   const meta = listingMeta(docModel, opts.extraction);
   const banner = opts.brandAssets?.banner;
   const logo = opts.brandAssets?.logo;
-  const photoClass = banner ? " home-hero--photo" : "";
+  const bannerKind = opts.brandAssets?.bannerKind ?? (banner ? "photo" : undefined);
+  const photoClass = banner
+    ? ` home-hero--photo home-hero--${bannerKind ?? "photo"}`
+    : "";
   const photo = banner
-    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async">`
+    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}">`
     : "";
   const lockup = logo
-    ? `<div class="home-hero__lockup"><img class="home-hero__logo" src="${escapeHtml(logo)}" alt="" width="200" height="48" decoding="async"></div>`
+    ? `<div class="home-hero__lockup"><img class="home-hero__logo" src="${escapeHtml(logo)}" alt="" width="220" height="52" decoding="async"></div>`
     : "";
   return `<header class="home-hero${photoClass}" data-dna-component="home-hero">
 ${photo}<div class="home-hero__mast"></div>

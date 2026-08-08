@@ -1264,25 +1264,16 @@ export async function buildSiteDraftArtifact(
     if (brandRow) {
       bundleJson = JSON.parse((await getPrivate(brandRow.blobPath)).toString("utf8"));
     }
+    const { loadBrandBytes } = await import("../lib/brand-assets");
     const { bundle, uris } = await resolveAssetUris({
       projectId,
       bundleJson,
       extractionJson,
       getPrivate,
+      refreshPick: true,
     });
-    if (bundle && (uris.logo || uris.banner)) {
-      brandAssets = {};
-      for (const role of ["logo", "banner"] as const) {
-        const asset = bundle.assets.find((a) => a.role === role);
-        if (!asset?.blob_path || !uris[role]) continue;
-        try {
-          const bytes = await getPrivate(asset.blob_path);
-          brandAssets[role] = { bytes: new Uint8Array(bytes), mime: asset.mime || "image/png" };
-        } catch (err) {
-          console.warn(`[run ${runId}] brand ${role} unavailable:`, err);
-        }
-      }
-      if (!brandAssets.logo && !brandAssets.banner) brandAssets = null;
+    if (bundle) {
+      brandAssets = await loadBrandBytes(bundle, uris, getPrivate);
     }
   } catch (err) {
     console.warn(`[run ${runId}] brand assets resolve failed:`, err);
@@ -1528,25 +1519,16 @@ export async function buildPrototypeExport(
     if (brandRow) {
       bundleJson = JSON.parse((await getPrivate(brandRow.blobPath)).toString("utf8"));
     }
+    const { loadBrandBytes } = await import("../lib/brand-assets");
     const { bundle, uris } = await resolveAssetUris({
       projectId,
       bundleJson,
       extractionJson: extraction,
       getPrivate,
+      refreshPick: true,
     });
-    if (bundle && (uris.logo || uris.banner)) {
-      brandAssets = {};
-      for (const role of ["logo", "banner"] as const) {
-        const asset = bundle.assets.find((a) => a.role === role);
-        if (!asset?.blob_path || !uris[role]) continue;
-        try {
-          const bytes = await getPrivate(asset.blob_path);
-          brandAssets[role] = { bytes: new Uint8Array(bytes), mime: asset.mime || "image/png" };
-        } catch (err) {
-          console.warn(`[run ${runId}] export brand ${role} unavailable:`, err);
-        }
-      }
-      if (!brandAssets.logo && !brandAssets.banner) brandAssets = null;
+    if (bundle) {
+      brandAssets = await loadBrandBytes(bundle, uris, getPrivate);
     }
   } catch (err) {
     console.warn(`[run ${runId}] export brand assets resolve failed:`, err);

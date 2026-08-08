@@ -12,6 +12,13 @@ export interface BrandAssetUris {
   logo?: string;
   /** Home photographic masthead / banner. */
   banner?: string;
+  /**
+   * Banner crop kind for hero CSS:
+   * - strip: ultra-wide extraction figure (cinematic IR band)
+   * - photo: wide photo figure
+   * - page: full page-1 render fallback (crop to top)
+   */
+  bannerKind?: "strip" | "photo" | "page";
 }
 
 export interface ResolveContext {

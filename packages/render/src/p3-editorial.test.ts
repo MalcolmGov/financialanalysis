@@ -188,10 +188,13 @@ describe("HomeComposer", () => {
       brandAssets: {
         logo: "assets/brand/logo.png",
         banner: "assets/brand/banner.jpg",
+        bannerKind: "strip",
       },
     });
     expect(home.heroHtml).toContain("home-hero--photo");
+    expect(home.heroHtml).toContain("home-hero--strip");
     expect(home.heroHtml).toContain('src="assets/brand/banner.jpg"');
+    expect(home.heroHtml).toContain('data-banner-kind="strip"');
     expect(home.heroHtml).toContain("home-hero__logo");
     expect(home.heroHtml).toContain('src="assets/brand/logo.png"');
   });

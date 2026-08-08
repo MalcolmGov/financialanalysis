@@ -92,7 +92,22 @@ describe("pickBrandAssets", () => {
     expect(logo?.blob_path).toBe("figures/logo.png");
     expect(logo?.origin).toBe("extraction_figure");
     expect(banner?.blob_path).toBe("figures/banner.png");
-    expect(banner?.origin).toBe("extraction_figure");
+    expect(banner?.origin).toBe("extraction_figure_strip");
+    expect(banner?.background).toBe("strip");
+  });
+
+  it("prefers cinematic ultra-wide strip over squat wide photo", () => {
+    const ex = extraction({
+      figures: {
+        logo: fig("logo", { page: 1, w: 454, h: 117, t: 8 }),
+        squat: fig("squat", { page: 1, w: 900, h: 400, t: 200 }),
+        strip: fig("strip", { page: 1, w: 1189, h: 135, t: 40 }),
+      },
+    });
+    const bundle = pickBrandAssets(ex, "proj");
+    const banner = bundle.assets.find((a) => a.role === "banner");
+    expect(banner?.blob_path).toBe("figures/strip.png");
+    expect(banner?.origin).toBe("extraction_figure_strip");
   });
 
   it("falls back to page-1 render when no wide banner figure", () => {
@@ -105,6 +120,7 @@ describe("pickBrandAssets", () => {
     const banner = bundle.assets.find((a) => a.role === "banner");
     expect(banner?.blob_path).toBe("pages/p001@2x.png");
     expect(banner?.origin).toBe("page_render");
+    expect(banner?.background).toBe("page");
   });
 });
 

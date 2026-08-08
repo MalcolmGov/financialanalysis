@@ -235,19 +235,19 @@ export const CHROME_SCRIPT = SITE_RUNTIME_JS;
  * Brand accents use --dna-brand / --dna-masthead from locked DesignDNA.
  */
 export const CHROME_CSS = `
-/* rs-ir-chrome */
-html{scroll-behavior:smooth}
-body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);line-height:1.55;-webkit-font-smoothing:antialiased}
+/* rs-ir-chrome — dense DNA-matched type scale (Open Sans; no Inter CDN) */
+html{scroll-behavior:smooth;font-size:16px}
+body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.9375rem;line-height:1.5;letter-spacing:-.005em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 .site-nav{position:sticky;top:0;z-index:40;background:var(--dna-masthead,#0F3B2E);border-bottom:3px solid var(--dna-brand,#FCAF17);box-shadow:0 8px 28px rgba(15,59,46,.22)}
-.site-nav .nav-inner{display:flex;align-items:center;gap:1rem;max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem);min-height:4.25rem}
+.site-nav .nav-inner{display:flex;align-items:center;gap:1rem;max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem);min-height:4.5rem}
 .nav-brand{display:flex;align-items:center;gap:.65rem;text-decoration:none;flex-shrink:0;padding:.35rem 0;margin-right:.35rem}
 .nav-brand__mark{width:10px;height:28px;background:linear-gradient(180deg,var(--dna-brand,#FCAF17),color-mix(in srgb,var(--dna-brand,#FCAF17) 40%,#000));border-radius:1px}
-.nav-brand__logo{display:block;height:36px;width:auto;max-width:160px;object-fit:contain;filter:brightness(0) invert(1)}
+.nav-brand__logo{display:block;height:40px;width:auto;max-width:180px;object-fit:contain;filter:brightness(0) invert(1)}
 .nav-brand--logo .nav-brand__name{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.nav-brand__name{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:.78rem;font-weight:800;letter-spacing:.08em;color:var(--dna-paper,#fff);line-height:1.15;max-width:14ch}
+.nav-brand__name{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:.72rem;font-weight:800;letter-spacing:.06em;color:var(--dna-paper,#fff);line-height:1.15;max-width:14ch}
 .site-nav .nav-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;list-style:none;margin:0;padding:0;flex:1;justify-content:flex-end}
 .site-nav .nav-row>li{display:flex;align-items:stretch}
-.site-nav a,.site-nav .nav-dd-btn{font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.78);text-decoration:none;background:none;border:0;padding:0 .85rem;cursor:pointer;display:inline-flex;align-items:center;min-height:4.25rem}
+.site-nav a,.site-nav .nav-dd-btn{font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.7rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,.78);text-decoration:none;background:none;border:0;padding:0 .8rem;cursor:pointer;display:inline-flex;align-items:center;min-height:4.5rem}
 .site-nav a:hover,.site-nav .nav-dd-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
 .site-nav a[aria-current="page"],.site-nav .is-active>a,.site-nav .is-active>.nav-dd-btn{color:#fff;font-weight:700;box-shadow:inset 0 -3px 0 var(--dna-brand,#FCAF17)}
 .site-nav a.nav-brand,.site-nav a.nav-brand:hover{background:transparent;box-shadow:none;padding:.35rem 0;min-height:0}
@@ -286,7 +286,7 @@ mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 32%,transpa
 .kpi-card__top{display:flex;align-items:flex-start;justify-content:space-between;gap:.65rem}
 .kpi-title{margin:0;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;font-weight:700;color:var(--dna-masthead,#0F3B2E);line-height:1.3}
 .kpi-delta{margin:0;flex-shrink:0;font-size:.72rem;font-weight:700;letter-spacing:.02em;color:var(--dna-masthead,#0F3B2E);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 22%,var(--dna-paper,#fff));padding:.2rem .45rem;border-radius:2px;white-space:nowrap}
-.kpi-value{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(1.55rem,2.8vw,2rem);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--dna-ink,#231F20);line-height:1.1}
+.kpi-value{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(1.5rem,2.6vw,1.9rem);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.025em;color:var(--dna-ink,#231F20);line-height:1.08}
 .kpi-label{margin:0;font-size:.78rem;line-height:1.4;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff))}
 .breadcrumb{display:flex;flex-wrap:wrap;gap:.35rem .5rem;align-items:center;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.8rem;color:color-mix(in srgb,var(--dna-ink,#111) 60%,var(--dna-paper,#fff));margin:0 0 .9rem}
 .breadcrumb a{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:600}
@@ -311,18 +311,22 @@ mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 32%,transpa
 .page-hero__sub{margin:0;font-size:.95rem;color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff));max-width:42rem}
 .page-title-banner{max-width:1120px;margin:0 auto;padding:1.25rem clamp(1rem,3vw,2rem) .5rem}
 .page-title-banner h1{margin:0;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(1.35rem,2.4vw,1.85rem);font-weight:700;color:var(--dna-masthead,#0F3B2E)}
-.home-hero{position:relative;max-width:none;margin:0;padding:0;background:linear-gradient(135deg,var(--dna-masthead,#0F3B2E) 0%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 82%,#000) 48%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 70%,var(--dna-brand,#FCAF17)) 100%);color:var(--dna-paper,#fff);border-bottom:0;overflow:hidden}
+.home-hero{position:relative;max-width:none;margin:0;padding:0;background:linear-gradient(135deg,var(--dna-masthead,#0F3B2E) 0%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 82%,#000) 48%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 70%,var(--dna-brand,#FCAF17)) 100%);color:var(--dna-paper,#fff);border-bottom:0;overflow:hidden;min-height:min(72vh,36rem)}
 .home-hero--photo{background:var(--dna-masthead,#0F3B2E)}
-.home-hero__photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.42;pointer-events:none}
+.home-hero__photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 28%;opacity:.48;pointer-events:none}
+/* Ultra-wide extraction strips — keep cinematic band, slightly stronger presence */
+.home-hero--strip .home-hero__photo{object-fit:cover;object-position:center 40%;opacity:.55;transform:scale(1.04)}
+/* Full page-1 render fallback — crop to upper masthead, not mid-page tables */
+.home-hero--page .home-hero__photo{object-fit:cover;object-position:center 12%;opacity:.38}
 .home-hero--photo::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 92%,#000) 0%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 55%,transparent) 55%,color-mix(in srgb,var(--dna-masthead,#0F3B2E) 35%,transparent) 100%);pointer-events:none}
 .home-hero__mast{height:5px;background:linear-gradient(90deg,var(--dna-brand,#FCAF17) 0%,var(--dna-brand,#FCAF17) 36%,rgba(255,255,255,.35) 36%,rgba(255,255,255,.35) 100%);position:relative;z-index:1}
 .home-hero__lockup{display:flex;align-items:center;gap:.85rem;margin:0 0 1.1rem}
-.home-hero__logo{display:block;height:48px;width:auto;max-width:200px;object-fit:contain;filter:brightness(0) invert(1)}
-.home-hero__inner{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:3.6rem clamp(1rem,3vw,2rem) 3.1rem}
-.home-kicker{margin:0 0 .7rem;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dna-brand,#FCAF17);font-weight:700;max-width:40rem}
-.home-hero h1{margin:0 0 .75rem;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(2.55rem,5.4vw,3.75rem);line-height:1.02;letter-spacing:-.03em;color:#fff;font-weight:800;max-width:12ch}
-.home-period{margin:0 0 1.1rem;font-size:clamp(1.08rem,2vw,1.3rem);color:rgba(255,255,255,.86);max-width:38rem;font-weight:600}
-.home-lede{margin:0 0 1.25rem;max-width:38rem;font-size:1.08rem;line-height:1.65;color:rgba(255,255,255,.78)}
+.home-hero__logo{display:block;height:52px;width:auto;max-width:220px;object-fit:contain;filter:brightness(0) invert(1)}
+.home-hero__inner{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:clamp(3.2rem,8vh,4.4rem) clamp(1rem,3vw,2rem) clamp(2.8rem,6vh,3.6rem)}
+.home-kicker{margin:0 0 .65rem;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dna-brand,#FCAF17);font-weight:700;max-width:40rem}
+.home-hero h1{margin:0 0 .7rem;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:clamp(2.4rem,5vw,3.5rem);line-height:1.02;letter-spacing:-.035em;color:#fff;font-weight:800;max-width:12ch}
+.home-period{margin:0 0 1rem;font-size:clamp(1.02rem,1.8vw,1.22rem);color:rgba(255,255,255,.86);max-width:38rem;font-weight:600;letter-spacing:-.01em}
+.home-lede{margin:0 0 1.15rem;max-width:38rem;font-size:1.02rem;line-height:1.55;color:rgba(255,255,255,.78);letter-spacing:-.005em}
 .home-meta{display:flex;flex-wrap:wrap;gap:.45rem .65rem;margin:0 0 1.55rem}
 .home-meta__chip{display:inline-block;padding:.4rem .7rem;font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18)}
 .home-cta{display:flex;flex-wrap:wrap;gap:.85rem 1.15rem;align-items:center}

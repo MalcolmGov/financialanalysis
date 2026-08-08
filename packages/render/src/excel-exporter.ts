@@ -6,7 +6,8 @@ import { classifyStatementRow } from "./row-taxonomy.js";
  * ExcelExporter — FinTables → multi-sheet + per-statement XLSX binaries.
  * Cell values are the FinTable `raw` strings verbatim (no invented figures,
  * no numeric reinterpretation that would drop thin-space grouping).
- * Presentation: header fill, column widths, freeze panes, row-role bold.
+ * Presentation: IR title card + company/period brand row, header fill,
+ * column widths, freeze panes, row-role bold, current-period shade.
  */
 
 export interface ExcelSheetSpec {
@@ -16,6 +17,13 @@ export interface ExcelSheetSpec {
   slug: string;
   table: FinTable;
   statementType?: StatementType;
+  /** Full IR title for the presentation card row (not invented numbers). */
+  title?: string;
+}
+
+export interface ExcelWorkbookMeta {
+  company?: string;
+  periodLabel?: string;
 }
 
 export interface ExcelExportResult {
@@ -30,27 +38,31 @@ export interface ExcelExportResult {
 
 const STATEMENT_META: Record<
   StatementType,
-  { sheet: string; slug: string; label: string }
+  { sheet: string; slug: string; label: string; title: string }
 > = {
   pnl_oci: {
-    sheet: "Income statement",
+    sheet: "Income Statement",
     slug: "income-statement",
     label: "Income statement",
+    title: "Condensed Consolidated Statement of Profit or Loss and OCI",
   },
   financial_position: {
-    sheet: "Financial position",
+    sheet: "Balance Sheet",
     slug: "balance-sheet",
     label: "Statement of financial position",
+    title: "Condensed Consolidated Statement of Financial Position",
   },
   changes_in_equity: {
-    sheet: "Changes in equity",
+    sheet: "Changes in Equity",
     slug: "changes-in-equity",
     label: "Changes in equity",
+    title: "Condensed Consolidated Statement of Changes in Equity",
   },
   cash_flows: {
-    sheet: "Cash flows",
+    sheet: "Cash Flows",
     slug: "cash-flows",
     label: "Cash flows",
+    title: "Condensed Consolidated Statement of Cash Flows",
   },
 };
 
@@ -150,6 +162,7 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
         slug,
         table,
         statementType: st,
+        title: idx === 0 ? meta.title : `${meta.title} (${idx + 1})`,
       });
     });
   }
@@ -186,7 +199,11 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
   return sheets;
 }
 
-/** Style indexes in STYLES_XML: 0 default, 1 header, 2 section, 3 subtotal, 4 total, 5 number, 6 numberCur. */
+/**
+ * Style indexes:
+ * 0 default, 1 header, 2 section, 3 subtotal, 4 total, 5 number, 6 numberCur,
+ * 7 title, 8 brand, 9 unitNote.
+ */
 const STYLE = {
   default: 0,
   header: 1,
@@ -195,18 +212,23 @@ const STYLE = {
   total: 4,
   number: 5,
   numberCur: 6,
+  title: 7,
+  brand: 8,
+  unitNote: 9,
 } as const;
 
 const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="5">
-    <font><sz val="11"/><name val="Calibri"/><family val="2"/></font>
-    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
-    <font><b/><sz val="11"/><color rgb="FF0F3B2E"/><name val="Calibri"/><family val="2"/></font>
-    <font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>
-    <font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+  <fonts count="7">
+    <font><sz val="10"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FF0F3B2E"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font>
+    <font><b/><sz val="14"/><color rgb="FF0F3B2E"/><name val="Arial"/><family val="2"/></font>
+    <font><sz val="9"/><color rgb="FF58595A"/><name val="Arial"/><family val="2"/></font>
   </fonts>
-  <fills count="7">
+  <fills count="8">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF839097"/></patternFill></fill>
@@ -214,23 +236,28 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFFFF3D6"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF7F7F7"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFBF0"/></patternFill></fill>
   </fills>
-  <borders count="5">
+  <borders count="6">
     <border><left/><right/><top/><bottom/><diagonal/></border>
     <border><left/><right/><top/><bottom style="thin"><color rgb="FF839097"/></bottom><diagonal/></border>
     <border><left/><right/><top style="medium"><color rgb="FF0F3B2E"/></top><bottom style="medium"><color rgb="FFFCAF17"/></bottom><diagonal/></border>
     <border><left style="thin"><color rgb="FF6C6C6C"/></left><right style="thin"><color rgb="FF6C6C6C"/></right><top style="thin"><color rgb="FF6C6C6C"/></top><bottom style="thin"><color rgb="FF6C6C6C"/></bottom><diagonal/></border>
     <border><left/><right/><top style="thin"><color rgb="FFBAC4CA"/></top><bottom/><diagonal/></border>
+    <border><left/><right/><top/><bottom style="medium"><color rgb="FFFCAF17"/></bottom><diagonal/></border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="7">
+  <cellXfs count="10">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="bottom" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="bottom" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="2" fillId="3" borderId="4" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
     <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
     <xf numFmtId="0" fontId="4" fillId="5" borderId="2" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="3" xfId="0" applyAlignment="1" applyBorder="1"><alignment horizontal="right"/></xf>
     <xf numFmtId="0" fontId="3" fillId="6" borderId="3" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="7" borderId="5" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="6" fillId="7" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+    <xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1"/>
   </cellXfs>
 </styleSheet>`;
 
@@ -291,9 +318,38 @@ function findCurrentPeriodCol(table: FinTable): number | null {
   return bestCol;
 }
 
-function sheetXml(table: FinTable): string {
+function sheetXml(
+  table: FinTable,
+  opts: { title?: string; company?: string; periodLabel?: string } = {},
+): string {
   const rows: string[] = [];
   let r = 1;
+  const widths = measureCols(table);
+  const colCount = Math.max(1, widths.length);
+  const unit = table.unit_context?.default?.trim();
+
+  // Presentation card: title + company/period brand (metadata only — no invented figures).
+  if (opts.title?.trim()) {
+    rows.push(
+      `<row r="${r}" ht="28" customHeight="1">${inlineStrCell(`A${r}`, opts.title.trim(), STYLE.title)}</row>`,
+    );
+    r++;
+  }
+  const brandBits = [opts.company?.trim(), opts.periodLabel?.trim()].filter(Boolean);
+  if (brandBits.length) {
+    rows.push(
+      `<row r="${r}" ht="18" customHeight="1">${inlineStrCell(`A${r}`, brandBits.join(" · "), STYLE.brand)}</row>`,
+    );
+    r++;
+  }
+  if (unit) {
+    rows.push(
+      `<row r="${r}">${inlineStrCell(`A${r}`, `Figures in ${unit}`, STYLE.unitNote)}</row>`,
+    );
+    r++;
+  }
+  const prefaceRows = r - 1;
+
   const headerCount = table.header_matrix.length;
   const curCol = findCurrentPeriodCol(table);
   for (const headerRow of table.header_matrix) {
@@ -304,7 +360,7 @@ function sheetXml(table: FinTable): string {
       cells.push(inlineStrCell(ref, h.raw, STYLE.header));
       c += Math.max(1, h.col_span ?? 1);
     }
-    rows.push(`<row r="${r}" ht="28" customHeight="1">${cells.join("")}</row>`);
+    rows.push(`<row r="${r}" ht="30" customHeight="1">${cells.join("")}</row>`);
     r++;
   }
   for (const row of table.rows) {
@@ -336,16 +392,19 @@ function sheetXml(table: FinTable): string {
     r++;
   }
 
-  const widths = measureCols(table);
+  widths[0] = Math.max(widths[0] ?? 40, 40);
   const colsXml = `<cols>${widths
     .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
     .join("")}</cols>`;
-  const freezeRow = Math.max(1, headerCount);
+  const freezeRow = Math.max(1, prefaceRows + headerCount);
   const views = `<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="${freezeRow}" topLeftCell="A${freezeRow + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
-  const dim = `A1:${colLetter(Math.max(0, widths.length - 1))}${Math.max(1, r - 1)}`;
+  const dim = `A1:${colLetter(Math.max(0, colCount - 1))}${Math.max(1, r - 1)}`;
+  const headerFooter = opts.company
+    ? `<headerFooter><oddHeader>&amp;L${escapeXml(opts.company)}${opts.periodLabel ? ` — ${escapeXml(opts.periodLabel)}` : ""}&amp;RInterim results</oddHeader></headerFooter>`
+    : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${views}${colsXml}<dimension ref="${dim}"/><sheetData>${rows.join("")}</sheetData><pageMargins left="0.5" right="0.5" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${views}${colsXml}<dimension ref="${dim}"/><sheetData>${rows.join("")}</sheetData><pageMargins left="0.5" right="0.5" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${headerFooter}<pageSetup orientation="landscape" fitToPage="1" fitToWidth="1" fitToHeight="0"/></worksheet>`;
 }
 
 function workbookXml(sheetNames: string[]): string {
@@ -455,7 +514,10 @@ export function zipDeflated(files: Record<string, string | Uint8Array>): Uint8Ar
 }
 
 /** Build an XLSX workbook from sheet specs (verbatim FinTable cells). */
-export function buildWorkbookXlsx(sheets: ExcelSheetSpec[]): Uint8Array {
+export function buildWorkbookXlsx(
+  sheets: ExcelSheetSpec[],
+  meta: ExcelWorkbookMeta = {},
+): Uint8Array {
   if (!sheets.length) {
     throw new Error("buildWorkbookXlsx: no sheets");
   }
@@ -468,7 +530,11 @@ export function buildWorkbookXlsx(sheets: ExcelSheetSpec[]): Uint8Array {
     "xl/styles.xml": STYLES_XML,
   };
   sheets.forEach((spec, i) => {
-    files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(spec.table);
+    files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(spec.table, {
+      title: spec.title ?? (spec.statementType ? STATEMENT_META[spec.statementType].title : spec.name),
+      company: meta.company,
+      periodLabel: meta.periodLabel,
+    });
   });
   return zipDeflated(files);
 }
@@ -484,9 +550,13 @@ export function exportExcelFromDocModel(docModel: FinancialDocModel): ExcelExpor
   const sheets = collectExcelSheets(docModel);
   const files: Record<string, Uint8Array> = {};
   const workbookSheetNames = sheets.map((s) => s.name);
+  const meta: ExcelWorkbookMeta = {
+    company: docModel.meta.company,
+    periodLabel: docModel.meta.period_label,
+  };
 
   if (sheets.length) {
-    files[WORKBOOK_HREF] = buildWorkbookXlsx(sheets);
+    files[WORKBOOK_HREF] = buildWorkbookXlsx(sheets, meta);
   }
 
   // Per-statement single-sheet workbooks (first table per statement type).
@@ -498,7 +568,7 @@ export function exportExcelFromDocModel(docModel: FinancialDocModel): ExcelExpor
     if (seenSlug.has(first.slug)) continue;
     seenSlug.add(first.slug);
     const href = `assets/excel/${first.slug}.xlsx`;
-    files[href] = buildWorkbookXlsx([first]);
+    files[href] = buildWorkbookXlsx([first], meta);
     statementFiles.push({
       label: STATEMENT_META[st].label,
       href,
@@ -509,7 +579,7 @@ export function exportExcelFromDocModel(docModel: FinancialDocModel): ExcelExpor
   const noteSheets = sheets.filter((s) => !s.statementType);
   if (noteSheets.length) {
     const href = "assets/excel/notes.xlsx";
-    files[href] = buildWorkbookXlsx(noteSheets);
+    files[href] = buildWorkbookXlsx(noteSheets, meta);
     statementFiles.push({ label: "Notes", href, slug: "notes" });
   }
 

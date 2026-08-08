@@ -127,13 +127,16 @@ function unzipEntry(zip: Uint8Array, name: string): string {
 describe("ExcelExporter", () => {
   it("collects statement sheets with stable names", () => {
     const sheets = collectExcelSheets(docModel());
-    expect(sheets.map((s) => s.name)).toEqual(["Income statement", "Financial position"]);
+    expect(sheets.map((s) => s.name)).toEqual(["Income Statement", "Balance Sheet"]);
     expect(sheets.map((s) => s.slug)).toEqual(["income-statement", "balance-sheet"]);
   });
 
   it("writes verbatim FinTable numbers into XLSX sheet XML", () => {
     const sheets = collectExcelSheets(docModel());
-    const xlsx = buildWorkbookXlsx(sheets);
+    const xlsx = buildWorkbookXlsx(sheets, {
+      company: "DRDGOLD Limited",
+      periodLabel: "HY1 FY2026",
+    });
     // ZIP local header signature
     expect(xlsx[0]).toBe(0x50);
     expect(xlsx[1]).toBe(0x4b);
@@ -141,20 +144,25 @@ describe("ExcelExporter", () => {
     expect(sheet1).toContain("5 053.2");
     expect(sheet1).toContain("1 927.7");
     expect(sheet1).toContain("Revenue");
+    expect(sheet1).toContain("Condensed Consolidated Statement of Profit or Loss");
+    expect(sheet1).toContain("DRDGOLD Limited · HY1 FY2026");
     expect(sheet1).toContain("frozen");
     expect(sheet1).toContain("<cols>");
     expect(sheet1).toContain('customWidth="1"');
+    expect(sheet1).toContain("fitToPage");
     const styles = unzipEntry(xlsx, "xl/styles.xml");
     expect(styles).toContain("cellXfs");
     expect(styles).toContain("FF839097");
+    expect(styles).toContain("Arial");
     const sheet2 = unzipEntry(xlsx, "xl/worksheets/sheet2.xml");
     expect(sheet2).toContain("Total assets");
     expect(sheet2).toContain("12 345.6");
+    expect(sheet2).toContain("Condensed Consolidated Statement of Financial Position");
   });
 
   it("exports multi-sheet workbook + per-statement files", () => {
     const result = exportExcelFromDocModel(docModel());
-    expect(result.workbookSheetNames).toEqual(["Income statement", "Financial position"]);
+    expect(result.workbookSheetNames).toEqual(["Income Statement", "Balance Sheet"]);
     expect(result.files["assets/excel/financial-statements.xlsx"]).toBeTruthy();
     expect(result.files["assets/excel/income-statement.xlsx"]).toBeTruthy();
     expect(result.files["assets/excel/balance-sheet.xlsx"]).toBeTruthy();
