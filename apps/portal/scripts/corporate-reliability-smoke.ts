@@ -12,7 +12,11 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { unzipSync, strFromU8 } from "fflate";
 import type { DesignDNA, ExtractionResult } from "@rs/contracts";
-import { auditCorporateReliability, type SiteFiles } from "@rs/render";
+import {
+  auditCorporateReliability,
+  resolveLegalCompanyName,
+  type SiteFiles,
+} from "@rs/render";
 import { buildMultipageExport } from "../lib/build-multipage-export";
 
 async function loadDir(dir: string): Promise<SiteFiles> {
@@ -58,7 +62,11 @@ async function loadZip(zipPath: string): Promise<SiteFiles> {
   return { files, binaries };
 }
 
-async function buildFromFixtures(): Promise<SiteFiles> {
+async function buildFromFixtures(): Promise<{
+  site: SiteFiles;
+  expectedLegalName: string;
+  forbiddenProjectTitles: string[];
+}> {
   const extraction = JSON.parse(
     await fs.readFile("/tmp/drd-extraction.json", "utf8"),
   ) as ExtractionResult;
@@ -69,31 +77,66 @@ async function buildFromFixtures(): Promise<SiteFiles> {
   } catch {
     /* optional */
   }
+  // Pass portal project slug on purpose — P1 must resolve to legal issuer.
   const built = buildMultipageExport({
     dna,
     extraction,
     projectId: extraction.project_id || "offline",
-    company: "DRDGOLD Limited",
+    company: "DRD Gold 1",
     periodLabel: "HY1 FY2026 — six months ended 31 December 2025",
     sourcePdfBytes,
   });
-  return { files: built.files, binaries: built.binaries };
+  const legal = resolveLegalCompanyName({
+    extraction,
+    dna,
+    projectCompanyName: "DRD Gold 1",
+  });
+  process.stdout.write(
+    `Resolved company: “${built.company}” (${built.companySource}); precheck “${legal.company}”\n`,
+  );
+  return {
+    site: { files: built.files, binaries: built.binaries },
+    expectedLegalName: built.company,
+    forbiddenProjectTitles: ["DRD Gold 1"],
+  };
 }
 
 async function main() {
   const target = process.argv[2];
   let site: SiteFiles;
   let label: string;
+  let expectedLegalName: string | undefined;
+  let forbiddenProjectTitles: string[] | undefined;
 
-  if (!target) {
+  // Optional: --expect=DRDGOLD --forbid=DRD Gold 1
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith("--expect=")) expectedLegalName = arg.slice("--expect=".length);
+    if (arg.startsWith("--forbid=")) {
+      forbiddenProjectTitles = (forbiddenProjectTitles ?? []).concat(arg.slice("--forbid=".length));
+    }
+  }
+
+  if (!target || target.startsWith("--")) {
     label = "fixture-build";
-    site = await buildFromFixtures();
+    const built = await buildFromFixtures();
+    site = built.site;
+    expectedLegalName = expectedLegalName ?? built.expectedLegalName;
+    forbiddenProjectTitles = forbiddenProjectTitles ?? built.forbiddenProjectTitles;
   } else if (target.endsWith(".zip")) {
     label = target;
     site = await loadZip(target);
+    // DRD pilot defaults when auditing a tree without flags
+    if (!expectedLegalName && !forbiddenProjectTitles) {
+      forbiddenProjectTitles = ["DRD Gold 1"];
+      expectedLegalName = "DRDGOLD";
+    }
   } else {
     label = target;
     site = await loadDir(target);
+    if (!expectedLegalName && !forbiddenProjectTitles) {
+      forbiddenProjectTitles = ["DRD Gold 1"];
+      expectedLegalName = "DRDGOLD";
+    }
   }
 
   const htmlPages = Object.keys(site.files)
@@ -102,8 +145,15 @@ async function main() {
 
   process.stdout.write(`Corporate reliability smoke · ${label}\n`);
   process.stdout.write(`Pages: ${htmlPages.length}\n`);
+  if (expectedLegalName) process.stdout.write(`Expect legal name: ${expectedLegalName}\n`);
+  if (forbiddenProjectTitles?.length) {
+    process.stdout.write(`Forbid in chrome: ${forbiddenProjectTitles.join(" | ")}\n`);
+  }
 
-  const { ok, findings } = auditCorporateReliability(site);
+  const { ok, findings } = auditCorporateReliability(site, {
+    expectedLegalName,
+    forbiddenProjectTitles,
+  });
   let failed = 0;
   for (const f of findings) {
     const mark = f.ok ? "✓" : "✗";

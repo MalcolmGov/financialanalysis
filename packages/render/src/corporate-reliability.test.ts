@@ -3,6 +3,7 @@ import { CHROME_CSS, renderStickyNav } from "./chrome.js";
 import {
   auditCorporateReliability,
   checkBrandFallback,
+  checkLegalCompanyChrome,
   checkPageMinContent,
   checkRevealProgressiveEnhancement,
   visibleTextBytes,
@@ -91,6 +92,36 @@ describe("auditCorporateReliability", () => {
     const fails = audit.findings.filter((f) => !f.ok);
     expect(fails, JSON.stringify(fails, null, 2)).toEqual([]);
     expect(audit.ok).toBe(true);
+  });
+
+  it("fails when project slug leaks into chrome", () => {
+    const nav = renderStickyNav(
+      [{ label: "Home", href: "index.html" }],
+      "index.html",
+      "DRD Gold 1",
+    );
+    const body =
+      "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
+        8,
+      );
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style><title>Home · DRD Gold 1</title></head><body>${nav}<main class="home-hero reveal"><h1 data-allow-number>DRD Gold 1</h1>${body}</main><script src="assets/site.js"></script></body></html>`;
+    const audit = auditCorporateReliability(
+      {
+        files: {
+          "index.html": page,
+          "assets/site.js": SITE_RUNTIME_JS,
+        },
+        binaries: {
+          "assets/fonts/open-sans-latin-400-normal.woff2": new Uint8Array(64).fill(1),
+        },
+      },
+      { expectedLegalName: "DRDGOLD", forbiddenProjectTitles: ["DRD Gold 1"] },
+    );
+    expect(audit.ok).toBe(false);
+    expect(audit.findings.some((f) => f.code === "project-slug-in-chrome" && !f.ok)).toBe(true);
+    expect(checkLegalCompanyChrome(page, "index.html", { expectedLegalName: "DRDGOLD" }).some((f) => !f.ok)).toBe(
+      true,
+    );
   });
 
   it("fails site with unguarded reveal hide", () => {

@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getPrivate, putPrivate } from "../lib/blob";
+import { resolveLegalCompanyName } from "@rs/render";
 import { loadBrandBytes, resolveAssetUris } from "../lib/brand-assets";
 import { buildMultipageExport, type BrandAssetBytes } from "../lib/build-multipage-export";
 import { db, schema } from "../lib/db";
@@ -90,6 +91,16 @@ async function main() {
 
   const brandAssets = await resolveBrand(arts, PROJECT_ID, extraction);
 
+  const legal = resolveLegalCompanyName({
+    extraction,
+    dna,
+    projectCompanyName: project.companyName,
+  });
+  console.log(
+    `Legal company: “${legal.company}” (${legal.source})` +
+      (legal.ignoredProjectSlug ? `; ignored project slug “${legal.ignoredProjectSlug}”` : ""),
+  );
+
   const built = buildMultipageExport({
     dna,
     extraction,
@@ -99,6 +110,9 @@ async function main() {
     sourcePdfBytes,
     brandAssets,
   });
+  if (built.company !== legal.company) {
+    console.warn(`build company “${built.company}” ≠ pre-resolve “${legal.company}”`);
+  }
 
   const existing = await db()
     .select({ version: schema.artifacts.version })

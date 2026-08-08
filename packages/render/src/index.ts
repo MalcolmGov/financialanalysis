@@ -17,3 +17,4 @@ export * from "./color.js";
 export * from "./linter.js";
 export * from "./fonts.js";
 export * from "./corporate-reliability.js";
+export * from "./legal-company.js";

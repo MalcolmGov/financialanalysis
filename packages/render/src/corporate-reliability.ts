@@ -1,8 +1,13 @@
 /**
- * P0 / P5 stub — corporate IR reliability gates for multipage HTML.
+ * P0 / P5 — corporate IR reliability gates for multipage HTML.
  * Fail closed on blank pages, unguarded opacity:0 reveal, missing assets,
- * or missing brand text fallback.
+ * missing brand text fallback, or project-slug leakage into chrome.
  */
+
+import {
+  extractChromeIdentityText,
+  looksLikeProjectSlug,
+} from "./legal-company.js";
 
 export interface ReliabilityFinding {
   ok: boolean;
@@ -239,7 +244,98 @@ export function checkRelativeAssetLinks(
   return findings;
 }
 
-export function auditCorporateReliability(site: SiteFiles): {
+export interface CorporateReliabilityOptions {
+  /** Legal / trading name that must appear in identity chrome (nav/footer/hero/OG). */
+  expectedLegalName?: string;
+  /** Project titles / slugs that must not appear in identity chrome. */
+  forbiddenProjectTitles?: string[];
+}
+
+/** Normalize for chrome presence checks (case/spacing; Limited optional). */
+function normalizeBrandToken(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\blimited\b/g, "")
+    .replace(/\bltd\.?\b/g, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+/**
+ * Assert legal name is present in chrome identity regions, and that project
+ * slugs (e.g. "DRD Gold 1") never leak into nav / hero / footer / OG / title.
+ */
+export function checkLegalCompanyChrome(
+  html: string,
+  path: string,
+  opts: CorporateReliabilityOptions = {},
+): ReliabilityFinding[] {
+  const findings: ReliabilityFinding[] = [];
+  const identity = extractChromeIdentityText(html);
+  const identityLower = identity.toLowerCase();
+  const identityNorm = normalizeBrandToken(identity);
+
+  if (opts.expectedLegalName?.trim()) {
+    const expected = opts.expectedLegalName.trim();
+    const expNorm = normalizeBrandToken(expected);
+    const present =
+      identityLower.includes(expected.toLowerCase()) ||
+      (expNorm.length >= 3 && identityNorm.includes(expNorm));
+    findings.push({
+      ok: present,
+      code: "legal-name-present",
+      path,
+      message: present
+        ? `${path}: legal name “${expected}” present in chrome`
+        : `${path}: legal name “${expected}” missing from nav/hero/footer/OG/title`,
+    });
+  }
+
+  for (const raw of opts.forbiddenProjectTitles ?? []) {
+    const f = raw.trim();
+    if (!f) continue;
+    if (identityLower.includes(f.toLowerCase())) {
+      findings.push({
+        ok: false,
+        code: "project-slug-in-chrome",
+        path,
+        message: `${path}: forbidden project title in chrome: “${f}”`,
+      });
+    }
+  }
+
+  // Scan identity segments (split on · | —) for slug-shaped labels.
+  const slugHits: string[] = [];
+  for (const line of identity.split("\n")) {
+    for (const part of line.split(/[·|—–]/)) {
+      const t = part.trim();
+      if (t && looksLikeProjectSlug(t)) slugHits.push(t);
+    }
+  }
+  if (slugHits.length) {
+    findings.push({
+      ok: false,
+      code: "project-slug-in-chrome",
+      path,
+      message: `${path}: project slug pattern leaked into chrome: “${slugHits[0]!.slice(0, 80)}”`,
+    });
+  } else if (!(opts.forbiddenProjectTitles ?? []).some((f) => identityLower.includes(f.trim().toLowerCase()))) {
+    findings.push({
+      ok: true,
+      code: "project-slug-in-chrome",
+      path,
+      message: `${path}: no project-slug patterns in identity chrome`,
+    });
+  }
+
+  return findings;
+}
+
+export function auditCorporateReliability(
+  site: SiteFiles,
+  opts: CorporateReliabilityOptions = {},
+): {
   ok: boolean;
   findings: ReliabilityFinding[];
 } {
@@ -277,6 +373,15 @@ export function auditCorporateReliability(site: SiteFiles): {
     }
     if (path === "index.html" || path.endsWith("/index.html")) {
       findings.push(checkBrandFallback(html, path));
+    }
+    // Naming gates on home + a statement page + commentary when present
+    if (
+      path === "index.html" ||
+      path.endsWith("/index.html") ||
+      path === "commentary.html" ||
+      /financials\/balance-sheet\.html$/i.test(path)
+    ) {
+      findings.push(...checkLegalCompanyChrome(html, path, opts));
     }
     findings.push(...checkRelativeAssetLinks(html, path, available));
   }

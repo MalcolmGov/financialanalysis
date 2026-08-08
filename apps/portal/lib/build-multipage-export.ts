@@ -9,6 +9,7 @@ import {
   gateA,
   gateB,
   renderSitePlan,
+  resolveLegalCompanyName,
   SOURCE_PDF_HREF,
   type BrandAssetUris,
   type GateAResult,
@@ -71,6 +72,9 @@ export interface MultipageExportResult {
   pdfBundled: boolean;
   brandLogo: boolean;
   brandBanner: boolean;
+  /** Legal issuer used in chrome (may differ from portal project title). */
+  company: string;
+  companySource: string;
 }
 
 function sha256Hex(body: string | Buffer): string {
@@ -131,8 +135,20 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   const checksum = sha256Hex(JSON.stringify(draft));
   const blueprint = BlueprintSchema.parse({ ...draft, checksum }) as Blueprint;
 
+  // P1: never publish portal project slugs (e.g. "DRD Gold 1") in IR chrome.
+  const legal = resolveLegalCompanyName({
+    extraction: input.extraction,
+    dna: input.dna,
+    projectCompanyName: input.company,
+  });
+  if (legal.ignoredProjectSlug) {
+    console.info(
+      `[buildMultipageExport] using legal name “${legal.company}” (${legal.source}); ignored project slug “${legal.ignoredProjectSlug}”`,
+    );
+  }
+
   const meta = {
-    company: input.company,
+    company: legal.company,
     period_label: input.periodLabel,
     doc_kind: "interim_unaudited" as const,
     currency: "ZAR",
@@ -207,5 +223,7 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     pdfBundled,
     brandLogo: Boolean(brandUris.logo),
     brandBanner: Boolean(brandUris.banner),
+    company: legal.company,
+    companySource: legal.source,
   };
 }

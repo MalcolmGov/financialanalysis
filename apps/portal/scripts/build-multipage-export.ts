@@ -34,10 +34,14 @@ async function main() {
     dna,
     extraction,
     projectId: extraction.project_id || "offline",
-    company: "DRDGOLD Limited",
+    // Prove P1: portal slug must not win over extraction/DNA issuer.
+    company: "DRD Gold 1",
     periodLabel: "HY1 FY2026 — six months ended 31 December 2025",
     sourcePdfBytes,
   });
+  process.stdout.write(
+    `Company: “${built.company}” (${built.companySource}) — portal slug “DRD Gold 1” ignored when issuer found\n`,
+  );
 
   await fs.rm(outDir, { recursive: true, force: true });
   await fs.mkdir(outDir, { recursive: true });
@@ -104,6 +108,12 @@ async function main() {
     ["prev/next", bs.includes("page-pager")],
     ["site footer", home.includes("site-footer") && bs.includes("site-footer__brand")],
     ["nav brand", home.includes("nav-brand") && home.includes("nav-brand__name")],
+    // P1 — legal name in chrome (not portal project slug)
+    ["legal company resolved", /DRDGOLD/i.test(built.company) && built.companySource !== "project"],
+    ["no project slug in nav", !/DRD Gold 1/i.test(home.match(/nav-brand__name[^>]*>([^<]*)/)?.[1] ?? "")],
+    ["no project slug in hero", !/<h1[^>]*>DRD Gold 1</i.test(home) && /<h1[^>]*>[^<]*DRDGOLD/i.test(home)],
+    ["no project slug in footer", !/site-footer__brand[^>]*>DRD Gold 1/i.test(home)],
+    ["no project slug in OG", !/og:title" content="[^"]*DRD Gold 1/i.test(home)],
     ["page hero", bs.includes("page-hero") && bs.includes("page-hero__eyebrow")],
     ["cur shading IS", income.includes("data-cur-col") && income.includes(" cur")],
     ["cur shading BS", bs.includes('data-cur-col="3"') || /data-cur-col="3"/.test(bs)],

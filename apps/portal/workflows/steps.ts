@@ -1283,11 +1283,18 @@ export async function buildSiteDraftArtifact(
     dna,
     extraction: extractionJson,
     projectId,
+    // project.companyName may be an internal slug; buildMultipageExport resolves legal issuer.
     company: project?.companyName ?? extractionJson.source?.pdf_meta?.title ?? "Company",
     periodLabel: project?.periodLabel ?? "",
     sourcePdfBytes,
     brandAssets,
   });
+  console.log(
+    `[run ${runId}] site draft company “${built.company}” (${built.companySource})` +
+      (project?.companyName && project.companyName !== built.company
+        ? `; portal title “${project.companyName}”`
+        : ""),
+  );
 
   const existing = await db()
     .select({ version: schema.artifacts.version })
@@ -1553,7 +1560,9 @@ export async function buildPrototypeExport(
     bundle_id: bundleId,
     project_id: projectId,
     run_id: runId,
-    company: project?.companyName ?? "Company",
+    company: built.company,
+    company_source: built.companySource,
+    portal_company_name: project?.companyName ?? null,
     period_label: project?.periodLabel ?? "",
     prototype_version_id: proto?.id ?? null,
     prototype_version_number: proto?.versionNumber ?? null,
