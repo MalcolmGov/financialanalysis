@@ -3,6 +3,9 @@
  * Bundled as assets/site.js (and optionally inlined). Numbers are never invented:
  * count-up reads data-countup / data-final / rendered text and restores the
  * original DOM string when the animation completes.
+ *
+ * Progressive enhancement only: content must remain visible if this never runs.
+ * html.rs-motion is armed here so CSS may hide .reveal/.kpi-card for motion.
  */
 
 /** Relative href to assets/site.js from a page path. */
@@ -34,6 +37,10 @@ export const SITE_RUNTIME_JS = `
   function pageTitle(){
     var h = document.querySelector('.page-hero h1, .home-hero h1, title');
     return (h && (h.textContent || '').trim()) || document.title || 'Results';
+  }
+
+  function linkedInShareUrl(){
+    return 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(location.href);
   }
 
   /* ── Toast ── */
@@ -77,6 +84,13 @@ export const SITE_RUNTIME_JS = `
       document.body.removeChild(ta);
       showToast(okMsg || 'Copied');
     } catch(e) {}
+  }
+
+  function openEmailShare(extraBody){
+    var subject = encodeURIComponent(pageTitle());
+    var bodyTxt = pageTitle() + '\\n\\n' + location.href;
+    if (extraBody) bodyTxt += '\\n\\n' + extraBody;
+    location.href = 'mailto:?subject=' + subject + '&body=' + encodeURIComponent(bodyTxt);
   }
 
   /* ── Sticky nav scroll state ── */
@@ -140,33 +154,47 @@ export const SITE_RUNTIME_JS = `
   }
 
   /* ── Mobile nav ── */
+  function setMobileNav(open){
+    var btn = document.querySelector('[data-nav-toggle]');
+    var panel = document.getElementById('nav-mobile');
+    if (!panel) return;
+    panel.classList.toggle('is-open', open);
+    document.documentElement.classList.toggle('nav-mobile-open', open);
+    if (btn) {
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    }
+  }
+
+  function closeMobileNav(){
+    setMobileNav(false);
+  }
+
   function initMobileNav(){
     var btn = document.querySelector('[data-nav-toggle]');
     var panel = document.getElementById('nav-mobile');
     if (!btn || !panel) return;
     btn.addEventListener('click', function(){
-      var open = panel.classList.toggle('is-open');
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      document.documentElement.classList.toggle('nav-mobile-open', open);
+      setMobileNav(!panel.classList.contains('is-open'));
     });
     panel.querySelectorAll('a').forEach(function(a){
-      a.addEventListener('click', function(){
-        panel.classList.remove('is-open');
-        btn.setAttribute('aria-expanded', 'false');
-        document.documentElement.classList.remove('nav-mobile-open');
-      });
+      a.addEventListener('click', function(){ closeMobileNav(); });
     });
   }
 
   /* ── Financials dropdown (desktop) ── */
+  function closeNavDropdowns(){
+    document.querySelectorAll('.nav-dd-btn').forEach(function(b){
+      b.setAttribute('aria-expanded', 'false');
+      if (b.parentElement) b.parentElement.classList.remove('is-open');
+    });
+  }
+
   function initNavDropdown(){
     document.querySelectorAll('.nav-dd-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
         var open = btn.getAttribute('aria-expanded') === 'true';
-        document.querySelectorAll('.nav-dd-btn').forEach(function(b){
-          b.setAttribute('aria-expanded', 'false');
-          if (b.parentElement) b.parentElement.classList.remove('is-open');
-        });
+        closeNavDropdowns();
         if (!open) {
           btn.setAttribute('aria-expanded', 'true');
           if (btn.parentElement) btn.parentElement.classList.add('is-open');
@@ -176,10 +204,7 @@ export const SITE_RUNTIME_JS = `
     document.addEventListener('click', function(e){
       var t = e.target;
       if (t && t.closest && t.closest('.nav-dd')) return;
-      document.querySelectorAll('.nav-dd-btn').forEach(function(b){
-        b.setAttribute('aria-expanded', 'false');
-        if (b.parentElement) b.parentElement.classList.remove('is-open');
-      });
+      closeNavDropdowns();
     });
   }
 
@@ -201,18 +226,16 @@ export const SITE_RUNTIME_JS = `
         }, 1600);
       });
     });
-    document.querySelectorAll('[data-share="linkedin"]').forEach(function(a){
-      a.addEventListener('click', function(e){
+    document.querySelectorAll('[data-share="linkedin"]').forEach(function(el){
+      el.addEventListener('click', function(e){
         e.preventDefault();
-        var u = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(location.href);
-        window.open(u, '_blank', 'noopener,noreferrer');
+        window.open(linkedInShareUrl(), '_blank', 'noopener,noreferrer');
+        showToast('Opening LinkedIn');
       });
     });
     document.querySelectorAll('[data-share="email"]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        var subject = encodeURIComponent(pageTitle());
-        var body = encodeURIComponent(pageTitle() + '\\n\\n' + location.href);
-        location.href = 'mailto:?subject=' + subject + '&body=' + body;
+        openEmailShare();
       });
     });
   }
@@ -299,11 +322,17 @@ export const SITE_RUNTIME_JS = `
     if (!tip) return;
     tip.classList.remove('is-visible');
     tip.hidden = true;
+    tip._selectedText = '';
+    tip._selectedRange = null;
   }
 
   function showSelTooltip(tip){
     tip.hidden = false;
     tip.classList.add('is-visible');
+    var first = tip.querySelector('.share-tip-btn');
+    if (first && first.focus) {
+      try { first.focus({ preventScroll: true }); } catch (e) { try { first.focus(); } catch (e2) {} }
+    }
   }
 
   function saveMarks(){
@@ -357,33 +386,60 @@ export const SITE_RUNTIME_JS = `
     });
   }
 
+  function placeSelTooltip(tip, rect){
+    var tipH = 56;
+    var top = rect.top + window.scrollY - tipH;
+    if (rect.top < tipH + 8) top = rect.bottom + window.scrollY + 8;
+    var left = rect.left + window.scrollX + rect.width / 2;
+    var vw = document.documentElement.clientWidth || window.innerWidth || 320;
+    var pad = 72;
+    if (left < pad) left = pad;
+    if (left > vw - pad) left = vw - pad;
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+
+  function updateSelectionTip(){
+    var tip = document.getElementById('share-tooltip');
+    if (!tip) return;
+    var sel = window.getSelection();
+    var text = sel ? String(sel.toString()).trim() : '';
+    if (text.length < 12) { hideSelTooltip(); return; }
+    try {
+      var range = sel.getRangeAt(0);
+      var rect = range.getBoundingClientRect();
+      if (!rect.width && !rect.height) { hideSelTooltip(); return; }
+      // Ignore selections inside chrome / tip itself
+      var anchor = range.commonAncestorContainer;
+      var el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
+      if (el && el.closest && el.closest('.site-nav, #share-tooltip, .share-bar, script, style')) {
+        hideSelTooltip();
+        return;
+      }
+      placeSelTooltip(tip, rect);
+      tip._selectedText = text;
+      tip._selectedRange = range.cloneRange();
+      showSelTooltip(tip);
+    } catch(e) { hideSelTooltip(); }
+  }
+
   function initSelectionShare(){
     var tip = document.getElementById('share-tooltip');
     if (!tip) return;
 
     document.addEventListener('mouseup', function(){
-      var sel = window.getSelection();
-      var text = sel ? String(sel.toString()).trim() : '';
-      if (text.length < 12) { hideSelTooltip(); return; }
-      try {
-        var range = sel.getRangeAt(0);
-        var rect = range.getBoundingClientRect();
-        if (!rect.width && !rect.height) { hideSelTooltip(); return; }
-        tip.style.top = (rect.top + window.scrollY - 56) + 'px';
-        tip.style.left = (rect.left + window.scrollX + rect.width / 2) + 'px';
-        tip._selectedText = text;
-        tip._selectedRange = range.cloneRange();
-        showSelTooltip(tip);
-      } catch(e) { hideSelTooltip(); }
+      setTimeout(updateSelectionTip, 0);
+    });
+    document.addEventListener('keyup', function(e){
+      if (e.key === 'Escape') return;
+      if (e.shiftKey || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        setTimeout(updateSelectionTip, 0);
+      }
     });
 
     document.addEventListener('mousedown', function(e){
       if (tip.contains(e.target)) return;
       hideSelTooltip();
-    });
-
-    document.addEventListener('keydown', function(e){
-      if (e.key === 'Escape') hideSelTooltip();
     });
 
     var copyBtn = document.getElementById('sel-share-copy');
@@ -401,12 +457,25 @@ export const SITE_RUNTIME_JS = `
 
     var liBtn = document.getElementById('sel-share-linkedin');
     if (liBtn) liBtn.addEventListener('click', function(){
-      window.open(
-        'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(location.href),
-        '_blank',
-        'noopener,noreferrer'
-      );
+      window.open(linkedInShareUrl(), '_blank', 'noopener,noreferrer');
+      showToast('Opening LinkedIn');
       hideSelTooltip();
+    });
+
+    var mailBtn = document.getElementById('sel-share-email');
+    if (mailBtn) mailBtn.addEventListener('click', function(){
+      openEmailShare(tip._selectedText || '');
+      hideSelTooltip();
+    });
+  }
+
+  /* Escape closes tip, mobile nav, and desktop dropdowns */
+  function initEscape(){
+    document.addEventListener('keydown', function(e){
+      if (e.key !== 'Escape') return;
+      hideSelTooltip();
+      closeMobileNav();
+      closeNavDropdowns();
     });
   }
 
@@ -419,6 +488,7 @@ export const SITE_RUNTIME_JS = `
     initReveal();
     initCountUp();
     initSelectionShare();
+    initEscape();
     restoreMarks();
   }
 

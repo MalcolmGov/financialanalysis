@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BRAND_IMG_ONERROR, renderSelectionTooltip, renderStickyNav } from "./chrome.js";
+import {
+  BRAND_IMG_ONERROR,
+  CHROME_CSS,
+  renderSelectionTooltip,
+  renderShareBar,
+  renderStickyNav,
+} from "./chrome.js";
 import { renderKpiCardsHtml, segmentHighlightKpis } from "./home-kpis.js";
 import { SITE_RUNTIME_JS, siteRuntimeHref } from "./site-runtime.js";
 
@@ -23,6 +29,7 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain("localStorage");
     expect(SITE_RUNTIME_JS).toContain("share-tooltip");
     expect(SITE_RUNTIME_JS).toContain("sel-share-mark");
+    expect(SITE_RUNTIME_JS).toContain("sel-share-email");
     expect(SITE_RUNTIME_JS).toContain("data-nav-toggle");
     expect(SITE_RUNTIME_JS).toContain("initReveal");
     expect(SITE_RUNTIME_JS).toContain("data-final");
@@ -30,12 +37,27 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain('data-share="email"');
     expect(SITE_RUNTIME_JS).toContain("is-scrolled");
     expect(SITE_RUNTIME_JS).toContain("Escape");
+    expect(SITE_RUNTIME_JS).toContain("initEscape");
+    expect(SITE_RUNTIME_JS).toContain("closeMobileNav");
+    expect(SITE_RUNTIME_JS).toContain("closeNavDropdowns");
+    expect(SITE_RUNTIME_JS).toContain("Close menu");
     expect(SITE_RUNTIME_JS).toContain("data-brand-img");
     expect(SITE_RUNTIME_JS).toContain("data-banner-img");
     expect(SITE_RUNTIME_JS).toContain("initBrandImages");
     expect(SITE_RUNTIME_JS).toContain("failBannerImg");
     expect(SITE_RUNTIME_JS).toContain("nav-brand--logo");
     expect(SITE_RUNTIME_JS).toContain("rs-motion");
+  });
+
+  it("stays lean vs WW-scale runtime bloat", () => {
+    const bytes = Buffer.byteLength(SITE_RUNTIME_JS, "utf8");
+    expect(bytes).toBeGreaterThan(4_000);
+    expect(bytes).toBeLessThan(20_000);
+  });
+
+  it("restores exact data-final after count-up (no invented figures)", () => {
+    expect(SITE_RUNTIME_JS).toContain("el.textContent = finalText");
+    expect(SITE_RUNTIME_JS).toMatch(/never invent/i);
   });
 });
 
@@ -65,14 +87,38 @@ describe("mobile nav chrome", () => {
       ],
       "index.html",
     );
-    expect(html).toContain('data-nav-toggle');
+    expect(html).toContain("data-nav-toggle");
     expect(html).toContain('id="nav-mobile"');
     expect(html).toContain("nav-mobile__link");
     expect(html).toContain("commentary.html");
-    expect(renderSelectionTooltip()).toContain("sel-share-copy");
-    expect(renderSelectionTooltip()).toContain("sel-share-mark");
-    expect(renderSelectionTooltip()).toContain("sel-share-linkedin");
-    expect(renderSelectionTooltip()).toContain("share-tip__label");
+    expect(html).toContain('aria-haspopup="true"');
+    expect(html).toContain('aria-label="Open menu"');
+  });
+
+  it("PE CSS keeps mobile links visible without rs-motion", () => {
+    expect(CHROME_CSS).toContain("html:not(.rs-motion) .nav-mobile");
+    expect(CHROME_CSS).toContain("html.rs-motion .nav-mobile.is-open");
+    expect(CHROME_CSS).toContain("html.nav-mobile-open");
+  });
+});
+
+describe("share chrome", () => {
+  it("emits labeled Copy / Highlight / LinkedIn / Email tip + share bar", () => {
+    const tip = renderSelectionTooltip();
+    expect(tip).toContain("sel-share-copy");
+    expect(tip).toContain("sel-share-mark");
+    expect(tip).toContain("sel-share-linkedin");
+    expect(tip).toContain("sel-share-email");
+    expect(tip).toContain('role="dialog"');
+    expect(tip).toContain("aria-label");
+    const bar = renderShareBar();
+    expect(bar).toContain('data-share="copy"');
+    expect(bar).toContain('data-share="linkedin"');
+    expect(bar).toContain('data-share="email"');
+    expect(bar).toContain("share-toast");
+    expect(bar).toContain("aria-live");
+    // No dead href="#" LinkedIn chrome
+    expect(bar).not.toContain('href="#"');
   });
 });
 

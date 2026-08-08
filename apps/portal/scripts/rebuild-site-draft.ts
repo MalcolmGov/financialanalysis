@@ -167,7 +167,7 @@ async function main() {
     gate_a: { status: built.gateA.status },
     gate_b: { status: built.gateB.status },
     created_at: new Date().toISOString(),
-    note: "rebuilt via scripts/rebuild-site-draft.ts (P3 home/commentary editorial)",
+    note: "rebuilt via scripts/rebuild-site-draft.ts (P4 runtime/share polish)",
   };
   const manifestPut = await putPrivate(
     `${prefix}/_meta/draft.json`,

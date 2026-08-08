@@ -174,6 +174,104 @@ export function checkAssetPresence(site: SiteFiles): ReliabilityFinding[] {
   return findings;
 }
 
+/**
+ * P4 — share/mark/mobile-nav runtime chrome must be present and wired.
+ * Content remains visible without JS; this only asserts the enhancement surface.
+ */
+export function checkRuntimeShareChrome(site: SiteFiles): ReliabilityFinding[] {
+  const findings: ReliabilityFinding[] = [];
+  const siteJs = site.files["assets/site.js"] ?? "";
+  const home =
+    site.files["index.html"] ??
+    site.files[Object.keys(site.files).find((p) => p.endsWith("/index.html")) ?? ""] ??
+    "";
+
+  const runtimeNeeds = [
+    ["rs-motion", "arms html.rs-motion"],
+    ["localStorage", "persists highlights"],
+    ["rs-marks-", "marks storage key"],
+    ["showToast", "toast feedback"],
+    ["initEscape", "Escape closes overlays"],
+    ["closeMobileNav", "mobile nav close"],
+    ["sel-share-email", "selection email action"],
+    ["data-share", "page share bar hooks"],
+    ["data-countup", "KPI count-up"],
+  ] as const;
+
+  if (!siteJs) {
+    findings.push({
+      ok: false,
+      code: "runtime-share",
+      path: "assets/site.js",
+      message: "assets/site.js missing",
+    });
+    return findings;
+  }
+
+  const missingRuntime = runtimeNeeds.filter(([needle]) => !siteJs.includes(needle)).map(([n]) => n);
+  findings.push({
+    ok: missingRuntime.length === 0,
+    code: "runtime-share",
+    path: "assets/site.js",
+    message:
+      missingRuntime.length === 0
+        ? "site.js share/mark/nav/toast/Escape surface present"
+        : `site.js missing runtime polish: ${missingRuntime.join(", ")}`,
+  });
+
+  // Lean budget — polish quality, not WW-scale bloat (WW ~21KB).
+  const jsBytes = Buffer.byteLength(siteJs, "utf8");
+  findings.push({
+    ok: jsBytes > 2_000 && jsBytes < 24_000,
+    code: "runtime-lean",
+    path: "assets/site.js",
+    message:
+      jsBytes > 2_000 && jsBytes < 24_000
+        ? `site.js lean (${jsBytes}B < 24KB)`
+        : `site.js size out of band: ${jsBytes}B (expect 2–24KB)`,
+  });
+
+  if (home) {
+    const chromeNeeds = [
+      ["share-tooltip", "selection tip host"],
+      ["sel-share-copy", "selection Copy"],
+      ["sel-share-mark", "selection Highlight"],
+      ["sel-share-linkedin", "selection LinkedIn"],
+      ["sel-share-email", "selection Email"],
+      ['data-share="copy"', "share Copy"],
+      ['data-share="linkedin"', "share LinkedIn"],
+      ['data-share="email"', "share Email"],
+      ["share-toast", "toast host"],
+      ["data-nav-toggle", "mobile nav toggle"],
+      ['id="nav-mobile"', "mobile nav panel"],
+    ] as const;
+    const missingChrome = chromeNeeds.filter(([n]) => !home.includes(n)).map(([, label]) => label);
+    findings.push({
+      ok: missingChrome.length === 0,
+      code: "runtime-share-chrome",
+      path: "index.html",
+      message:
+        missingChrome.length === 0
+          ? "home share/mark/nav chrome present"
+          : `home missing share chrome: ${missingChrome.join(", ")}`,
+    });
+
+    const peNav =
+      /html:not\(\.rs-motion\)\s*\.nav-mobile/.test(home) ||
+      /html:not\(\.rs-motion\)\s*\.nav-mobile\{/.test(home);
+    findings.push({
+      ok: peNav,
+      code: "runtime-nav-pe",
+      path: "index.html",
+      message: peNav
+        ? "mobile nav visible without JS (html:not(.rs-motion) guard)"
+        : "mobile nav missing no-JS progressive fallback CSS",
+    });
+  }
+
+  return findings;
+}
+
 /** Logo img OK, or intentional text wordmark — never neither. */
 export function checkBrandFallback(html: string, path = "index.html"): ReliabilityFinding {
   const hasTextMark = /class="[^"]*nav-brand__name[^"]*"/.test(html) || /nav-brand__name/.test(html);
@@ -406,6 +504,8 @@ export function auditCorporateReliability(
         : "site.js missing brand image fallback init",
     });
   }
+
+  findings.push(...checkRuntimeShareChrome(site));
 
   const ok = findings.every((f) => f.ok);
   return { ok, findings };

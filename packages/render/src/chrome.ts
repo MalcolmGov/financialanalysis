@@ -121,7 +121,7 @@ export function renderStickyNav(
             return `<li><a href="${escapeHtml(href)}"${isCur}>${escapeHtml(c.label)}</a></li>`;
           })
           .join("");
-        return `<li class="nav-dd${active ? " is-active" : ""}"><button type="button" class="nav-dd-btn" aria-expanded="false">${escapeHtml(item.label)}</button><ul class="nav-dd-menu">${kids}</ul></li>`;
+        return `<li class="nav-dd${active ? " is-active" : ""}"><button type="button" class="nav-dd-btn" aria-expanded="false" aria-haspopup="true">${escapeHtml(item.label)}</button><ul class="nav-dd-menu" role="list">${kids}</ul></li>`;
       }
       const href = hrefFrom(currentPath, item.href);
       const isCur = item.href === currentPath ? ' aria-current="page"' : "";
@@ -233,12 +233,12 @@ export function renderSiteFooter(
 }
 
 export function renderShareBar(): string {
-  return `<div class="share-bar" data-dna-component="share" role="region" aria-label="Share this page"><span class="share-bar__label">Share</span><div class="share-bar__actions"><button type="button" class="share-bar__btn" data-share="copy"><span class="share-bar__ico share-bar__ico--link" aria-hidden="true"></span><span class="share-bar__txt">Copy link</span></button><a class="share-bar__btn" data-share="linkedin" href="#" rel="noopener noreferrer" target="_blank"><span class="share-bar__ico share-bar__ico--li" aria-hidden="true"></span><span class="share-bar__txt">LinkedIn</span></a><button type="button" class="share-bar__btn" data-share="email"><span class="share-bar__ico share-bar__ico--mail" aria-hidden="true"></span><span class="share-bar__txt">Email</span></button></div></div><div id="share-toast" class="share-toast" role="status" aria-live="polite" hidden></div>`;
+  return `<div class="share-bar" data-dna-component="share" role="region" aria-label="Share this page"><span class="share-bar__label">Share</span><div class="share-bar__actions"><button type="button" class="share-bar__btn" data-share="copy" aria-label="Copy page link"><span class="share-bar__ico share-bar__ico--link" aria-hidden="true"></span><span class="share-bar__txt">Copy link</span></button><button type="button" class="share-bar__btn" data-share="linkedin" aria-label="Share on LinkedIn"><span class="share-bar__ico share-bar__ico--li" aria-hidden="true"></span><span class="share-bar__txt">LinkedIn</span></button><button type="button" class="share-bar__btn" data-share="email" aria-label="Share by email"><span class="share-bar__ico share-bar__ico--mail" aria-hidden="true"></span><span class="share-bar__txt">Email</span></button></div></div><div id="share-toast" class="share-toast" role="status" aria-live="polite" hidden></div>`;
 }
 
-/** Selection tooltip host for Copy / Highlight / LinkedIn (wired by SiteRuntime). */
+/** Selection tooltip host for Copy / Highlight / LinkedIn / Email (wired by SiteRuntime). */
 export function renderSelectionTooltip(): string {
-  return `<div id="share-tooltip" class="share-tip" role="tooltip" hidden><div class="share-tip__label">Selection</div><div class="share-tip__actions"><button type="button" class="share-tip-btn" id="sel-share-copy">Copy</button><button type="button" class="share-tip-btn" id="sel-share-mark">Highlight</button><button type="button" class="share-tip-btn" id="sel-share-linkedin">LinkedIn</button></div></div>`;
+  return `<div id="share-tooltip" class="share-tip" role="dialog" aria-label="Selection actions" hidden><div class="share-tip__label" id="share-tip-label">Selection</div><div class="share-tip__actions" role="group" aria-labelledby="share-tip-label"><button type="button" class="share-tip-btn" id="sel-share-copy" aria-label="Copy selection">Copy</button><button type="button" class="share-tip-btn" id="sel-share-mark" aria-label="Highlight selection">Highlight</button><button type="button" class="share-tip-btn" id="sel-share-linkedin" aria-label="Share selection on LinkedIn">LinkedIn</button><button type="button" class="share-tip-btn" id="sel-share-email" aria-label="Email selection">Email</button></div></div>`;
 }
 
 /**
@@ -282,6 +282,7 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .nav-dd-menu a{display:block;text-transform:none;letter-spacing:-.005em;font-size:.9rem;font-weight:500;padding:.58rem 1.15rem;border-radius:0;min-height:0;color:rgba(255,255,255,.9)}
 .nav-dd-menu a:hover,.nav-dd-menu a[aria-current="page"]{background:rgba(255,255,255,.09);color:#fff;box-shadow:none}
 .nav-toggle{display:none;flex-direction:column;justify-content:center;gap:5px;margin-left:auto;padding:.45rem;background:none;border:0;cursor:pointer}
+.nav-toggle:focus-visible,.nav-dd-btn:focus-visible,.site-nav a:focus-visible{outline:2px solid var(--dna-brand,#FCAF17);outline-offset:2px}
 .nav-toggle span{display:block;width:22px;height:2px;background:var(--dna-paper,#fff);border-radius:1px}
 .nav-mobile{display:none;flex-direction:column;gap:0;padding:.35rem clamp(1rem,3vw,2rem) 1rem;border-top:1px solid rgba(255,255,255,.12);background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 96%,#000)}
 .nav-mobile.is-open{display:flex}
@@ -289,10 +290,15 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .nav-mobile__link.is-active,.nav-mobile__link[aria-current="page"]{color:var(--dna-brand,#FCAF17);font-weight:700}
 .nav-mobile__sub{padding-left:1.1rem;font-size:.9rem}
 .nav-mobile__heading{padding:.65rem .35rem .2rem;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:700}
+html.nav-mobile-open{overflow:hidden}
 @media (max-width:820px){
   .site-nav .nav-row{display:none}
   .nav-toggle{display:flex}
-  .nav-mobile.is-open{display:flex}
+  /* No-JS: keep mobile links visible (rs-motion only arms when site.js runs). */
+  html:not(.rs-motion) .nav-toggle{display:none}
+  html:not(.rs-motion) .nav-mobile{display:flex}
+  html.rs-motion .nav-mobile{display:none}
+  html.rs-motion .nav-mobile.is-open{display:flex}
   .nav-brand__name{max-width:18ch;font-size:.72rem}
   .home-hero--composition{min-height:0;padding-bottom:1.75rem}
   .home-hero h1{max-width:18ch}
@@ -304,6 +310,7 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .share-bar__actions{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
 .share-bar__btn{display:inline-flex;align-items:center;gap:.4rem;font-family:inherit;font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff));background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff));border:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);padding:.42rem .7rem;cursor:pointer;text-decoration:none;transition:color .15s ease,border-color .15s ease,background .15s ease}
 .share-bar__btn:hover,.share-bar__btn.is-active{color:var(--dna-masthead,#0F3B2E);border-color:color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 12%,var(--dna-paper,#fff))}
+.share-bar__btn:focus-visible,.share-tip-btn:focus-visible{outline:2px solid var(--dna-brand,#FCAF17);outline-offset:2px}
 .share-bar__ico{display:inline-block;width:12px;height:12px;flex-shrink:0;opacity:.85;background:currentColor;mask-size:contain;mask-repeat:no-repeat;mask-position:center;-webkit-mask-size:contain;-webkit-mask-repeat:no-repeat;-webkit-mask-position:center}
 .share-bar__ico--link{mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23000' d='M6.5 9.5a2.5 2.5 0 0 1 0-3.5l1.8-1.8a2.5 2.5 0 0 1 3.5 3.5L10.5 9a.75.75 0 0 0 1.06 1.06l1.3-1.3a4 4 0 1 0-5.66-5.66L5.4 4.9a4 4 0 0 0 0 5.66.75.75 0 0 0 1.1-1.06zm3 0a2.5 2.5 0 0 1 0 3.5l-1.8 1.8a2.5 2.5 0 0 1-3.5-3.5L5.5 7a.75.75 0 0 0-1.06-1.06l-1.3 1.3a4 4 0 1 0 5.66 5.66l1.8-1.8a4 4 0 0 0 0-5.66.75.75 0 1 0-1.1 1.06z'/%3E%3C/svg%3E");-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23000' d='M6.5 9.5a2.5 2.5 0 0 1 0-3.5l1.8-1.8a2.5 2.5 0 0 1 3.5 3.5L10.5 9a.75.75 0 0 0 1.06 1.06l1.3-1.3a4 4 0 1 0-5.66-5.66L5.4 4.9a4 4 0 0 0 0 5.66.75.75 0 0 0 1.1-1.06zm3 0a2.5 2.5 0 0 1 0 3.5l-1.8 1.8a2.5 2.5 0 0 1-3.5-3.5L5.5 7a.75.75 0 0 0-1.06-1.06l-1.3 1.3a4 4 0 1 0 5.66 5.66l1.8-1.8a4 4 0 0 0 0-5.66.75.75 0 1 0-1.1 1.06z'/%3E%3C/svg%3E")}
 .share-bar__ico--li{mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23000' d='M2.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM1 5.75h3V14H1V5.75zM6 5.75h2.85v1.13h.04c.4-.75 1.37-1.54 2.82-1.54C14.2 5.34 15 7 15 9.3V14h-3v-4.1c0-.98-.02-2.23-1.36-2.23-1.36 0-1.57 1.06-1.57 2.16V14H6V5.75z'/%3E%3C/svg%3E");-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23000' d='M2.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM1 5.75h3V14H1V5.75zM6 5.75h2.85v1.13h.04c.4-.75 1.37-1.54 2.82-1.54C14.2 5.34 15 7 15 9.3V14h-3v-4.1c0-.98-.02-2.23-1.36-2.23-1.36 0-1.57 1.06-1.57 2.16V14H6V5.75z'/%3E%3C/svg%3E")}
@@ -313,9 +320,9 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .share-tip{position:absolute;z-index:200;display:none;flex-direction:column;gap:.35rem;min-width:11.5rem;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 97%,#000);color:var(--dna-paper,#fff);border-radius:3px;padding:.55rem .55rem .5rem;box-shadow:0 14px 36px rgba(15,59,46,.32);border:1px solid rgba(255,255,255,.1);border-top:2px solid var(--dna-brand,#FCAF17);transform:translateX(-50%);pointer-events:none}
 .share-tip.is-visible{display:flex;pointer-events:auto}
 .share-tip__label{font-size:.62rem;letter-spacing:.11em;text-transform:uppercase;font-weight:800;color:var(--dna-brand,#FCAF17);padding:0 .35rem .1rem}
-.share-tip__actions{display:flex;gap:.2rem}
+.share-tip__actions{display:flex;flex-wrap:wrap;gap:.2rem}
 .share-tip-btn{font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--dna-paper,#fff);background:rgba(255,255,255,.06);border:0;padding:.42rem .55rem;cursor:pointer}
-.share-tip-btn:hover{color:var(--dna-brand,#FCAF17);background:rgba(255,255,255,.1)}
+.share-tip-btn:hover,.share-tip-btn:focus-visible{color:var(--dna-brand,#FCAF17);background:rgba(255,255,255,.1)}
 mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 34%,transparent);color:inherit;border-radius:2px;padding:0 2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dna-brand,#FCAF17) 48%,transparent)}
 /* Progressive enhancement: content visible by default. Motion only arms after
    runtime sets html.rs-motion — never blank if site.js/CSP/auth fails. */

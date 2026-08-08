@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { CHROME_CSS, renderStickyNav } from "./chrome.js";
+import {
+  CHROME_CSS,
+  renderSelectionTooltip,
+  renderShareBar,
+  renderStickyNav,
+} from "./chrome.js";
 import {
   auditCorporateReliability,
   checkBrandFallback,
   checkLegalCompanyChrome,
   checkPageMinContent,
   checkRevealProgressiveEnhancement,
+  checkRuntimeShareChrome,
   visibleTextBytes,
 } from "./corporate-reliability.js";
 import { SITE_RUNTIME_JS } from "./site-runtime.js";
@@ -66,6 +72,25 @@ describe("checkBrandFallback", () => {
   });
 });
 
+describe("checkRuntimeShareChrome", () => {
+  it("passes real SITE_RUNTIME_JS + chrome hosts", () => {
+    const nav = renderStickyNav(
+      [
+        { label: "Home", href: "index.html" },
+        { label: "Commentary", href: "commentary.html" },
+      ],
+      "index.html",
+      "Acme",
+    );
+    const home = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main>IR</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
+    const findings = checkRuntimeShareChrome({
+      files: { "index.html": home, "assets/site.js": SITE_RUNTIME_JS },
+    });
+    const fails = findings.filter((f) => !f.ok);
+    expect(fails, JSON.stringify(fails, null, 2)).toEqual([]);
+  });
+});
+
 describe("auditCorporateReliability", () => {
   it("passes a minimal PE-safe multipage fixture", () => {
     const nav = renderStickyNav(
@@ -77,7 +102,7 @@ describe("auditCorporateReliability", () => {
       "Investor results centre with commentary, condensed statements, notes, and downloads for the reporting period. ".repeat(
         8,
       );
-    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}<main class="reveal">${body}</main><script src="assets/site.js"></script></body></html>`;
+    const page = `<!doctype html><html><head><style>${CHROME_CSS}</style></head><body>${nav}${renderShareBar()}<main class="reveal">${body}</main>${renderSelectionTooltip()}<script src="assets/site.js"></script></body></html>`;
     const site = {
       files: {
         "index.html": page,

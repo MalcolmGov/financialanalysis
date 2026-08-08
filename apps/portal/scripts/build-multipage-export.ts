@@ -134,13 +134,19 @@ async function main() {
     ["notes", !!built.files["financials/notes.html"]],
     ["downloads", !!built.files["downloads.html"]],
     ["no prototype entrypoint", !built.files["prototype/index.html"] || built.entrypoint === "index.html"],
-    // P2 — SiteRuntime
+    // P2 — SiteRuntime · P4 polish
     ["assets/site.js", siteJs.includes("data-countup") && siteJs.includes("user-mark") && siteJs.includes("data-nav-toggle")],
+    ["runtime Escape/toast", siteJs.includes("initEscape") && siteJs.includes("showToast") && siteJs.includes("closeMobileNav")],
+    ["runtime marks restore", siteJs.includes("localStorage") && siteJs.includes("rs-marks-") && siteJs.includes("restoreMarks")],
+    ["runtime lean", Buffer.byteLength(siteJs, "utf8") < 24_000],
     ["runtime script tag", home.includes("assets/site.js") && bs.includes("../assets/site.js")],
     ["mobile nav", home.includes("data-nav-toggle") && home.includes('id="nav-mobile"')],
-    ["selection tooltip", home.includes("share-tooltip") && home.includes("sel-share-mark")],
+    ["mobile nav PE", home.includes("html:not(.rs-motion) .nav-mobile")],
+    ["selection tooltip", home.includes("share-tooltip") && home.includes("sel-share-mark") && home.includes("sel-share-email")],
+    ["share bar labeled", home.includes('data-share="copy"') && home.includes('data-share="email"') && home.includes("share-toast")],
     ["KPI count-up", home.includes("data-countup") && home.includes("kpi-card")],
     ["reveal hooks", home.includes("class=\"kpi-card reveal\"") || home.includes("kpi-card reveal")],
+    ["reveal PE guard", home.includes("html.rs-motion .reveal") || home.includes("html.rs-motion .kpi-card")],
     // P3 — editorial home / commentary / SEO
     ["home hero lede", home.includes("home-lede") && home.includes("home-cta__primary")],
     ["home explore desc", home.includes("explore-desc") && home.includes("Explore the report")],
