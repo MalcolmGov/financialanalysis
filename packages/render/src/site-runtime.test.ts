@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderSelectionTooltip, renderStickyNav } from "./chrome.js";
+import { BRAND_IMG_ONERROR, renderSelectionTooltip, renderStickyNav } from "./chrome.js";
 import { renderKpiCardsHtml, segmentHighlightKpis } from "./home-kpis.js";
 import { SITE_RUNTIME_JS, siteRuntimeHref } from "./site-runtime.js";
 
@@ -31,9 +31,26 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain("is-scrolled");
     expect(SITE_RUNTIME_JS).toContain("Escape");
     expect(SITE_RUNTIME_JS).toContain("data-brand-img");
+    expect(SITE_RUNTIME_JS).toContain("data-banner-img");
     expect(SITE_RUNTIME_JS).toContain("initBrandImages");
+    expect(SITE_RUNTIME_JS).toContain("failBannerImg");
     expect(SITE_RUNTIME_JS).toContain("nav-brand--logo");
     expect(SITE_RUNTIME_JS).toContain("rs-motion");
+  });
+});
+
+describe("brand img fallback", () => {
+  it("emits inline onerror on logo imgs", () => {
+    const html = renderStickyNav(
+      [{ label: "Home", href: "index.html" }],
+      "index.html",
+      "DRDGOLD",
+      "assets/brand/logo.svg",
+    );
+    expect(html).toContain("data-brand-img");
+    expect(html).toContain("onerror=");
+    expect(html).toContain(BRAND_IMG_ONERROR.slice(0, 24));
+    expect(html).toContain("nav-brand__name");
   });
 });
 

@@ -1,0 +1,299 @@
+/**
+ * P0 / P5 stub — corporate IR reliability gates for multipage HTML.
+ * Fail closed on blank pages, unguarded opacity:0 reveal, missing assets,
+ * or missing brand text fallback.
+ */
+
+export interface ReliabilityFinding {
+  ok: boolean;
+  code: string;
+  message: string;
+  path?: string;
+}
+
+export interface SiteFiles {
+  /** Text files keyed by relative path (HTML/JS/CSS/JSON). */
+  files: Record<string, string>;
+  /** Optional binaries (fonts, images, xlsx, pdf). */
+  binaries?: Record<string, Uint8Array>;
+}
+
+/** Minimum visible text bytes (tags/scripts/styles stripped) per HTML page. */
+export const MIN_VISIBLE_TEXT_BYTES = 280;
+
+/** Home / commentary carry denser editorial — slightly higher floor. */
+export const MIN_VISIBLE_TEXT_BYTES_EDITORIAL = 420;
+
+const REQUIRED_ASSETS = [
+  "assets/site.js",
+  "assets/fonts/open-sans-latin-400-normal.woff2",
+] as const;
+
+/** Strip tags/scripts/styles and measure remaining text payload. */
+export function visibleTextBytes(html: string): number {
+  const stripped = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return Buffer.byteLength(stripped, "utf8");
+}
+
+function extractStyleBlocks(htmlOrCss: string): string {
+  if (!/<style\b/i.test(htmlOrCss) && !/<html\b/i.test(htmlOrCss)) {
+    return htmlOrCss;
+  }
+  const blocks: string[] = [];
+  const re = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(htmlOrCss))) blocks.push(m[1] ?? "");
+  return blocks.join("\n");
+}
+
+/**
+ * Fail if .reveal / .kpi-card are hidden with opacity:0 without html.rs-motion.
+ * Share-toast and decorative opacity are ignored.
+ */
+export function checkRevealProgressiveEnhancement(htmlOrCss: string): ReliabilityFinding {
+  const css = extractStyleBlocks(htmlOrCss).replace(/\/\*[\s\S]*?\*\//g, "");
+  const ruleRe = /([^{}@]+)\{([^{}]*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = ruleRe.exec(css))) {
+    const selectors = m[1] ?? "";
+    const body = m[2] ?? "";
+    if (!/opacity\s*:\s*0\b/.test(body)) continue;
+    if (!/\.(?:reveal|kpi-card)\b/.test(selectors)) continue;
+    const parts = selectors.split(",");
+    for (const part of parts) {
+      if (!/\.(?:reveal|kpi-card)\b/.test(part)) continue;
+      if (!/html\.rs-motion\b/.test(part)) {
+        return {
+          ok: false,
+          code: "reveal-opacity-unguarded",
+          message: `Content hide uses opacity:0 without html.rs-motion guard: ${part.trim().slice(0, 120)}`,
+        };
+      }
+    }
+  }
+  // Positive signal: progressive arm must exist when reveal/kpi motion is present.
+  if (
+    /\.(?:reveal|kpi-card)\b/.test(css) &&
+    /opacity\s*:\s*0\b/.test(css) &&
+    !/html\.rs-motion\b/.test(css)
+  ) {
+    return {
+      ok: false,
+      code: "reveal-opacity-unguarded",
+      message: "opacity:0 present near reveal/kpi but html.rs-motion guard missing",
+    };
+  }
+  return {
+    ok: true,
+    code: "reveal-pe",
+    message: "Reveal/KPI opacity:0 is gated by html.rs-motion (or absent)",
+  };
+}
+
+export function checkPageMinContent(
+  html: string,
+  path: string,
+  minBytes?: number,
+): ReliabilityFinding {
+  const editorial = /(?:^|\/)(index|commentary)\.html$/i.test(path);
+  const floor = minBytes ?? (editorial ? MIN_VISIBLE_TEXT_BYTES_EDITORIAL : MIN_VISIBLE_TEXT_BYTES);
+  const bytes = visibleTextBytes(html);
+  if (bytes < floor) {
+    return {
+      ok: false,
+      code: "min-content-bytes",
+      path,
+      message: `${path}: visible text ${bytes}B < ${floor}B (blank/near-blank)`,
+    };
+  }
+  return {
+    ok: true,
+    code: "min-content-bytes",
+    path,
+    message: `${path}: visible text ${bytes}B ≥ ${floor}B`,
+  };
+}
+
+export function checkAssetPresence(site: SiteFiles): ReliabilityFinding[] {
+  const findings: ReliabilityFinding[] = [];
+  const keys = new Set([
+    ...Object.keys(site.files),
+    ...Object.keys(site.binaries ?? {}),
+  ]);
+  for (const asset of REQUIRED_ASSETS) {
+    const present = keys.has(asset);
+    const body = site.files[asset];
+    const bin = site.binaries?.[asset];
+    const nonEmpty =
+      present &&
+      ((typeof body === "string" && body.length > 32) ||
+        (bin != null && bin.byteLength > 32));
+    findings.push({
+      ok: !!nonEmpty,
+      code: "asset-presence",
+      path: asset,
+      message: nonEmpty
+        ? `${asset}: present`
+        : `${asset}: missing or empty`,
+    });
+  }
+  // site.js must arm progressive motion
+  const siteJs = site.files["assets/site.js"] ?? "";
+  if (siteJs && !siteJs.includes("rs-motion")) {
+    findings.push({
+      ok: false,
+      code: "runtime-rs-motion",
+      path: "assets/site.js",
+      message: "assets/site.js missing rs-motion arming",
+    });
+  } else if (siteJs) {
+    findings.push({
+      ok: true,
+      code: "runtime-rs-motion",
+      path: "assets/site.js",
+      message: "assets/site.js arms html.rs-motion",
+    });
+  }
+  return findings;
+}
+
+/** Logo img OK, or intentional text wordmark — never neither. */
+export function checkBrandFallback(html: string, path = "index.html"): ReliabilityFinding {
+  const hasTextMark = /class="[^"]*nav-brand__name[^"]*"/.test(html) || /nav-brand__name/.test(html);
+  const hasLogo = /data-brand-img/.test(html);
+  const hasOnerror = hasLogo && /onerror=/.test(html) && /data-brand-img/.test(html);
+  if (!hasTextMark && !hasLogo) {
+    return {
+      ok: false,
+      code: "brand-fallback",
+      path,
+      message: `${path}: no logo and no nav-brand__name text fallback`,
+    };
+  }
+  if (hasLogo && !hasTextMark) {
+    return {
+      ok: false,
+      code: "brand-fallback",
+      path,
+      message: `${path}: logo present without text wordmark fallback`,
+    };
+  }
+  if (hasLogo && !hasOnerror) {
+    return {
+      ok: false,
+      code: "brand-img-onerror",
+      path,
+      message: `${path}: brand img missing inline onerror fallback`,
+    };
+  }
+  return {
+    ok: true,
+    code: "brand-fallback",
+    path,
+    message: hasLogo
+      ? `${path}: logo + text fallback + onerror`
+      : `${path}: text wordmark fallback (no logo)`,
+  };
+}
+
+/** Relative asset hrefs in HTML that must resolve inside the site tree. */
+export function checkRelativeAssetLinks(
+  html: string,
+  path: string,
+  available: Set<string>,
+): ReliabilityFinding[] {
+  const findings: ReliabilityFinding[] = [];
+  const depth = path.includes("/") ? path.split("/").filter(Boolean).length - 1 : 0;
+  const basePrefix = depth > 0 ? "../".repeat(depth) : "";
+  const hrefRe = /(?:src|href)="((?:\.\/|\.\.\/)?assets\/[^"#?]+)"/gi;
+  let m: RegExpExecArray | null;
+  const seen = new Set<string>();
+  while ((m = hrefRe.exec(html))) {
+    const raw = m[1]!;
+    if (seen.has(raw)) continue;
+    seen.add(raw);
+    let resolved = raw.replace(/^\.\//, "");
+    if (basePrefix && resolved.startsWith(basePrefix)) {
+      resolved = resolved.slice(basePrefix.length);
+    } else {
+      // From financials/foo.html, ../assets/x → assets/x
+      while (resolved.startsWith("../")) resolved = resolved.slice(3);
+    }
+    if (!available.has(resolved)) {
+      findings.push({
+        ok: false,
+        code: "broken-asset-href",
+        path,
+        message: `${path}: href/src ${raw} → ${resolved} missing from site tree`,
+      });
+    }
+  }
+  return findings;
+}
+
+export function auditCorporateReliability(site: SiteFiles): {
+  ok: boolean;
+  findings: ReliabilityFinding[];
+} {
+  const findings: ReliabilityFinding[] = [];
+  const htmlPaths = Object.keys(site.files)
+    .filter((p) => p.endsWith(".html") && !p.startsWith("prototype/"))
+    .sort();
+
+  if (htmlPaths.length === 0) {
+    findings.push({
+      ok: false,
+      code: "no-pages",
+      message: "No HTML pages in site tree",
+    });
+    return { ok: false, findings };
+  }
+
+  findings.push(...checkAssetPresence(site));
+
+  const available = new Set([
+    ...Object.keys(site.files),
+    ...Object.keys(site.binaries ?? {}),
+  ]);
+
+  let peChecked = false;
+  for (const path of htmlPaths) {
+    const html = site.files[path]!;
+    findings.push(checkPageMinContent(html, path));
+    if (!peChecked || path === "index.html") {
+      findings.push({
+        ...checkRevealProgressiveEnhancement(html),
+        path,
+      });
+      peChecked = true;
+    }
+    if (path === "index.html" || path.endsWith("/index.html")) {
+      findings.push(checkBrandFallback(html, path));
+    }
+    findings.push(...checkRelativeAssetLinks(html, path, available));
+  }
+
+  // Site-wide PE check on chrome CSS embedded in any page is enough; also scan site.js.
+  const siteJs = site.files["assets/site.js"];
+  if (siteJs) {
+    findings.push({
+      ok: siteJs.includes("rs-motion") && siteJs.includes("initBrandImages"),
+      code: "runtime-brand-init",
+      path: "assets/site.js",
+      message: siteJs.includes("initBrandImages")
+        ? "site.js initializes brand image fallback"
+        : "site.js missing brand image fallback init",
+    });
+  }
+
+  const ok = findings.every((f) => f.ok);
+  return { ok, findings };
+}

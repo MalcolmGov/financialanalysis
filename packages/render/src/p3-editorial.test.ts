@@ -197,10 +197,14 @@ describe("HomeComposer", () => {
     });
     expect(home.heroHtml).toContain("home-hero--photo");
     expect(home.heroHtml).toContain("home-hero--strip");
-    expect(home.heroHtml).not.toContain("home-hero--atmosphere");
+    // Class on <header> is photo/strip; atmosphere class only appears in onerror fallback.
+    expect(home.heroHtml).toMatch(/<header class="home-hero home-hero--photo home-hero--strip"/);
+    expect(home.heroHtml).not.toMatch(/<header class="[^"]*home-hero--atmosphere/);
     expect(home.heroHtml).toContain("home-hero__atmosphere");
     expect(home.heroHtml).toContain('src="assets/brand/banner.jpg"');
     expect(home.heroHtml).toContain('data-banner-kind="strip"');
+    expect(home.heroHtml).toContain("data-banner-img");
+    expect(home.heroHtml).toContain("onerror=");
     expect(home.heroHtml).toContain("home-hero__logo--raster");
     expect(home.heroHtml).toContain('src="assets/brand/logo.png"');
   });

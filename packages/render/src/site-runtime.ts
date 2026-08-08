@@ -91,7 +91,7 @@ export const SITE_RUNTIME_JS = `
     window.addEventListener('scroll', onScroll, { passive: true });
   }
 
-  /* ── Brand images: hide broken <img>, fall back to text mark ── */
+  /* ── Brand / banner images: hide broken <img>, fall back to text / atmosphere ── */
   function failBrandImg(img){
     if (!img || img.dataset.brandFailed === '1') return;
     img.dataset.brandFailed = '1';
@@ -111,12 +111,30 @@ export const SITE_RUNTIME_JS = `
     }
   }
 
+  function failBannerImg(img){
+    if (!img || img.dataset.bannerFailed === '1') return;
+    img.dataset.bannerFailed = '1';
+    img.setAttribute('hidden', '');
+    img.removeAttribute('src');
+    var hero = img.closest('.home-hero');
+    if (hero) {
+      hero.classList.remove('home-hero--photo', 'home-hero--strip', 'home-hero--page');
+      hero.classList.add('home-hero--atmosphere');
+    }
+  }
+
   function initBrandImages(){
     document.querySelectorAll('img[data-brand-img]').forEach(function(img){
       img.addEventListener('error', function(){ failBrandImg(img); });
       // Cached 404 / already-failed decode
       if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) {
         failBrandImg(img);
+      }
+    });
+    document.querySelectorAll('img[data-banner-img]').forEach(function(img){
+      img.addEventListener('error', function(){ failBannerImg(img); });
+      if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) {
+        failBannerImg(img);
       }
     });
   }

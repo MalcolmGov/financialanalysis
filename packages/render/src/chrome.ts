@@ -16,6 +16,17 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Inline onerror for brand logos — fires even when assets/site.js is blocked
+ * (preview CSP / sandbox). Hides the broken img and restores the text mark.
+ */
+export const BRAND_IMG_ONERROR =
+  "this.hidden=true;this.removeAttribute('src');var w=this.closest('.nav-brand__logo-wrap,.home-hero__lockup,.site-footer__lockup');if(w)w.classList.add('is-broken');var b=this.closest('.nav-brand');if(b){b.classList.remove('nav-brand--logo');if(!b.querySelector('.nav-brand__mark')){var m=document.createElement('span');m.className='nav-brand__mark';m.setAttribute('aria-hidden','true');b.insertBefore(m,b.firstChild);}}";
+
+/** Inline onerror for hero banner — drop photo plane, keep atmosphere. */
+export const BANNER_IMG_ONERROR =
+  "this.hidden=true;this.removeAttribute('src');var h=this.closest('.home-hero');if(h){h.classList.remove('home-hero--photo','home-hero--strip','home-hero--page');h.classList.add('home-hero--atmosphere');}";
+
 export interface NavItem {
   label: string;
   href: string;
@@ -147,10 +158,10 @@ export function renderStickyNav(
   const logoKind =
     logoHref && /\.svg($|\?)/i.test(logoHref) ? "svg" : logoHref ? "raster" : "";
   const mark = logoHref
-    ? `<span class="nav-brand__logo-wrap"><img class="nav-brand__logo nav-brand__logo--${logoKind}" src="${escapeHtml(logoHref)}" alt="" width="148" height="38" decoding="async" data-brand-img></span>`
+    ? `<span class="nav-brand__logo-wrap"><img class="nav-brand__logo nav-brand__logo--${logoKind}" src="${escapeHtml(logoHref)}" alt="" width="148" height="38" decoding="async" data-brand-img onerror="${BRAND_IMG_ONERROR}"></span>`
     : `<span class="nav-brand__mark" aria-hidden="true"></span>`;
   // Keep text mark visible to assistive tech; CSS hides it while the logo
-  // loads. site.js removes nav-brand--logo on image error so the name shows.
+  // loads. Inline onerror + site.js restore the name if the image fails.
   const brand = `<a class="nav-brand${logoHref ? " nav-brand--logo" : ""}" href="${escapeHtml(homeHref)}" data-allow-number>${mark}<span class="nav-brand__name">${escapeHtml(brandLabel)}</span></a>`;
 
   return `<nav class="site-nav" data-dna-component="sticky-nav" aria-label="Primary"><div class="nav-inner">${brand}<ul class="nav-row">${items}</ul><button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="nav-mobile" aria-label="Open menu"><span></span><span></span><span></span></button></div><div class="nav-mobile" id="nav-mobile">${mobileLinks}</div></nav>`;
@@ -212,7 +223,7 @@ export function renderSiteFooter(
   const logoKind =
     logoHref && /\.svg($|\?)/i.test(logoHref) ? "svg" : logoHref ? "raster" : "";
   const logo = logoHref
-    ? `<div class="site-footer__lockup"><img class="site-footer__logo site-footer__logo--${logoKind}" src="${escapeHtml(logoHref)}" alt="" width="132" height="34" decoding="async" data-brand-img></div>`
+    ? `<div class="site-footer__lockup"><img class="site-footer__logo site-footer__logo--${logoKind}" src="${escapeHtml(logoHref)}" alt="" width="132" height="34" decoding="async" data-brand-img onerror="${BRAND_IMG_ONERROR}"></div>`
     : "";
   return `<footer class="site-footer" data-dna-component="site-footer"><div class="site-footer__accent" aria-hidden="true"></div><div class="site-footer__inner">${logo}<p class="site-footer__brand" data-allow-number>${escapeHtml(brand)}</p>${
     period
@@ -256,6 +267,8 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .nav-brand--logo .nav-brand__logo--svg{filter:brightness(0) invert(1)}
 .nav-brand__logo--raster{-ms-interpolation-mode:nearest-neighbor}
 .nav-brand--logo .nav-brand__name{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* If logo fails (inline onerror / site.js), unclip the text wordmark. */
+.nav-brand:has(.nav-brand__logo-wrap.is-broken) .nav-brand__name{position:static;width:auto;height:auto;padding:0;margin:0;overflow:visible;clip:auto;white-space:normal;border:0}
 .nav-brand__name{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:.7rem;font-weight:800;letter-spacing:.08em;color:var(--dna-paper,#fff);line-height:1.15;max-width:14ch}
 .site-nav .nav-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;list-style:none;margin:0;padding:0;flex:1;justify-content:flex-end}
 .site-nav .nav-row>li{display:flex;align-items:stretch}
@@ -300,11 +313,11 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .share-tip-btn{font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--dna-paper,#fff);background:rgba(255,255,255,.06);border:0;padding:.42rem .55rem;cursor:pointer}
 .share-tip-btn:hover{color:var(--dna-brand,#FCAF17);background:rgba(255,255,255,.1)}
 mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 34%,transparent);color:inherit;border-radius:2px;padding:0 2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dna-brand,#FCAF17) 48%,transparent)}
-/* Progressive enhancement: never blank the page if site.js fails to load
-   (console iframe sandbox / CSP / auth). Motion only arms after runtime sets html.rs-motion. */
+/* Progressive enhancement: content visible by default. Motion only arms after
+   runtime sets html.rs-motion — never blank if site.js/CSP/auth fails. */
+.reveal,.kpi-card{opacity:1;transform:none;transition:opacity .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1)}
 html.rs-motion .reveal:not(.is-visible):not(.revealed),
 html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:translateY(18px)}
-.reveal,.kpi-card{transition:opacity .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1)}
 .reveal.is-visible,.reveal.revealed,.kpi-card.is-visible,.kpi-card.revealed{opacity:1;transform:none}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15.75rem,1fr));gap:1.05rem;margin:0}
 .kpi-card{display:flex;flex-direction:column;gap:.55rem;padding:1.35rem 1.3rem 1.15rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 11%,transparent);background:linear-gradient(180deg,var(--dna-paper,#fff),color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff)));border-left:4px solid var(--dna-brand,#FCAF17);min-height:9.75rem;box-shadow:0 1px 0 color-mix(in srgb,var(--dna-ink,#111) 5%,transparent)}

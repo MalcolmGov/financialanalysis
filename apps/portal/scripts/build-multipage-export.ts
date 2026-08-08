@@ -11,6 +11,7 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { zipSync, strToU8, unzipSync, strFromU8 } from "fflate";
 import type { DesignDNA, ExtractionResult } from "@rs/contracts";
+import { auditCorporateReliability } from "@rs/render";
 import { buildMultipageExport } from "../lib/build-multipage-export";
 
 async function main() {
@@ -157,11 +158,24 @@ async function main() {
     ["zip has excel", zipPaths.includes("assets/excel/financial-statements.xlsx")],
     ["gate A", built.gateA.status === "pass"],
     ["gate B", built.gateB.status === "pass"],
+    // P0 — reliability / preview truth
+    ["rs-motion PE CSS", home.includes("html.rs-motion") && home.includes(".reveal")],
+    ["reveal default visible", /(?:^|})\s*\.reveal,\s*\.kpi-card\{[^}]*opacity\s*:\s*1/.test(home.replace(/\s+/g, "")) || home.includes(".reveal,.kpi-card{opacity:1")],
+    ["brand onerror", home.includes("data-brand-img") ? home.includes("onerror=") : home.includes("nav-brand__name")],
   ] as const;
+
+  const reliability = auditCorporateReliability({
+    files: built.files,
+    binaries: built.binaries,
+  });
   for (const [name, ok] of checks) {
     process.stdout.write(`${ok ? "✓" : "✗"} ${name}\n`);
   }
-  if (checks.some(([, ok]) => !ok)) {
+  process.stdout.write(`\nCorporate reliability audit:\n`);
+  for (const f of reliability.findings) {
+    process.stdout.write(`${f.ok ? "✓" : "✗"} ${f.code}${f.path ? ` [${f.path}]` : ""}: ${f.message}\n`);
+  }
+  if (checks.some(([, ok]) => !ok) || !reliability.ok) {
     if (built.gateB.status !== "pass") {
       const byReason = new Map<string, number>();
       for (const f of built.gateB.failures) {

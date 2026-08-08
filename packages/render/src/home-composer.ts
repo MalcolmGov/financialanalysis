@@ -4,6 +4,7 @@
  */
 
 import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
+import { BANNER_IMG_ONERROR, BRAND_IMG_ONERROR } from "./chrome.js";
 import type { BrandAssetUris } from "./resolve.js";
 import { renderKpiCardsHtml, segmentHighlightKpis, type HomeKpiCard } from "./home-kpis.js";
 import { docKindLabel } from "./seo.js";
@@ -162,13 +163,13 @@ function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): s
     ? ` home-hero--photo home-hero--${bannerKind ?? "photo"}`
     : " home-hero--atmosphere";
   const photo = banner
-    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" fetchpriority="high" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}">`
+    ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" fetchpriority="high" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}" data-banner-img onerror="${BANNER_IMG_ONERROR}">`
     : "";
   // DNA-token atmosphere always present — designed plane when banner missing;
   // subtle underlay when photographic strip/photo exists.
   const atmosphere = `<div class="home-hero__atmosphere" aria-hidden="true"><div class="home-hero__mesh"></div><div class="home-hero__beam"></div><div class="home-hero__orb home-hero__orb--a"></div><div class="home-hero__orb home-hero__orb--b"></div><div class="home-hero__grain"></div></div>`;
   const lockup = logo
-    ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high" data-brand-img></div>`
+    ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high" data-brand-img onerror="${BRAND_IMG_ONERROR}"></div>`
     : "";
   return `<header class="home-hero${modeClass}" data-dna-component="home-hero">
 ${atmosphere}${photo}<div class="home-hero__mast"></div>
