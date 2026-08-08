@@ -124,11 +124,42 @@ function xlsToolbarHtml(pagePath: string, excel?: DownloadEnrichOptions["excel"]
   return `<div class="xls-toolbar" data-dna-component="xls-toolbar"><span class="xls-toolbar__label">Excel</span><a class="xls-download" href="${escapeHtml(href)}">Download this statement</a><a class="xls-download xls-download--secondary" href="${escapeHtml(workbook)}">Full workbook</a></div>`;
 }
 
+/**
+ * Replace the inner HTML of the first element whose class list includes
+ * `markerClass`. Uses tag-depth matching so nested <section>/<div> (e.g. ops
+ * tables already rendered into .prose-body) are not truncated at the first
+ * closing tag.
+ */
 function injectInto(html: string, markerClass: string, content: string): string {
-  const re = new RegExp(`(<[^>]*class="[^"]*\\b${markerClass}\\b[^"]*"[^>]*>)([\\s\\S]*?)(</(?:div|main|section)>)`, "i");
-  if (re.test(html)) {
-    // Function replacer — prose may contain `$1` / `$&` (e.g. FX rates).
-    return html.replace(re, (_m, open: string, _inner: string, close: string) => `${open}${content}${close}`);
+  const openRe = new RegExp(
+    `<([a-zA-Z][a-zA-Z0-9]*)([^>]*\\bclass="[^"]*\\b${markerClass}\\b[^"]*"[^>]*)>`,
+    "i",
+  );
+  const m = openRe.exec(html);
+  if (m) {
+    const tag = m[1]!;
+    const openEnd = m.index + m[0].length;
+    const openTagRe = new RegExp(`<${tag}\\b`, "gi");
+    const closeTagRe = new RegExp(`</${tag}\\s*>`, "gi");
+    let depth = 1;
+    let i = openEnd;
+    while (i < html.length && depth > 0) {
+      openTagRe.lastIndex = i;
+      closeTagRe.lastIndex = i;
+      const nextOpen = openTagRe.exec(html);
+      const nextClose = closeTagRe.exec(html);
+      if (!nextClose) break;
+      if (nextOpen && nextOpen.index < nextClose.index) {
+        depth++;
+        i = nextOpen.index + nextOpen[0].length;
+      } else {
+        depth--;
+        if (depth === 0) {
+          return `${html.slice(0, openEnd)}${content}${html.slice(nextClose.index)}`;
+        }
+        i = nextClose.index + nextClose[0].length;
+      }
+    }
   }
   // Fallback: insert before closing </main>
   if (/<\/main>/i.test(html)) {
@@ -311,7 +342,15 @@ export function enrichMultiPageFiles(
   }
 
   if (out["commentary.html"]) {
-    const prose = composeCommentaryBody(docModel);
+    // SitePlan places ops/facts tables in the commentary region; extract them
+    // before prose inject (which replaces .prose-body) and remount under
+    // Review of operations so Gate A coverage + editorial hierarchy both hold.
+    const opsTablesHtml = [
+      ...out["commentary.html"].matchAll(
+        /<section[^>]*data-dna-component="statement-table"[^>]*>[\s\S]*?<\/section>/gi,
+      ),
+    ].map((m) => m[0]);
+    const prose = composeCommentaryBody(docModel, { opsTablesHtml });
     const content =
       pageHero({
         path: "commentary.html",

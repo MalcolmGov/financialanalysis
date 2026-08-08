@@ -81,6 +81,15 @@ function isNoteTitle(title: string): boolean {
   return cls.kind === "note" || /^notes?\b/i.test(title) || /\bnote\s+\d/i.test(title);
 }
 
+function isOpsFactsTable(
+  table: FinancialDocModel["tables"][number],
+  title: string,
+): boolean {
+  if (table.table_type === "facts") return true;
+  const cls = classifySectionTitle(title);
+  return cls.kind === "reviewOfOperations" || /review\s+of\s+operations/i.test(title);
+}
+
 function tableInstances(
   tableIds: string[],
   tableComponent: string,
@@ -141,6 +150,7 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   // Map tables → buckets by caption / section title
   const byStatement: Partial<Record<StatementType, string[]>> = {};
   const noteTables: string[] = [];
+  const commentaryTables: string[] = [];
   const otherFinancial: string[] = [];
 
   const titleByTableId = new Map<string, string>();
@@ -150,6 +160,8 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
         titleByTableId.set(b.table_ref, sec.title?.text ?? sec.statement_type ?? b.table_ref);
         if (sec.statement_type) {
           (byStatement[sec.statement_type] ??= []).push(b.table_ref);
+        } else if (sec.kind === "reviewOfOperations") {
+          commentaryTables.push(b.table_ref);
         } else if (
           sec.kind === "note" ||
           sec.kind === "segments" ||
@@ -162,13 +174,19 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   }
 
   for (const t of docModel.tables) {
-    if ([...Object.values(byStatement)].some((ids) => ids?.includes(t.id)) || noteTables.includes(t.id)) {
+    if (
+      [...Object.values(byStatement)].some((ids) => ids?.includes(t.id)) ||
+      noteTables.includes(t.id) ||
+      commentaryTables.includes(t.id)
+    ) {
       continue;
     }
     const title = titleByTableId.get(t.id) ?? "";
     const st = statementTypeForTitle(title);
     if (st) {
       (byStatement[st] ??= []).push(t.id);
+    } else if (isOpsFactsTable(t, title)) {
+      commentaryTables.push(t.id);
     } else if (isNoteTitle(title) || t.table_type === "note" || t.table_type === "wide") {
       noteTables.push(t.id);
     } else if (t.table_type === "statement" || t.must_appear) {
@@ -193,11 +211,14 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   });
   nav.push({ label: "Home", href: "index.html" });
 
+  // Ops / facts KPI grids live on Commentary (with Review of operations prose),
+  // not on the income-statement page — Financials stays statements-only.
+  const proseRegion = firstRegionAccepting(blueprint, proseTpl, tableComponent);
   pages.push({
     path: "commentary.html",
     template: proseTpl,
     title: "Commentary",
-    regions: { main: [] },
+    regions: { [proseRegion]: tableInstances(commentaryTables, tableComponent, slotName) },
     downloads: [],
   });
   nav.push({ label: "Commentary", href: "commentary.html" });

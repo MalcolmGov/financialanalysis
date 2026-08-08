@@ -370,11 +370,13 @@ export function mapToDocModel(
     const sectionKind =
       noteNum != null || titleCls.kind === "note"
         ? ("note" as const)
-        : cls.table_type === "sensitivity" || /segment/i.test(title) || titleCls.kind === "segments"
-          ? ("segments" as const)
-          : titleCls.statement_type || cls.is_financial
-            ? ("statement" as const)
-            : ("other" as const);
+        : cls.table_type === "facts" || titleCls.kind === "reviewOfOperations"
+          ? ("reviewOfOperations" as const)
+          : cls.table_type === "sensitivity" || /segment/i.test(title) || titleCls.kind === "segments"
+            ? ("segments" as const)
+            : titleCls.statement_type || cls.is_financial
+              ? ("statement" as const)
+              : ("other" as const);
     sections.push({
       id: `doc:sec_tbl_${i}`,
       kind: sectionKind,

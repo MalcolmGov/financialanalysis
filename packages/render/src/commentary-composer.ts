@@ -1,6 +1,8 @@
 /**
  * CommentaryComposer — letter / operations / dividend hierarchy for commentary.html.
  * Prose is verbatim from DocModel sections (with data-src); layout only.
+ * Ops / facts KPI tables (pre-rendered from the SitePlan region) mount under
+ * Review of operations so Financials stays statements-only.
  */
 
 import type { FinancialDocModel } from "@rs/contracts";
@@ -43,6 +45,11 @@ const BANDS: CommentaryBand[] = [
   },
 ];
 
+export interface CommentaryComposeOptions {
+  /** Pre-rendered statement-table sections (ops/facts) from the SitePlan region. */
+  opsTablesHtml?: string[];
+}
+
 function wrapLooseListItems(html: string): string {
   if (!html.includes("prose-li")) return html;
   return html.replace(/(?:<li class="prose-li"[^>]*>[\s\S]*?<\/li>\n?)+/g, (block) => {
@@ -79,12 +86,23 @@ function sectionInnerHtml(sec: FinancialDocModel["sections"][number]): string {
   return wrapLooseListItems(parts.join("\n"));
 }
 
+function bandShell(band: CommentaryBand, bodyHtml: string): string {
+  // No .reveal — editorial must stay visible even if site.js/IO fails in iframe.
+  return `<section class="commentary-section" id="${band.id}" data-kind="${band.kind}" data-dna-component="commentary-section">
+<header class="commentary-section__hdr">
+<p class="commentary-section__eyebrow">${escapeHtml(band.eyebrow)}</p>
+<h2 class="commentary-section__title">${escapeHtml(band.label)}</h2>
+</header>
+<div class="commentary-section__body prose-rail">${bodyHtml}</div>
+</section>`;
+}
+
 function bandHtml(
   band: CommentaryBand,
   sections: FinancialDocModel["sections"],
+  opsTablesHtml: string[] = [],
 ): string | null {
   const matching = sections.filter((s) => s.kind === band.kind);
-  if (!matching.length) return null;
   const bodies = matching
     .map((sec) => {
       const inner = sectionInnerHtml(sec);
@@ -94,7 +112,9 @@ function bandHtml(
       const showTitle =
         titleText &&
         !/^dear shareholder/i.test(titleText) &&
-        titleText.toLowerCase() !== band.label.toLowerCase();
+        titleText.toLowerCase() !== band.label.toLowerCase() &&
+        // Ops KPI table captions restated as band title — skip duplicate.
+        !(band.kind === "reviewOfOperations" && /review\s+of\s+operations/i.test(titleText));
       const titleSrc = sec.title?.src_ref
         ? ` data-src="${escapeHtml(sec.title.src_ref)}"`
         : "";
@@ -105,15 +125,14 @@ function bandHtml(
     })
     .filter(Boolean)
     .join("\n");
-  if (!bodies) return null;
-  // No .reveal — editorial must stay visible even if site.js/IO fails in iframe.
-  return `<section class="commentary-section" id="${band.id}" data-kind="${band.kind}" data-dna-component="commentary-section">
-<header class="commentary-section__hdr">
-<p class="commentary-section__eyebrow">${escapeHtml(band.eyebrow)}</p>
-<h2 class="commentary-section__title">${escapeHtml(band.label)}</h2>
-</header>
-<div class="commentary-section__body prose-rail">${bodies}</div>
-</section>`;
+
+  const tables =
+    band.kind === "reviewOfOperations" && opsTablesHtml.length
+      ? `<div class="commentary-ops-tables" data-dna-component="commentary-ops-tables">${opsTablesHtml.join("\n")}</div>`
+      : "";
+
+  if (!bodies && !tables) return null;
+  return bandShell(band, `${bodies}${tables}`);
 }
 
 function tocHtml(present: CommentaryBand[]): string {
@@ -138,7 +157,14 @@ const OPS_HEADING =
  * available ops prose out of the shareholder letter (common DRD shape).
  */
 function withOpsFallback(sections: FinancialDocModel["sections"]): FinancialDocModel["sections"] {
-  if (sections.some((s) => s.kind === "reviewOfOperations")) return sections;
+  // A facts-table-only reviewOfOperations section must not block carving ops
+  // prose out of the shareholder letter.
+  const hasOpsProse = sections.some(
+    (s) =>
+      s.kind === "reviewOfOperations" &&
+      s.blocks.some((b) => b.kind !== "table" && Boolean((b.text ?? "").trim())),
+  );
+  if (hasOpsProse) return sections;
   const letterIdx = sections.findIndex((s) => s.kind === "letter");
   if (letterIdx < 0) return sections;
   const letter = sections[letterIdx]!;
@@ -173,12 +199,27 @@ function withOpsFallback(sections: FinancialDocModel["sections"]): FinancialDocM
   return next;
 }
 
-export function composeCommentaryBody(docModel: FinancialDocModel): string {
+export function composeCommentaryBody(
+  docModel: FinancialDocModel,
+  opts: CommentaryComposeOptions = {},
+): string {
   const sections = withOpsFallback(docModel.sections);
+  const opsTablesHtml = opts.opsTablesHtml ?? [];
   const rendered: Array<{ band: CommentaryBand; html: string }> = [];
   for (const band of BANDS) {
-    const html = bandHtml(band, sections);
+    const html = bandHtml(band, sections, opsTablesHtml);
     if (html) rendered.push({ band, html });
+  }
+  // Tables alone still warrant an ops band (prose may be absent in thin extractions).
+  if (!rendered.some((r) => r.band.kind === "reviewOfOperations") && opsTablesHtml.length) {
+    const opsBand = BANDS.find((b) => b.kind === "reviewOfOperations")!;
+    rendered.splice(Math.min(1, rendered.length), 0, {
+      band: opsBand,
+      html: bandShell(
+        opsBand,
+        `<div class="commentary-ops-tables" data-dna-component="commentary-ops-tables">${opsTablesHtml.join("\n")}</div>`,
+      ),
+    });
   }
   if (!rendered.length) {
     return `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter.</p>`;

@@ -445,6 +445,8 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .commentary-dek{margin:0 0 1.25rem;font-size:1.16rem;line-height:1.62;color:color-mix(in srgb,var(--dna-ink,#111) 78%,var(--dna-paper,#fff));font-weight:600}
 .prose-rail{max-width:44rem}
 .prose-rail .prose-p,.prose-rail .prose-subh,.prose-rail .prose-signoff{max-width:44rem}
+.commentary-ops-tables{margin:1.75rem 0 0;max-width:min(100%,52rem);width:100%}
+.commentary-ops-tables .statement-table{margin:.35rem 0 0}
 .prose-subh{margin:2rem 0 .7rem;font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.22rem;font-weight:800;line-height:1.28;color:var(--dna-masthead,#0F3B2E);letter-spacing:-.015em}
 .prose-ul{margin:.65rem 0 1.25rem;padding-left:1.3rem}
 .prose-li{margin:.5rem 0;line-height:1.68}

@@ -145,9 +145,116 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     };
     const dm = mapToDocModel(ex, meta);
     expect(dm.tables[0]!.table_type).toBe("facts");
+    expect(dm.sections.find((s) => s.blocks.some((b) => b.table_ref === dm.tables[0]!.id))?.kind).toBe(
+      "reviewOfOperations",
+    );
     expect(dm.tables[0]!.unit_context.default).toBe("");
     expect(dm.tables[0]!.rows[0]!.cells[2]!.raw).toBe("980 042");
     expect(dm.tables[0]!.rows[1]!.cells[1]!.raw).toBe("US$ per oz");
+  });
+
+  it("places ops facts tables on commentary, not income-statement", () => {
+    const opsCells: Cell[] = [
+      h(0, 0, "Review Of Operations"),
+      h(0, 2, "Six months ended 31 Dec 2025"),
+      h(0, 3, "Six months ended 31 Dec 2024"),
+      h(0, 4, "% change 1"),
+      rh(1, 0, "Cash operating costs"),
+      d(1, 1, "R per kg"),
+      d(1, 2, "980 042"),
+      d(1, 3, "866 221"),
+      d(1, 4, "13"),
+      rh(2, 0, "Cash operating costs"),
+      d(2, 1, "US$ per oz"),
+      d(2, 2, "1 756"),
+      d(2, 3, "1 502"),
+      d(2, 4, "17"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      tables: {
+        ...extraction().tables,
+        t_ops: {
+          id: "t_ops",
+          caption_block: null,
+          prov: [],
+          num_rows: 3,
+          num_cols: 5,
+          cells: opsCells,
+          column_roles: null,
+        },
+      },
+      body: [
+        {
+          id: "blk-ops",
+          type: "heading",
+          text: "Review of operations",
+          children: [],
+        },
+        {
+          id: "blk-ops-p",
+          type: "paragraph",
+          text: "Gold production at Ergo was lower year on year.",
+          children: [],
+        },
+      ],
+    } as ExtractionResult;
+    const dm = mapToDocModel(ex, meta);
+    const bp = blueprint();
+    bp.page_templates.push(
+      {
+        id: "bp:tpl_home",
+        name: "Home",
+        shell_html: '<main class="page-home"><div class="home-body">{{region:main}}</div></main>',
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_statement_page",
+        name: "Statement page",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_prose",
+        name: "Prose",
+        shell_html: '<main class="page-prose"><div class="prose-body">{{region:main}}</div></main>',
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+    );
+    const plan = buildSitePlan(dm, bp);
+    const opsTable = dm.tables.find((t) => t.table_type === "facts")!;
+    const commentaryPage = plan.pages.find((p) => p.path === "commentary.html")!;
+    const isPage = plan.pages.find((p) => p.path === "financials/income-statement.html")!;
+    const commentaryIds = Object.values(commentaryPage.regions)
+      .flat()
+      .flatMap((inst) => Object.values(inst.slots).filter((v): v is string => typeof v === "string"));
+    const isIds = Object.values(isPage.regions)
+      .flat()
+      .flatMap((inst) => Object.values(inst.slots).filter((v): v is string => typeof v === "string"));
+    expect(commentaryIds).toContain(opsTable.id);
+    expect(isIds).not.toContain(opsTable.id);
+
+    const ctx: ResolveContext = { extraction: ex, docModel: dm };
+    const a = gateA(plan, ctx);
+    expect(a.status).toBe("pass");
+    const { files } = renderSitePlan(plan, bp, ctx);
+    const b = gateB(files, ctx);
+    expect(b.status).toBe("pass");
+    expect(files["financials/income-statement.html"]).toContain("5 053.2");
+    expect(files["financials/income-statement.html"]).not.toContain("980 042");
+    expect(files["financials/income-statement.html"]).not.toContain(
+      'data-dna-component="commentary-ops-tables"',
+    );
+    expect(files["commentary.html"]).toContain("980 042");
+    expect(files["commentary.html"]).toContain('data-dna-component="commentary-ops-tables"');
+    expect(files["commentary.html"]).toContain('id="operations"');
+    expect(files["commentary.html"]).toMatch(/<col class="c-unit">/);
+    expect(files["commentary.html"]).toContain("R per kg");
+    expect(files["commentary.html"]).toMatch(
+      /id="operations"[\s\S]*data-dna-component="commentary-ops-tables"[\s\S]*980 042/,
+    );
+    // injectInto must replace the whole prose-body (not truncate at nested </section>)
+    expect(files["commentary.html"]).not.toMatch(/<\/section>\s*<\/section>/);
   });
 
   it("clamps title colspan when Notes is a discrete cell (no 5-col ghost grid)", () => {

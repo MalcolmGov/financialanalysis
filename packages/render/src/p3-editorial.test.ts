@@ -322,4 +322,16 @@ describe("CommentaryComposer", () => {
     expect(html).toContain("Gold production at Ergo was 9% lower at 1 683kg.");
     expect(html).toMatch(/commentary-toc__link[^>]*>[\s\S]*Review of operations/);
   });
+
+  it("mounts ops KPI tables under Review of operations", () => {
+    const tableHtml =
+      '<section data-dna-component="statement-table" class="statement-table"><table class="fin-table"><tbody><tr><td>Cash operating costs</td><td class="cell-unit">R per kg</td><td class="cell-num"><span class="num" data-src="ext:t_ops:r1c2">980 042</span></td></tr></tbody></table></section>';
+    const html = composeCommentaryBody(docModel(), { opsTablesHtml: [tableHtml] });
+    expect(html).toContain('id="operations"');
+    expect(html).toContain("commentary-ops-tables");
+    expect(html).toContain("980 042");
+    expect(html).toMatch(
+      /id="operations"[\s\S]*commentary-ops-tables[\s\S]*980 042/,
+    );
+  });
 });
