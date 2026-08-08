@@ -172,10 +172,15 @@ const ctx = (): ResolveContext => ({ extraction: extraction(), docModel: docMode
 describe("deterministic render + integrity gates", () => {
   it("renders every number as a verbatim, provenance-tagged span", () => {
     const { files } = renderSitePlan(statementPlan(), blueprint(), ctx());
-    const html = files["statements/index.html"];
+    const html = files["statements/index.html"]!;
     expect(html).toContain('data-src="ext:t_pnl:r1c1"');
     expect(html).toContain("5 053.2"); // verbatim, thin space intact
     expect(html).toContain("1 927.7");
+    expect(html).toContain('data-dna-component="statement-unit"');
+    expect(html).toContain('statement-unit__value');
+    expect(html).toContain(">Rm<");
+    expect(html).toContain("<colgroup>");
+    expect(html).toContain('class="c-label"');
   });
 
   it("a correct render passes Gate A and Gate B", () => {

@@ -65,25 +65,27 @@ export function extractHomeKpis(docModel: FinancialDocModel): HomeKpiCard[] {
   return segmentHighlightKpis(text, src);
 }
 
-/** Pull listing / ISIN chips from shareholderInfo — verbatim substrings only. */
+/** Pull listing / ISIN chips — verbatim substrings from any section (cover often holds them). */
 function listingMeta(docModel: FinancialDocModel): string {
-  const sec = docModel.sections.find((s) => s.kind === "shareholderInfo");
-  if (!sec) return "";
   const chips: string[] = [];
-  for (const b of sec.blocks) {
-    const text = b.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-    if (!text) continue;
-    const src = b.src_ref ? ` data-src="${escapeHtml(b.src_ref)}"` : "";
-    const jse = text.match(/JSE and A2X share code:\s*[A-Z0-9]+/i)?.[0];
-    const nyse = text.match(/NYSE trading symbol:\s*[A-Z0-9]+/i)?.[0];
-    const isin = text.match(/ISIN:\s*[A-Z0-9]+/i)?.[0];
-    const parts = [jse, nyse, isin].filter(Boolean) as string[];
-    if (!parts.length) continue;
-    chips.push(
-      ...parts.map(
-        (p) => `<span class="home-meta__chip" data-allow-number${src}>${escapeHtml(p)}</span>`,
-      ),
-    );
+  const seen = new Set<string>();
+  for (const sec of docModel.sections) {
+    for (const b of sec.blocks) {
+      const text = b.text?.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const src = b.src_ref ? ` data-src="${escapeHtml(b.src_ref)}"` : "";
+      const jse = text.match(/JSE and A2X share code:\s*[A-Z0-9]+/i)?.[0];
+      const nyse = text.match(/NYSE trading symbol:\s*[A-Z0-9]+/i)?.[0];
+      const isin = text.match(/ISIN:\s*[A-Z0-9]+/i)?.[0];
+      for (const p of [jse, nyse, isin].filter(Boolean) as string[]) {
+        const key = p.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        chips.push(
+          `<span class="home-meta__chip" data-allow-number${src}>${escapeHtml(p)}</span>`,
+        );
+      }
+    }
   }
   if (!chips.length) return "";
   return `<div class="home-meta" data-dna-component="home-meta">${chips.join("")}</div>`;
@@ -103,9 +105,9 @@ function homeHero(docModel: FinancialDocModel): string {
 <p class="home-kicker">${kind}</p>
 <h1 data-allow-number>${company}</h1>
 ${periodHtml}
-<p class="home-lede">Interactive investor results centre — key figures, commentary, and condensed consolidated statements.</p>
+<p class="home-lede">Investor results centre — key figures, commentary, condensed consolidated statements, notes, and downloads.</p>
 ${meta}
-<p class="home-cta"><a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a></p>
+<p class="home-cta"><a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a></p>
 </div>
 </header>`;
 }

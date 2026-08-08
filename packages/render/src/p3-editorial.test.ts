@@ -146,6 +146,7 @@ describe("HomeComposer", () => {
     expect(home.heroHtml).toContain("DRDGOLD Limited");
     expect(home.heroHtml).toContain("home-lede");
     expect(home.heroHtml).toContain("Condensed Consolidated Unaudited Interim Results");
+    expect(home.heroHtml).toContain("downloads.html");
     expect(home.bodyHtml).toContain('data-dna-component="kpi-band"');
     expect(home.bodyHtml).toContain("Financial highlights");
     expect(home.bodyHtml).toContain("kpi-title");
@@ -188,5 +189,6 @@ describe("CommentaryComposer", () => {
     expect(html).toContain("Overview");
     expect(html).toContain('data-src="ext:blk-l2"');
     expect(html).toContain("The Group delivered a solid operating performance.");
+    expect(html).toContain("prose-lead");
   });
 });

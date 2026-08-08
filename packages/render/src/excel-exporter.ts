@@ -216,7 +216,7 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <borders count="3">
     <border><left/><right/><top/><bottom/><diagonal/></border>
     <border><left/><right/><top/><bottom style="thin"><color rgb="FF839097"/></bottom><diagonal/></border>
-    <border><left/><right/><top style="medium"><color rgb="FF231F20"/></top><bottom style="thin"><color rgb="FF231F20"/></bottom><diagonal/></border>
+    <border><left/><right/><top style="medium"><color rgb="FF0F3B2E"/></top><bottom style="medium"><color rgb="FFFCAF17"/></bottom><diagonal/></border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
   <cellXfs count="6">

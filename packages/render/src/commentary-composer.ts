@@ -52,6 +52,7 @@ function wrapLooseListItems(html: string): string {
 
 function sectionInnerHtml(sec: FinancialDocModel["sections"][number]): string {
   const parts: string[] = [];
+  let leadUsed = false;
   for (const b of sec.blocks) {
     if (b.kind === "table") continue;
     const text = b.text?.trim();
@@ -68,6 +69,9 @@ function sectionInnerHtml(sec: FinancialDocModel["sections"][number]): string {
       parts.push(`<li class="prose-li"${src}>${escapeHtml(text)}</li>`);
     } else if (b.kind === "signoff") {
       parts.push(`<p class="prose-signoff"${src}>${escapeHtml(text)}</p>`);
+    } else if (!leadUsed) {
+      leadUsed = true;
+      parts.push(`<p class="prose-p prose-lead"${src}>${escapeHtml(text)}</p>`);
     } else {
       parts.push(`<p class="prose-p"${src}>${escapeHtml(text)}</p>`);
     }

@@ -12,6 +12,7 @@ import {
   renderPrevNext,
   renderSelectionTooltip,
   renderShareBar,
+  renderSiteFooter,
   renderStickyNav,
 } from "./chrome.js";
 import { enrichMultiPageFiles } from "./enrich.js";
@@ -77,9 +78,48 @@ function findCurrentPeriodCol(table: FinTable): number | null {
   return bestCol;
 }
 
+/** Stack IR period headers (As at / date / Rm / Unaudited) without inventing text. */
+function formatHeaderCellHtml(raw: string): string {
+  const m = raw
+    .replace(/\s+/g, " ")
+    .trim()
+    .match(
+      /^(As at|For the (?:six months|year) ended)\s+(.+?)\s+(Rm|R'000|R million)\s+(Unaudited|Audited)$/i,
+    );
+  if (m) {
+    return `${escapeHtml(m[1]!)}<br><span class="h-fig__date">${escapeHtml(m[2]!)}</span><br><span class="h-fig__unit">${escapeHtml(m[3]!)}</span><br><span class="h-fig__audit">${escapeHtml(m[4]!)}</span>`;
+  }
+  return escapeHtml(raw);
+}
+
+function noteColIndex(table: FinTable): number | null {
+  for (const row of table.header_matrix) {
+    let col = 0;
+    for (const h of row) {
+      if (/^notes?$/i.test(h.raw.trim())) return col;
+      col += Math.max(1, h.col_span ?? 1);
+    }
+  }
+  return null;
+}
+
 function renderFinTable(table: FinTable, notesBase: string | null): string {
   const cur0 = findCurrentPeriodCol(table);
+  const noteCol = noteColIndex(table);
   const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
+  const colCount = Math.max(
+    ...table.header_matrix.map((row) =>
+      row.reduce((n, h) => n + Math.max(1, h.col_span ?? 1), 0),
+    ),
+    ...table.rows.map((r) => r.cells.length),
+    1,
+  );
+  const cols = Array.from({ length: colCount }, (_, i) => {
+    if (i === 0) return `<col class="c-label">`;
+    if (noteCol != null && i === noteCol) return `<col class="c-note">`;
+    if (cur0 != null && i === cur0) return `<col class="c-cur">`;
+    return `<col class="c-cmp">`;
+  }).join("");
 
   const head = table.header_matrix
     .map((row) => {
@@ -90,12 +130,23 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           const span = Math.max(1, h.col_span ?? 1);
           col += span;
           const isCur = cur0 != null && cur0 >= start && cur0 < start + span;
+          const isNote = /^notes?$/i.test(h.raw.trim());
+          const isTitle = start === 0 && !isNote && !/\b(19|20)\d{2}\b/.test(h.raw);
           // Header cells carry provenance too: they hold dates ("31 Dec 2025")
           // and unit labels whose digits must be traceable + verified. Empty
           // header slots (real tables are sparse) carry no data-src.
           const src = h.raw.trim() !== "" ? ` data-src="${escapeHtml(h.src_ref)}"` : "";
-          const cls = isCur ? ` class="cur"` : "";
-          return `<th${cls}${src}${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${escapeHtml(h.raw)}</th>`;
+          const classes = [
+            isCur ? "cur" : "",
+            isNote ? "h-notes" : "",
+            isTitle ? "h-title" : "",
+            !isNote && !isTitle && h.raw.trim() ? "h-fig" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const cls = classes ? ` class="${classes}"` : "";
+          const inner = isNote || isTitle ? escapeHtml(h.raw) : formatHeaderCellHtml(h.raw);
+          return `<th${cls}${src}${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${inner}</th>`;
         })
         .join("");
       return `<tr>${cells}</tr>`;
@@ -108,19 +159,20 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
       const role = classifyStatementRow(label, rowHasNumeric(row.cells));
       let col = 0;
       const cells = row.cells
-        .map((cell) => {
+        .map((cell, cellIdx) => {
           const start = col;
           const span = Math.max(1, (cell as { col_span?: number }).col_span ?? 1);
           col += span;
           const isCur = cur0 != null && cur0 >= start && cur0 < start + span;
           const curCls = isCur ? " cur" : "";
+          const cmpCls = !isCur && cell.kind === "number" ? " cmp" : "";
           if (cell.kind === "number") {
-            return `<td class="cell-num${curCls}">${numberSpan(cell.src_ref, cell.raw)}</td>`;
+            return `<td class="cell-num${curCls}${cmpCls}">${numberSpan(cell.src_ref, cell.raw)}</td>`;
           }
           if (cell.kind === "noteRef" && cell.raw.trim() && notesBase) {
             const src = ` data-src="${escapeHtml(cell.src_ref)}"`;
             const linked = linkNoteRefHtml(cell.raw, notesBase, escapeHtml);
-            return `<td class="cell-noteRef${curCls}"${src}>${linked}</td>`;
+            return `<td class="cell-noteRef note${curCls}"${src}>${linked}</td>`;
           }
           // Every cell with CONTENT is provenance-tagged — text row-labels
           // ("Balance at 30 June 2024"), nil markers and note refs all carry
@@ -128,14 +180,23 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           // mapper's byte-for-byte copy). Empty grid slots — real Docling tables
           // omit cells — carry no digit and need no provenance.
           const src = cell.raw.trim() !== "" ? ` data-src="${escapeHtml(cell.src_ref)}"` : "";
-          return `<td class="cell-${cell.kind}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
+          const labelCls = cellIdx === 0 ? " cell-label lbl" : "";
+          const noteEmpty =
+            noteCol != null && start === noteCol ? " cell-noteRef note" : "";
+          return `<td class="cell-${cell.kind}${labelCls}${noteEmpty}${curCls}"${src}>${escapeHtml(cell.raw)}</td>`;
         })
         .join("");
       return `<tr class="${rowRoleClass(role)}">${cells}</tr>`;
     })
     .join("");
 
-  return `<table class="fin-table"${curAttr} data-table-src="${escapeHtml(table.src_table)}"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  const unit = table.unit_context?.default?.trim();
+  const unitHtml = unit
+    ? `<p class="statement-unit" data-dna-component="statement-unit"><span>Unit</span><span class="statement-unit__value" data-allow-number>${escapeHtml(unit)}</span></p>`
+    : "";
+
+  // Section chrome already provides `.statement-table`; emit unit + table only.
+  return `${unitHtml}<table class="fin-table"${curAttr} data-table-src="${escapeHtml(table.src_table)}"><colgroup>${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 function renderSlot(
@@ -257,12 +318,12 @@ export function renderSitePlan(
       : `<meta charset="utf-8"><title>${escapeHtml(page.title)}</title><style>${css}</style>`;
 
     const chromeTop = multiPage
-      ? `${renderStickyNav(plan.nav, page.path)}${renderShareBar()}${
+      ? `${renderStickyNav(plan.nav, page.path, company)}${renderShareBar()}${
           crumbInHero ? "" : renderBreadcrumb(page.path, page.title, company)
         }`
       : "";
     const chromeBottom = multiPage
-      ? `${renderPrevNext(pageOrder, page.path)}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
+      ? `${renderPrevNext(pageOrder, page.path)}${renderSiteFooter(company, periodLabel)}${renderSelectionTooltip()}<script src="${siteRuntimeHref(page.path)}" defer></script>`
       : "";
 
     // Prefer injecting chrome around main; otherwise wrap body content.
@@ -319,20 +380,35 @@ ${STATEMENT_IR_CSS}
 /** WW-grade row taxonomy + note-ref + banding (safe to append after any .fin-table base). */
 const STATEMENT_IR_CSS = `
 /* rs-statement-ir */
-.statement-table{overflow-x:auto;margin:.35rem 0 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
-.fin-table{font-variant-numeric:tabular-nums}
-.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.03em;font-size:11px;font-weight:700;padding:10px 12px}
-.fin-table td{padding:7px 12px}
+.statement-table{overflow-x:auto;margin:.15rem 0 1.25rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 14%,transparent);background:var(--dna-paper,#fff);padding:0 2px}
+.fin-table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12.5px}
+.fin-table col.c-label{width:auto}
+.fin-table col.c-note{width:3.6em}
+.fin-table col.c-cur,.fin-table col.c-cmp{width:7.25em}
+.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.02em;font-size:11px;font-weight:700;padding:11px 10px;vertical-align:bottom;line-height:1.3}
+.fin-table thead th.h-title{text-align:left;font-size:12px;letter-spacing:.01em}
+.fin-table thead th.h-notes{text-align:center;font-size:10px;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom}
+.fin-table thead th.h-fig{text-align:right;font-weight:700}
+.fin-table thead th.h-fig .h-fig__date{display:inline-block;font-weight:800}
+.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:inline-block;font-weight:600;opacity:.92;font-size:10.5px}
+.fin-table td{padding:5px 10px;vertical-align:middle;line-height:1.35}
+.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#231F20);padding-left:8px}
+.fin-table td.cell-num,.fin-table td.cmp{text-align:right;white-space:nowrap;padding-right:10px}
+.fin-table td.cur{font-weight:700}
 .fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
-.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:16px;padding-bottom:6px;color:var(--dna-masthead,#0F3B2E);font-size:12.5px;letter-spacing:.02em;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important;border-top:1px solid color-mix(in srgb,var(--dna-masthead,#0F3B2E) 18%,transparent)}
+.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:15px;padding-bottom:5px;color:var(--dna-masthead,#0F3B2E);font-size:12.5px;letter-spacing:.02em;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important;border-top:1px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,transparent)}
 .fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5%,var(--dna-paper,#fff))!important}
 .fin-table tr.r-subtotal td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff))!important}
 .fin-table tr.r-subtotal td.cur{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 78%,var(--dna-paper,#fff))!important}
-.fin-table tr.r-total td{font-weight:700;border-top:2px solid var(--dna-masthead,#0F3B2E);border-bottom:2px solid color-mix(in srgb,var(--dna-masthead,#0F3B2E) 35%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 10%,var(--dna-paper,#fff))!important;padding-top:9px;padding-bottom:9px}
+.fin-table tr.r-total td{font-weight:700;border-top:2px solid var(--dna-masthead,#0F3B2E);border-bottom:2px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 65%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 10%,var(--dna-paper,#fff))!important;padding-top:9px;padding-bottom:9px}
 .fin-table tr.r-total td.cur{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 16%,var(--dna-shading,#F2F2F2))!important}
-.fin-table tr.r-line td.cell-num.cur{font-weight:600}
-.fin-table td.cell-label,.fin-table td:first-child{color:var(--dna-ink,#231F20)}
+.fin-table tr.r-line td.cell-num.cur{font-weight:700}
+.fin-table[data-cur-col] tbody td.cur{box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dna-ink,#111) 18%,transparent)}
 .fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 80%,transparent);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
-.fin-table .cell-noteRef{text-align:center;width:3.75em;font-size:11.5px}
+.fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.6em;font-size:11.5px}
+@media (max-width:720px){
+  .fin-table{table-layout:auto;font-size:11.5px}
+  .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}
+}
 `.trim();
