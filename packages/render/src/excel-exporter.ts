@@ -106,10 +106,15 @@ function sanitizeSheetName(name: string, used: Set<string>): string {
   return candidate;
 }
 
-/** Collect statement (+ optional note) sheets from the DocModel. */
+const OPS_SHEET = "Review of Operations";
+const OPS_SLUG = "review-of-operations";
+const OPS_TITLE = "Review of Operations";
+
+/** Collect statement (+ ops + optional note) sheets from the DocModel. */
 export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[] {
   const tableById = new Map(docModel.tables.map((t) => [t.id, t]));
   const byType: Partial<Record<StatementType, FinTable[]>> = {};
+  const opsTables: FinTable[] = [];
   const noteTables: Array<{ table: FinTable; note?: number; title?: string }> = [];
   const seen = new Set<string>();
 
@@ -121,6 +126,9 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
       if (sec.statement_type) {
         seen.add(table.id);
         (byType[sec.statement_type] ??= []).push(table);
+      } else if (sec.kind === "reviewOfOperations") {
+        seen.add(table.id);
+        opsTables.push(table);
       } else if (sec.kind === "note" || sec.kind === "cashReconciliation") {
         seen.add(table.id);
         if (sec.kind === "cashReconciliation") {
@@ -166,6 +174,18 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
       });
     });
   }
+
+  // Review of Operations — named sheet(s) after primary statements, before notes.
+  opsTables.forEach((table, idx) => {
+    const sheetBase = idx === 0 ? OPS_SHEET : `${OPS_SHEET} ${idx + 1}`;
+    const slug = idx === 0 ? OPS_SLUG : `${OPS_SLUG}-${idx + 1}`;
+    sheets.push({
+      name: sanitizeSheetName(sheetBase, usedNames),
+      slug,
+      table,
+      title: idx === 0 ? OPS_TITLE : `${OPS_TITLE} (${idx + 1})`,
+    });
+  });
 
   // Notes as appropriate — cap to keep workbook IR-readable
   for (const n of noteTables.slice(0, 8)) {
@@ -576,7 +596,16 @@ export function exportExcelFromDocModel(docModel: FinancialDocModel): ExcelExpor
     });
   }
 
-  const noteSheets = sheets.filter((s) => !s.statementType);
+  const opsSheets = sheets.filter((s) => s.slug === OPS_SLUG || s.slug.startsWith(`${OPS_SLUG}-`));
+  if (opsSheets.length) {
+    const href = `assets/excel/${OPS_SLUG}.xlsx`;
+    files[href] = buildWorkbookXlsx(opsSheets, meta);
+    statementFiles.push({ label: OPS_TITLE, href, slug: OPS_SLUG });
+  }
+
+  const noteSheets = sheets.filter(
+    (s) => !s.statementType && !(s.slug === OPS_SLUG || s.slug.startsWith(`${OPS_SLUG}-`)),
+  );
   if (noteSheets.length) {
     const href = "assets/excel/notes.xlsx";
     files[href] = buildWorkbookXlsx(noteSheets, meta);

@@ -124,11 +124,72 @@ function unzipEntry(zip: Uint8Array, name: string): string {
   throw new Error(`missing zip entry ${name}`);
 }
 
+const OPS = {
+  ...PNL,
+  id: "doc:tbl_ops",
+  src_table: "ext:t_ops",
+  table_type: "facts" as const,
+  must_appear: true,
+  rows: [
+    {
+      cells: [
+        { src_ref: "ext:t_ops:r1c0", raw: "Gold produced", kind: "text" as const, footnote_refs: [] },
+        { src_ref: "ext:t_ops:r1c1", raw: "2 600", kind: "number" as const, footnote_refs: [] },
+        { src_ref: "ext:t_ops:r1c2", raw: "2 400", kind: "number" as const, footnote_refs: [] },
+      ],
+    },
+  ],
+  header_matrix: [
+    [
+      { raw: "", col_span: 1, row_span: 1, src_ref: "ext:t_ops:r0c0" },
+      { raw: "HY1 FY2026", col_span: 1, row_span: 1, src_ref: "ext:t_ops:r0c1" },
+      { raw: "HY1 FY2025", col_span: 1, row_span: 1, src_ref: "ext:t_ops:r0c2" },
+    ],
+  ],
+};
+
+function docModelWithOps(): FinancialDocModel {
+  const base = docModel();
+  return {
+    ...base,
+    sections: [
+      ...base.sections,
+      {
+        id: "doc:sec_ops",
+        kind: "reviewOfOperations",
+        title: { text: "Review of operations", src_ref: "ext:h_ops" },
+        blocks: [{ kind: "table", table_ref: "doc:tbl_ops" }],
+        items: [],
+      },
+    ],
+    tables: [...base.tables, OPS],
+  } as FinancialDocModel;
+}
+
 describe("ExcelExporter", () => {
   it("collects statement sheets with stable names", () => {
     const sheets = collectExcelSheets(docModel());
     expect(sheets.map((s) => s.name)).toEqual(["Income Statement", "Balance Sheet"]);
     expect(sheets.map((s) => s.slug)).toEqual(["income-statement", "balance-sheet"]);
+  });
+
+  it("adds a named Review of Operations workbook sheet", () => {
+    const sheets = collectExcelSheets(docModelWithOps());
+    expect(sheets.map((s) => s.name)).toEqual([
+      "Income Statement",
+      "Balance Sheet",
+      "Review of Operations",
+    ]);
+    expect(sheets.map((s) => s.slug)).toContain("review-of-operations");
+    const result = exportExcelFromDocModel(docModelWithOps());
+    expect(result.workbookSheetNames).toContain("Review of Operations");
+    expect(result.files["assets/excel/review-of-operations.xlsx"]).toBeTruthy();
+    const xlsx = result.files["assets/excel/financial-statements.xlsx"]!;
+    const wb = unzipEntry(xlsx, "xl/workbook.xml");
+    expect(wb).toContain('name="Review of Operations"');
+    const opsSheet = unzipEntry(xlsx, "xl/worksheets/sheet3.xml");
+    expect(opsSheet).toContain("Gold produced");
+    expect(opsSheet).toContain("2 600");
   });
 
   it("writes verbatim FinTable numbers into XLSX sheet XML", () => {
