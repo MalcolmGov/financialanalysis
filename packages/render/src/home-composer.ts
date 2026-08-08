@@ -168,7 +168,7 @@ function homeHero(docModel: FinancialDocModel, opts: HomeComposeOptions = {}): s
   // subtle underlay when photographic strip/photo exists.
   const atmosphere = `<div class="home-hero__atmosphere" aria-hidden="true"><div class="home-hero__mesh"></div><div class="home-hero__beam"></div><div class="home-hero__orb home-hero__orb--a"></div><div class="home-hero__orb home-hero__orb--b"></div><div class="home-hero__grain"></div></div>`;
   const lockup = logo
-    ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high"></div>`
+    ? `<div class="home-hero__lockup"><img class="home-hero__logo home-hero__logo--${logoKind}" src="${escapeHtml(logo)}" alt="" width="240" height="56" decoding="async" fetchpriority="high" data-brand-img></div>`
     : "";
   return `<header class="home-hero${modeClass}" data-dna-component="home-hero">
 ${atmosphere}${photo}<div class="home-hero__mast"></div>

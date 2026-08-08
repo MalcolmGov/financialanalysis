@@ -865,7 +865,10 @@ textarea.rs-field:focus {
 
 .rs-preview-frame iframe {
   display: block;
-  max-width: 100%;
+  /* Do not max-width:100% — Desktop/Tablet width buttons must drive the
+     iframe layout viewport so site media queries (nav breakpoint) work.
+     Parent .rs-preview-frame scrolls horizontally when needed. */
+  max-width: none;
   height: min(72vh, 760px);
   margin: 0 auto;
   border: 0;
@@ -1040,10 +1043,14 @@ textarea.rs-field:focus {
   border: none;
   flex: 1 1 auto;
   min-height: min(68vh, 720px);
+  overflow: auto;
 }
 
 .rs-compare__pane--prototype .rs-preview-frame iframe {
   height: min(68vh, 720px);
+  /* Inline style sets Phone/Tablet/Desktop width; keep max-width none so
+     1280 Desktop is a real viewport (not squeezed to the pane width). */
+  max-width: none;
 }
 
 .rs-compare__empty {

@@ -88,6 +88,36 @@ export const SITE_RUNTIME_JS = `
     window.addEventListener('scroll', onScroll, { passive: true });
   }
 
+  /* ── Brand images: hide broken <img>, fall back to text mark ── */
+  function failBrandImg(img){
+    if (!img || img.dataset.brandFailed === '1') return;
+    img.dataset.brandFailed = '1';
+    img.setAttribute('hidden', '');
+    img.removeAttribute('src');
+    var wrap = img.closest('.nav-brand__logo-wrap, .home-hero__lockup, .site-footer__lockup');
+    if (wrap) wrap.classList.add('is-broken');
+    var brand = img.closest('.nav-brand');
+    if (brand) {
+      brand.classList.remove('nav-brand--logo');
+      if (!brand.querySelector('.nav-brand__mark')) {
+        var mark = document.createElement('span');
+        mark.className = 'nav-brand__mark';
+        mark.setAttribute('aria-hidden', 'true');
+        brand.insertBefore(mark, brand.firstChild);
+      }
+    }
+  }
+
+  function initBrandImages(){
+    document.querySelectorAll('img[data-brand-img]').forEach(function(img){
+      img.addEventListener('error', function(){ failBrandImg(img); });
+      // Cached 404 / already-failed decode
+      if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) {
+        failBrandImg(img);
+      }
+    });
+  }
+
   /* ── Mobile nav ── */
   function initMobileNav(){
     var btn = document.querySelector('[data-nav-toggle]');
@@ -361,6 +391,7 @@ export const SITE_RUNTIME_JS = `
 
   function boot(){
     initNavScroll();
+    initBrandImages();
     initMobileNav();
     initNavDropdown();
     initShareBar();

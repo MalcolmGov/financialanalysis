@@ -30,6 +30,9 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain('data-share="email"');
     expect(SITE_RUNTIME_JS).toContain("is-scrolled");
     expect(SITE_RUNTIME_JS).toContain("Escape");
+    expect(SITE_RUNTIME_JS).toContain("data-brand-img");
+    expect(SITE_RUNTIME_JS).toContain("initBrandImages");
+    expect(SITE_RUNTIME_JS).toContain("nav-brand--logo");
   });
 });
 

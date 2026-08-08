@@ -410,22 +410,22 @@ ${STATEMENT_IR_CSS}
 /** WW-grade row taxonomy + note-ref + banding (safe to append after any .fin-table base). */
 const STATEMENT_IR_CSS = `
 /* rs-statement-ir — dense IR table skin */
-.statement-table{overflow-x:auto;margin:.1rem 0 1.35rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 13%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:0 1px 0 color-mix(in srgb,var(--dna-ink,#111) 4%,transparent)}
+.statement-table{overflow-x:auto;margin:.35rem 0 1.35rem;border:0;border-top:2px solid var(--dna-brand,#FCAF17);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
 .fin-table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12.5px;letter-spacing:-.01em}
 .fin-table col.c-label{width:auto}
 .fin-table col.c-note{width:3.5em}
 .fin-table col.c-cur,.fin-table col.c-cmp{width:7.35em}
-.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.015em;font-size:11px;font-weight:700;padding:12px 10px 11px;vertical-align:bottom;line-height:1.28;background:color-mix(in srgb,var(--dna-paper,#fff) 92%,var(--dna-shading,#F2F2F2));backdrop-filter:blur(4px)}
+.fin-table thead th{position:sticky;top:0;z-index:2;border-bottom:2px solid var(--dna-brand,#FCAF17);letter-spacing:.015em;font-size:11px;font-weight:700;padding:12px 10px 11px;vertical-align:bottom;line-height:1.28;color:var(--dna-ink,#231F20);background:color-mix(in srgb,var(--dna-paper,#fff) 94%,var(--dna-shading,#F2F2F2));backdrop-filter:blur(4px)}
 .fin-table thead th.h-title{text-align:left;font-size:12px;letter-spacing:.005em;font-weight:800}
 .fin-table thead th.h-notes{text-align:center;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;vertical-align:bottom;font-weight:800}
 .fin-table thead th.h-fig{text-align:right;font-weight:700}
-.fin-table thead th.h-fig .h-fig__date{display:inline-block;font-weight:800;letter-spacing:-.01em}
-.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:inline-block;font-weight:600;opacity:.9;font-size:10.5px}
-.fin-table td{padding:5.5px 10px;vertical-align:middle;line-height:1.32}
+.fin-table thead th.h-fig .h-fig__date{display:block;font-weight:800;letter-spacing:-.01em;line-height:1.3}
+.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:block;font-weight:600;opacity:.88;font-size:10.5px;margin-top:.15rem}
+.fin-table td{padding:6.5px 10px;vertical-align:middle;line-height:1.35;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
 .fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#231F20);padding-left:10px}
 .fin-table td.cell-num,.fin-table td.cmp{text-align:right;white-space:nowrap;padding-right:11px}
 .fin-table td.cur{font-weight:700}
-.fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 30%,var(--dna-paper,#fff))}
+.fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 34%,var(--dna-paper,#fff))}
 .fin-table tr.r-section td{font-weight:800;border-bottom:none;padding-top:16px;padding-bottom:6px;color:var(--dna-masthead,#0F3B2E);font-size:12.5px;letter-spacing:.015em;background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5.5%,var(--dna-paper,#fff))!important;border-top:1px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 58%,transparent)}
 .fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:color-mix(in srgb,var(--dna-masthead,#0F3B2E) 5.5%,var(--dna-paper,#fff))!important}
 .fin-table tr.r-subtotal td{font-weight:700;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 58%,var(--dna-paper,#fff))!important}
@@ -433,8 +433,9 @@ const STATEMENT_IR_CSS = `
 .fin-table tr.r-total td{font-weight:800;border-top:2px solid var(--dna-masthead,#0F3B2E);border-bottom:2px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 68%,transparent);background:color-mix(in srgb,var(--dna-brand,#FCAF17) 11%,var(--dna-paper,#fff))!important;padding-top:10px;padding-bottom:10px}
 .fin-table tr.r-total td.cur{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 18%,var(--dna-shading,#F2F2F2))!important}
 .fin-table tr.r-line td.cell-num.cur{font-weight:700}
-.fin-table[data-cur-col] tbody td.cur{box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dna-ink,#111) 16%,transparent)}
-.fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:800;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 80%,transparent);padding:0 1px}
+.fin-table[data-cur-col] thead th.cur,.fin-table[data-cur-col] tbody td.cur{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 72%,var(--dna-paper,#fff))!important}
+.fin-table[data-cur-col] tbody td.cur{box-shadow:inset 1px 0 0 color-mix(in srgb,var(--dna-ink,#111) 14%,transparent)}
+.fin-table .note-ref{color:var(--dna-masthead,#0F3B2E);text-decoration:none;font-weight:800;border-bottom:1px dashed color-mix(in srgb,var(--dna-brand,#FCAF17) 85%,transparent);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
 .fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.5em;font-size:11.5px}
 .fin-table tr.bd-tan>td{border-top:1.5px solid color-mix(in srgb,var(--dna-brand,#FCAF17) 55%,#CDAE86)}
