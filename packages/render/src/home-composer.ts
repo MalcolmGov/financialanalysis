@@ -101,7 +101,7 @@ function homeHero(docModel: FinancialDocModel): string {
 <div class="home-hero__mast"></div>
 <div class="home-hero__inner">
 <p class="home-kicker">${kind}</p>
-<h1>${company}</h1>
+<h1 data-allow-number>${company}</h1>
 ${periodHtml}
 <p class="home-lede">Interactive investor results centre — key figures, commentary, and condensed consolidated statements.</p>
 ${meta}

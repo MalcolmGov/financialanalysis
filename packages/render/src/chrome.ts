@@ -149,7 +149,10 @@ export function renderBreadcrumb(
 ): string {
   if (path === "index.html") return "";
   const homeHref = hrefFrom(path, "index.html");
-  const crumbs = [`<a href="${escapeHtml(homeHref)}">${escapeHtml(company || "Home")}</a>`];
+  // Company names may contain digits (e.g. "3M", test labels) — identity chrome, not figures.
+  const crumbs = [
+    `<a href="${escapeHtml(homeHref)}" data-allow-number>${escapeHtml(company || "Home")}</a>`,
+  ];
   if (path.startsWith(FINANCIALS_PREFIX)) {
     crumbs.push(`<span>Financials</span>`);
   }

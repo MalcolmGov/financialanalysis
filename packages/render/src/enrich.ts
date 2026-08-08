@@ -97,7 +97,7 @@ function downloadsHtml(
 
   return `<section class="downloads" data-dna-component="downloads">
 <h2 class="prose-h">Downloads</h2>
-<p class="prose-p">Source PDF and spreadsheet exports for ${company}.</p>
+<p class="prose-p">Source PDF and spreadsheet exports for <span data-allow-number>${company}</span>.</p>
 <ul class="download-list">
 ${pdfItem}
 <li><a class="dl-link" href="${escapeHtml(workbookHref)}"><span class="dl-label">Financial statements (Excel)</span>${sheetNote}</a></li>

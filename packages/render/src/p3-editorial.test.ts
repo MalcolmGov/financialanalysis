@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { FinancialDocModel, SitePlan } from "@rs/contracts";
+import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
+import { renderBreadcrumb } from "./chrome.js";
 import { composeCommentaryBody } from "./commentary-composer.js";
+import { gateB } from "./gate-b.js";
 import { composeHome, extractHomeKpis } from "./home-composer.js";
 import { composeSeo, renderSeoMeta } from "./seo.js";
 
@@ -157,6 +159,21 @@ describe("HomeComposer", () => {
     expect(home.bodyHtml).toContain("Shareholder letter");
     // Explore blurbs must not invent statement figures
     expect(home.bodyHtml).not.toMatch(/R2\.3bn|R428/);
+  });
+
+  it("allow-lists digits in company identity chrome for Gate B", () => {
+    const dm = docModel();
+    dm.meta.company = "DRD Gold 1";
+    const home = composeHome(plan(), dm);
+    expect(home.heroHtml).toMatch(/<h1[^>]*data-allow-number[^>]*>DRD Gold 1<\/h1>/);
+    const crumb = renderBreadcrumb("commentary.html", "Commentary", "DRD Gold 1");
+    expect(crumb).toContain('data-allow-number');
+    expect(crumb).toContain("DRD Gold 1");
+    const html = `<!doctype html><html><body>${home.heroHtml}${crumb}<p>Source PDF for <span data-allow-number>DRD Gold 1</span>.</p></body></html>`;
+    const emptyExtraction = { tables: {}, blocks: {} } as unknown as ExtractionResult;
+    const b = gateB({ "index.html": html }, { extraction: emptyExtraction, docModel: dm });
+    expect(b.status).toBe("pass");
+    expect(b.failures).toEqual([]);
   });
 });
 
