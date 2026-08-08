@@ -406,17 +406,17 @@ function exploreCards(plan: SitePlan): string {
       const cta = exploreCta(n.href, n.label);
       return `<a class="explore-card reveal" href="${escapeHtml(n.href)}">
 <span class="explore-n" data-allow-number>${n_}</span>
-<span class="explore-card__body">
 <span class="explore-label">${escapeHtml(n.label)}</span>
 <span class="explore-desc">${escapeHtml(desc)}</span>
-<span class="explore-cta">${escapeHtml(cta)} →</span>
-</span>
+<span class="explore-cta">${escapeHtml(cta)} <span class="explore-cta__arrow" aria-hidden="true">→</span></span>
 </a>`;
     })
     .join("");
   return `<section class="explore" aria-label="Explore the report" data-dna-component="explore">
-<div class="section-hdr"><h2 class="section-hdr__title">Explore the report</h2><p class="section-hdr__sub">Commentary, statements, notes, and downloads</p></div>
+<div class="explore__rail">
+<div class="section-hdr section-hdr--explore"><h2 class="section-hdr__title">Explore the report</h2><p class="section-hdr__sub">Commentary, statements, notes, and downloads</p></div>
 <div class="explore-grid">${cards}</div>
+</div>
 </section>`;
 }
 
