@@ -440,8 +440,8 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .note-block{margin:1.75rem 0 1.15rem;padding-top:.65rem;scroll-margin-top:5.5rem;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
 .note-title{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.15rem;margin:0 0 .7rem;color:var(--dna-masthead,#0F3B2E);font-weight:700}
 .note-block .prose-p{margin:.4rem 0;line-height:1.55}
-.statement-unit{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .65rem;margin:0 0 .65rem;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
-.statement-unit__value{color:var(--dna-masthead,#0F3B2E);font-weight:800;letter-spacing:.04em}
-.page-statement .statement-table{border-top:2px solid var(--dna-brand,#FCAF17);border-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);box-shadow:none}
+.statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 .7rem;padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#FCAF17);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
+.statement-unit__value{color:var(--dna-masthead,#0F3B2E);font-weight:800;letter-spacing:.06em}
+.page-statement .statement-table,.page-statement .fin-wrapper{border-top:2px solid var(--dna-brand,#FCAF17);border-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);box-shadow:none}
 `.trim();
 

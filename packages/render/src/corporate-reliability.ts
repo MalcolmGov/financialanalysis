@@ -8,6 +8,10 @@ import {
   extractChromeIdentityText,
   looksLikeProjectSlug,
 } from "./legal-company.js";
+import {
+  checkStatementIrFidelity,
+  isStatementFinancialPage,
+} from "./statement-fidelity.js";
 
 export interface ReliabilityFinding {
   ok: boolean;
@@ -382,6 +386,10 @@ export function auditCorporateReliability(
       /financials\/balance-sheet\.html$/i.test(path)
     ) {
       findings.push(...checkLegalCompanyChrome(html, path, opts));
+    }
+    // P2 — statement IR fidelity on BS/IS/CF/equity pages
+    if (isStatementFinancialPage(path)) {
+      findings.push(...checkStatementIrFidelity(html, path));
     }
     findings.push(...checkRelativeAssetLinks(html, path, available));
   }

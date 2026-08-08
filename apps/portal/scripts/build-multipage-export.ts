@@ -125,6 +125,12 @@ async function main() {
     ["stacked headers", bs.includes("h-fig") && bs.includes("h-fig__date")],
     ["note links", bs.includes('class="note-ref"') && bs.includes("notes.html#note-")],
     ["note anchors", /id="note-\d+"/.test(notes)],
+    // P2 — statement IR design system
+    ["rs-statement-ir CSS", bs.includes("/* rs-statement-ir */") && income.includes("/* rs-statement-ir */")],
+    ["print statement CSS", bs.includes("@media print") && bs.includes("print-color-adjust")],
+    ["IR skin all statements", [bs, income, cf].every((h) => h.includes("rs-statement-ir") && h.includes("data-cur-col"))],
+    ["gold top rule", /border-top:2px solid var\(--dna-brand/.test(bs)],
+    ["zebra/hover IR", bs.includes("tbody tr:hover") && (bs.includes("#DCE3E7") || bs.includes("r-line:nth-child"))],
     ["notes", !!built.files["financials/notes.html"]],
     ["downloads", !!built.files["downloads.html"]],
     ["no prototype entrypoint", !built.files["prototype/index.html"] || built.entrypoint === "index.html"],
