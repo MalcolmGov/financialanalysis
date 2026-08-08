@@ -113,6 +113,70 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(noteCell?.kind).toBe("noteRef"); // NOT "number" — it is a cross-reference
   });
 
+  it("clamps title colspan when Notes is a discrete cell (no 5-col ghost grid)", () => {
+    const cells: Cell[] = [
+      { ...h(0, 0, "Statement of Profit or Loss"), col_span: 2 },
+      h(0, 1, "Notes"),
+      h(0, 2, "Six months ended 31 Dec 2025 Rm Unaudited"),
+      h(0, 3, "Six months ended 31 Dec 2024 Rm Unaudited"),
+      rh(1, 0, "Revenue"),
+      d(1, 1, ""),
+      d(1, 2, "5 053.2"),
+      d(1, 3, "3 802.3"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      tables: {
+        t_pnl: {
+          id: "t_pnl",
+          caption_block: "PnL",
+          prov: [],
+          num_rows: 2,
+          num_cols: 4,
+          cells,
+          column_roles: null,
+        },
+      },
+    };
+    const dm = mapToDocModel(ex, meta);
+    const hdr = dm.tables[0]!.header_matrix[0]!;
+    const headerLogical = hdr.reduce((n, c) => n + c.col_span, 0);
+    expect(headerLogical).toBe(4);
+    expect(hdr[0]!.col_span).toBe(1);
+    expect(hdr.some((c) => /^notes?$/i.test(c.raw))).toBe(true);
+    expect(dm.tables[0]!.rows[0]!.cells).toHaveLength(4);
+  });
+
+  it("treats multi note refs like 5, 7 as noteRef", () => {
+    const cells: Cell[] = [
+      h(0, 0, ""),
+      h(0, 1, "Notes"),
+      h(0, 2, "As at 31 Dec 2025"),
+      h(0, 3, "As at 31 Dec 2024"),
+      rh(1, 0, "Finance income"),
+      d(1, 1, "5, 7"),
+      d(1, 2, "116.6"),
+      d(1, 3, "132.8"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      tables: {
+        t_pnl: {
+          id: "t_pnl",
+          caption_block: "PnL",
+          prov: [],
+          num_rows: 2,
+          num_cols: 4,
+          cells,
+          column_roles: null,
+        },
+      },
+    };
+    const note = mapToDocModel(ex, meta).tables[0]!.rows[0]!.cells[1]!;
+    expect(note.raw).toBe("5, 7");
+    expect(note.kind).toBe("noteRef");
+  });
+
   it("produces a blueprint-conformant, ref-only SitePlan (validateSitePlan clean)", () => {
     const dm = mapToDocModel(extraction(), meta);
     const bp = blueprint();

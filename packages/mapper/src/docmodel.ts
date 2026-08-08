@@ -17,8 +17,8 @@ import { classifySectionTitle, classifyTable, headerRows, noteNumberOf } from ".
 
 const NIL = /^[—–-]$/;
 const DIGIT = /[0-9]/;
-/** A note cross-reference column cell: a bare small integer (e.g. "5"). */
-const NOTE_REF = /^\d{1,2}$/;
+/** Notes column: "5" or "5, 7" — cross-refs, not financial figures. */
+const NOTE_REF = /^\d{1,2}(?:\s*,\s*\d{1,2})*$/;
 
 function cellKind(text: string, isRowHeader: boolean, colIndex: number): DocCell["kind"] {
   const t = text.trim();
@@ -29,28 +29,55 @@ function cellKind(text: string, isRowHeader: boolean, colIndex: number): DocCell
   return "number";
 }
 
+type ExtCell = ExtractionTable["cells"][number];
+
+/**
+ * Resolve header colspan without inventing columns.
+ * Docling often marks the title colspan=2 while also emitting a discrete Notes
+ * cell at c+1 — trusting both yields 5 logical cols vs 4 body cols and shreds
+ * the table layout (numbers land in the notes col width).
+ */
+function resolvedHeaderColSpan(
+  claimed: number,
+  r: number,
+  c: number,
+  numCols: number,
+  byPos: Map<string, ExtCell>,
+): number {
+  let span = Math.max(1, claimed);
+  for (let k = 1; k < span && c + k < numCols; k++) {
+    if (byPos.has(`${r}:${c + k}`)) {
+      span = 1;
+      break;
+    }
+  }
+  return Math.min(span, numCols - c);
+}
+
 function buildFinTable(table: ExtractionTable, docTableId: string, mustAppear: boolean): FinTable {
   const nHeader = headerRows(table);
   const byPos = new Map<string, (typeof table.cells)[number]>();
   for (const c of table.cells) byPos.set(`${c.r}:${c.c}`, c);
 
-  // Header matrix: the top nHeader rows.
+  // Header matrix: advance by resolved colspan so covered empty slots are skipped.
   const header_matrix = [];
   for (let r = 0; r < nHeader; r++) {
     const row = [];
-    for (let c = 0; c < table.num_cols; c++) {
+    for (let c = 0; c < table.num_cols; ) {
       const cell = byPos.get(`${r}:${c}`);
+      const col_span = resolvedHeaderColSpan(cell?.col_span ?? 1, r, c, table.num_cols, byPos);
       row.push({
         raw: cell?.text ?? "",
-        col_span: cell?.col_span ?? 1,
+        col_span,
         row_span: cell?.row_span ?? 1,
         src_ref: `ext:${table.id}:r${r}c${c}`,
       });
+      c += col_span;
     }
     header_matrix.push(row);
   }
 
-  // Data rows.
+  // Data rows — dense grid (one cell per column).
   const rows = [];
   for (let r = nHeader; r < table.num_rows; r++) {
     const cells: DocCell[] = [];
@@ -60,8 +87,7 @@ function buildFinTable(table: ExtractionTable, docTableId: string, mustAppear: b
       const isRowHeader = cell?.is_row_header ?? false;
       let kind = cellKind(raw, isRowHeader, c);
       if (kind === "number" && NOTE_REF.test(raw.trim()) && c === 1) {
-        // A small-integer second column adjacent to the label is a note ref,
-        // not a data value (IAS 1 "Notes" column) — do not treat as a number.
+        // Notes column cross-ref — not a data value.
         kind = "noteRef";
       }
       cells.push({
@@ -69,7 +95,9 @@ function buildFinTable(table: ExtractionTable, docTableId: string, mustAppear: b
         raw,
         kind,
         footnote_refs: [],
-        ...(kind === "noteRef" ? { note_number: Number(raw.trim()) || null } : {}),
+        ...(kind === "noteRef"
+          ? { note_number: Number(raw.trim().split(/\s*,\s*/)[0]!) || null }
+          : {}),
       });
     }
     rows.push({ cells });

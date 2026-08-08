@@ -285,5 +285,7 @@ describe("CommentaryComposer", () => {
     expect(html).toContain('data-src="ext:blk-l2"');
     expect(html).toContain("The Group delivered a solid operating performance.");
     expect(html).toContain("prose-lead");
+    expect(html).toContain("commentary-section");
+    expect(html).not.toMatch(/commentary-section[^>]*\breveal\b/);
   });
 });

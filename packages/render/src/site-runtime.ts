@@ -5,7 +5,7 @@
  * original DOM string when the animation completes.
  *
  * Progressive enhancement only: content must remain visible if this never runs.
- * html.rs-motion is armed here so CSS may hide .reveal/.kpi-card for motion.
+ * html.rs-motion is armed inside initReveal after above-fold items are marked visible.
  */
 
 /** Relative href to assets/site.js from a page path. */
@@ -20,8 +20,8 @@ export const SITE_RUNTIME_JS = `
 (function(){
   'use strict';
 
-  /* Arm scroll-reveal CSS only when runtime actually executes. */
-  try { document.documentElement.classList.add('rs-motion'); } catch (e) {}
+  /* rs-motion is armed inside initReveal AFTER marking above-fold items visible.
+     Arming first hid .reveal at opacity:0; iframe IO sometimes never fired → blank. */
 
   function pageKey(){
     try {
@@ -301,6 +301,15 @@ export const SITE_RUNTIME_JS = `
   /* ── Scroll reveal ── */
   function initReveal(){
     var items = document.querySelectorAll('.reveal, .kpi-card');
+    var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+    /* Sync: mark anything already in the viewport before hiding the rest. */
+    items.forEach(function(el){
+      var rect = el.getBoundingClientRect();
+      if (rect.top < vh * 0.98 && rect.bottom > 0) {
+        el.classList.add('is-visible', 'revealed');
+      }
+    });
+    try { document.documentElement.classList.add('rs-motion'); } catch (e) {}
     if (!items.length) return;
     if (!('IntersectionObserver' in window)) {
       items.forEach(function(el){ el.classList.add('is-visible', 'revealed'); });
@@ -312,8 +321,18 @@ export const SITE_RUNTIME_JS = `
         entry.target.classList.add('is-visible', 'revealed');
         io.unobserve(entry.target);
       });
-    }, { threshold: 0.1, rootMargin: '0px 0px -4% 0px' });
-    items.forEach(function(el){ io.observe(el); });
+    }, { threshold: 0.05, rootMargin: '0px 0px 0px 0px' });
+    items.forEach(function(el){
+      if (!el.classList.contains('is-visible')) io.observe(el);
+    });
+    /* Failsafe — never leave editorial/KPI stuck at opacity:0 in iframe. */
+    setTimeout(function(){
+      items.forEach(function(el){
+        if (!el.classList.contains('is-visible')) {
+          el.classList.add('is-visible', 'revealed');
+        }
+      });
+    }, 900);
   }
 
   /* ── Selection mark / share tooltip ── */

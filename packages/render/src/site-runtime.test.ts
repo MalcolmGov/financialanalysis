@@ -47,12 +47,20 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain("failBannerImg");
     expect(SITE_RUNTIME_JS).toContain("nav-brand--logo");
     expect(SITE_RUNTIME_JS).toContain("rs-motion");
+    expect(SITE_RUNTIME_JS).toContain("getBoundingClientRect");
+    expect(SITE_RUNTIME_JS).toContain("setTimeout");
+  });
+
+  it("arms rs-motion only inside initReveal (not at parse time)", () => {
+    const armIdx = SITE_RUNTIME_JS.indexOf("classList.add('rs-motion')");
+    const initIdx = SITE_RUNTIME_JS.indexOf("function initReveal");
+    expect(armIdx).toBeGreaterThan(initIdx);
   });
 
   it("stays lean vs WW-scale runtime bloat", () => {
     const bytes = Buffer.byteLength(SITE_RUNTIME_JS, "utf8");
     expect(bytes).toBeGreaterThan(4_000);
-    expect(bytes).toBeLessThan(20_000);
+    expect(bytes).toBeLessThan(22_000);
   });
 
   it("restores exact data-final after count-up (no invented figures)", () => {

@@ -345,7 +345,9 @@ describe("P2 statement IR render fidelity", () => {
     expect(html).toContain("14 639.9");
     expect(html).toContain("@media print");
     expect(html).toContain("print-color-adjust");
-    expect(html).toContain("position:sticky");
+    expect(html).toContain("h-fig");
+    expect(html).toMatch(/width:165px|col\.c-cur/);
+    expect(html).not.toContain("border-left:1px solid #6C6C6C");
     expect(html).toContain("border-top:2px solid var(--dna-brand");
 
     const audit = checkStatementIrFidelity(html, "financials/balance-sheet.html");

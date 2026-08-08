@@ -106,7 +106,8 @@ function bandHtml(
     .filter(Boolean)
     .join("\n");
   if (!bodies) return null;
-  return `<section class="commentary-section reveal" id="${band.id}" data-kind="${band.kind}" data-dna-component="commentary-section">
+  // No .reveal — editorial must stay visible even if site.js/IO fails in iframe.
+  return `<section class="commentary-section" id="${band.id}" data-kind="${band.kind}" data-dna-component="commentary-section">
 <header class="commentary-section__hdr">
 <p class="commentary-section__eyebrow">${escapeHtml(band.eyebrow)}</p>
 <h2 class="commentary-section__title">${escapeHtml(band.label)}</h2>

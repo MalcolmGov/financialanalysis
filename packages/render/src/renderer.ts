@@ -83,17 +83,17 @@ function findCurrentPeriodCol(table: FinTable): number | null {
 /** Stack IR period headers (As at / date / Rm / audit) without inventing text. */
 function formatHeaderCellHtml(raw: string): string {
   const t = raw.replace(/\s+/g, " ").trim();
-  // Full IR stack: "As at 31 Dec 2025 Rm Unaudited"
+  const lead =
+    "As at|For the (?:six months|year) ended|Six months ended|Year ended";
+  // Full IR stack: "Six months ended 31 Dec 2025 Rm Unaudited"
   const full = t.match(
-    /^(As at|For the (?:six months|year) ended)\s+(.+?)\s+(Rm|R'000|R million)\s+(Unaudited|Audited)$/i,
+    new RegExp(`^(${lead})\\s+(.+?)\\s+(Rm|R'000|R million)\\s+(Unaudited|Audited)$`, "i"),
   );
   if (full) {
     return `${escapeHtml(full[1]!)}<br><span class="h-fig__date">${escapeHtml(full[2]!)}</span><br><span class="h-fig__unit">${escapeHtml(full[3]!)}</span><br><span class="h-fig__audit">${escapeHtml(full[4]!)}</span>`;
   }
   // Partial: "As at 31 Dec 2025" / "Six months ended 31 Dec 2025 Rm"
-  const partial = t.match(
-    /^(As at|For the (?:six months|year) ended|Six months ended|Year ended)\s+(.+)$/i,
-  );
+  const partial = t.match(new RegExp(`^(${lead})\\s+(.+)$`, "i"));
   if (partial) {
     const rest = partial[2]!.trim();
     const withUnit = rest.match(/^(.*?)\s+(Rm|R'000|R million)$/i);
@@ -116,17 +116,41 @@ function noteColIndex(table: FinTable): number | null {
   return null;
 }
 
+/**
+ * Prefer body width when header colspans were over-claimed (layout defense).
+ * Clamps individual header spans so Σ spans === bodyColCount.
+ */
+function normalizedHeaderMatrix(
+  table: FinTable,
+  bodyColCount: number,
+): FinTable["header_matrix"] {
+  return table.header_matrix.map((row) => {
+    const out: typeof row = [];
+    let used = 0;
+    for (const h of row) {
+      if (used >= bodyColCount) break;
+      let span = Math.max(1, h.col_span ?? 1);
+      if (used + span > bodyColCount) span = bodyColCount - used;
+      // Discrete Notes / figure cells after a title must not be absorbed.
+      if (span > 1 && out.length === 0 && row.length > 1) {
+        const restNeed = row.slice(1).reduce((n, x) => n + Math.max(1, x.col_span ?? 1), 0);
+        if (used + span + restNeed > bodyColCount) span = 1;
+      }
+      out.push({ ...h, col_span: span });
+      used += span;
+    }
+    return out;
+  });
+}
+
 function renderFinTable(table: FinTable, notesBase: string | null): string {
-  const cur0 = findCurrentPeriodCol(table);
-  const noteCol = noteColIndex(table);
+  const bodyColCount = Math.max(...table.rows.map((r) => r.cells.length), 1);
+  const header_matrix = normalizedHeaderMatrix(table, bodyColCount);
+  const normTable = { ...table, header_matrix };
+  const cur0 = findCurrentPeriodCol(normTable);
+  const noteCol = noteColIndex(normTable);
   const curAttr = cur0 != null ? ` data-cur-col="${cur0 + 1}"` : "";
-  const colCount = Math.max(
-    ...table.header_matrix.map((row) =>
-      row.reduce((n, h) => n + Math.max(1, h.col_span ?? 1), 0),
-    ),
-    ...table.rows.map((r) => r.cells.length),
-    1,
-  );
+  const colCount = bodyColCount;
   const cols = Array.from({ length: colCount }, (_, i) => {
     if (i === 0) return `<col class="c-label">`;
     if (noteCol != null && i === noteCol) return `<col class="c-note">`;
@@ -134,7 +158,7 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
     return `<col class="c-cmp">`;
   }).join("");
 
-  const head = table.header_matrix
+  const head = header_matrix
     .map((row) => {
       let col = 0;
       const cells = row
@@ -159,7 +183,7 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
             .join(" ");
           const cls = classes ? ` class="${classes}"` : "";
           const inner = isNote || isTitle ? escapeHtml(h.raw) : formatHeaderCellHtml(h.raw);
-          return `<th${cls}${src}${h.col_span > 1 ? ` colspan="${h.col_span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${inner}</th>`;
+          return `<th${cls}${src}${span > 1 ? ` colspan="${span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${inner}</th>`;
         })
         .join("");
       return `<tr>${cells}</tr>`;
@@ -397,7 +421,7 @@ body{margin:0;padding:0;background:var(--dna-paper,#fff);color:var(--dna-ink,#11
 main[data-dna-component="page-shell"]{max-width:1120px;margin:0 auto;padding:0 clamp(1rem,3vw,2rem) 2rem;display:grid;gap:1.5rem}
 .statement-table{overflow-x:auto;margin:.35rem 0 1rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:var(--dna-paper,#fff)}
 .fin-table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);letter-spacing:-.01em}
-.fin-table thead th{position:sticky;top:0;z-index:2}
+.fin-table thead th{position:relative;z-index:1}
 .fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:700;text-align:left;padding:10px 12px;vertical-align:bottom;font-size:11px;letter-spacing:.03em;line-height:1.35;border-bottom:2px solid var(--dna-brand,#FCAF17)}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
 .fin-table td{padding:7px 12px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 9%,transparent);vertical-align:top}
@@ -428,27 +452,27 @@ ${STATEMENT_BASE_CSS}
 ${STATEMENT_IR_CSS}`;
 }
 
-/** WW-recognizable statement IR skin (capability parity, not pixel clone). */
+/** WW-recognizable statement IR skin (sofp-style widths; no decorative grp rules). */
 const STATEMENT_IR_CSS = `
 /* rs-statement-ir */
-.statement-table,.fin-wrapper{overflow-x:auto;margin:.35rem 0 1.35rem;border:0;border-top:2px solid var(--dna-brand,#FCAF17);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
+.statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:.35rem 0 1.35rem;border:0;border-top:2px solid var(--dna-brand,#FCAF17);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
 .statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 .7rem;padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#FCAF17);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
 .statement-unit__value{color:var(--dna-masthead,#0F3B2E);font-weight:800;letter-spacing:.06em}
-.fin-table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.82rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
+.fin-table{width:100%;min-width:36rem;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.82rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
 .fin-table col.c-label{width:auto}
-.fin-table col.c-note{width:3.4em}
-.fin-table col.c-cur,.fin-table col.c-cmp{width:6.75em}
-.fin-table thead th{position:sticky;top:0;z-index:3;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.35;border:none;border-bottom:2px solid var(--dna-brand,#FCAF17);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
-.fin-table thead th.h-title{text-align:left;font-size:.9rem;letter-spacing:-.005em;font-weight:800;padding-left:4px;background:var(--dna-paper,#fff)!important;color:color-mix(in srgb,var(--dna-ink,#221F1F) 55%,#839097)}
-.fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important}
-.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#839097)!important;border-left:1px solid #fff;white-space:nowrap;padding:8px 10px;line-height:1.45}
+.fin-table col.c-note{width:54px}
+.fin-table col.c-cur,.fin-table col.c-cmp{width:165px}
+.fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.35;border:none;border-bottom:2px solid var(--dna-brand,#FCAF17);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
+.fin-table thead th.h-title{text-align:left;font-size:.9rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:#839097}
+.fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F)}
+.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#839097)!important;border-left:1px solid #fff;white-space:normal;padding:8px 10px;line-height:1.5}
 .fin-table thead th.h-fig.cur{filter:brightness(.94)}
 .fin-table thead th.h-fig .h-fig__date{display:block;font-weight:800;letter-spacing:-.01em;line-height:1.3}
 .fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:block;font-weight:600;opacity:.92;font-size:.7rem;margin-top:.1rem}
-.fin-table td{padding:3.5px 8px;vertical-align:middle;line-height:1.35;border-bottom:none}
-.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:4px}
-.fin-table td.cell-num,.fin-table td.cmp{text-align:right;white-space:nowrap;padding-right:10px;font-variant-numeric:tabular-nums}
-.fin-table td.cur{font-weight:700}
+.fin-table td{padding:3px 8px;vertical-align:middle;line-height:1.35;border-bottom:none}
+.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px}
+.fin-table td.cell-num,.fin-table td.cmp,.fin-table td.cur{text-align:right;white-space:nowrap;padding-right:10px;font-variant-numeric:tabular-nums}
+.fin-table td.cur{font-weight:700;background:var(--dna-shading,#F2F2F2)}
 .fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
 .fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:10px;padding-bottom:3px;color:var(--dna-ink,#221F1F);font-size:.82rem;letter-spacing:.01em;background:transparent!important}
 .fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:transparent!important}
@@ -461,25 +485,21 @@ const STATEMENT_IR_CSS = `
 .fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
 .fin-table .note-ref{color:color-mix(in srgb,var(--dna-brand,#FCAF17) 35%,var(--dna-masthead,#0F3B2E));text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#FCAF17) 70%,#C7B08B);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#FCAF17)}
-.fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.4em;font-size:.76rem;color:var(--dna-ink,#221F1F)}
+.fin-table .cell-noteRef,.fin-table td.note{text-align:center;font-size:.76rem;color:var(--dna-ink,#221F1F)}
 .fin-table tr.bd-tan>td{border-top:1.5px solid #CDAE86}
 .fin-table tr.bd-blue>td{border-top:1px solid #BAC4CA}
-.fin-table tr.grp td.cur{border-left:1px solid #6C6C6C}
-.fin-table tr.grp td.cmp:last-child,.fin-table tr.grp td.cell-num.cmp:last-child{border-right:1px solid #6C6C6C}
-.fin-table tr.grp-top td.cur,.fin-table tr.grp-top td.cmp,.fin-table tr.grp-top td.cell-num{border-top:1px solid #6C6C6C}
-.fin-table tr.grp-bot td.cur,.fin-table tr.grp-bot td.cmp,.fin-table tr.grp-bot td.cell-num{border-bottom:1px solid #6C6C6C}
 .fin-table tbody tr{transition:background-color .12s ease}
 .fin-table tbody tr:hover td{background-color:#DCE3E7!important}
 .fin-table tbody tr:hover td.cur{background-color:#CBD4D9!important}
 @media (max-width:720px){
-  .fin-table{table-layout:auto;font-size:.72rem}
+  .fin-table{table-layout:auto;font-size:.72rem;min-width:0}
   .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}
   .fin-table td.cur,.fin-table td.cmp,.fin-table td.cell-num{padding-left:4px;padding-right:6px}
 }
 @media print{
   .site-nav,.nav-mobile,.nav-toggle,.share-bar,.page-pager,.xls-toolbar,.share-tooltip,.sel-share-mark{display:none!important}
   .statement-table,.fin-wrapper{overflow:visible;border-top:2px solid #000;break-inside:avoid}
-  .fin-table{font-size:9.5pt;table-layout:auto}
+  .fin-table{font-size:9.5pt;table-layout:auto;min-width:0}
   .fin-table thead th{position:static;background:#fff!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .fin-table thead th.h-fig{background:#839097!important;color:#fff!important}
   .fin-table td.cur,.fin-table[data-cur-col] tbody td.cur{background:#F2F2F2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}

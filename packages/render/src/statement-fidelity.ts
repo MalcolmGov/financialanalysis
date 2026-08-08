@@ -58,14 +58,17 @@ export function checkStatementIrFidelity(
     ),
   );
 
+  // Stable thead (WW sofp): grey period headers — sticky+overflow was clipping.
   findings.push(
     finding(
-      /position:\s*sticky/.test(html) && /thead th/.test(html),
-      "statement-sticky-thead",
+      /\.fin-table\s+thead\s+th\.h-fig/.test(html) ||
+        /thead th\.h-fig/.test(html) ||
+        /class="[^"]*\bh-fig\b/.test(markup),
+      "statement-stable-thead",
       path,
-      /position:\s*sticky/.test(html)
-        ? `${path}: sticky thead CSS present`
-        : `${path}: sticky thead CSS missing`,
+      /h-fig/.test(html)
+        ? `${path}: period header (h-fig) thead present`
+        : `${path}: period header (h-fig) thead missing`,
     ),
   );
 
