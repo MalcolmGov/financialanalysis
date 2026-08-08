@@ -123,9 +123,11 @@ describe("mobile nav chrome", () => {
     expect(CHROME_CSS).toMatch(/\.home-hero\{[^}]*max-width:none/);
     expect(CHROME_CSS).toMatch(/\.page-hero\{[^}]*max-width:none/);
     expect(CHROME_CSS).toMatch(/\.page-statement\{[^}]*max-width:none/);
-    expect(CHROME_CSS).toMatch(/\.home-body,\.prose-body\{[^}]*max-width:1120px/);
+    expect(CHROME_CSS).toMatch(
+      /\.home-body,\.prose-body\{[^}]*max-width:var\(--rs-rail\)/,
+    );
     expect(CHROME_CSS).not.toMatch(
-      /\.home-body,\.prose-body,\.page-statement\{[^}]*max-width:1120px/,
+      /\.home-body,\.prose-body,\.page-statement\{[^}]*max-width/,
     );
   });
 });
@@ -151,6 +153,10 @@ describe("share chrome", () => {
     expect(CHROME_CSS).toMatch(
       /\.share-bar\{[^}]*max-width:none[^}]*border-top:3px solid var\(--dna-brand/,
     );
+    expect(CHROME_CSS).toContain(".share-bar__inner");
+    expect(CHROME_CSS).toContain("--rs-rail");
+    expect(CHROME_CSS).toContain("--rs-fs-body");
+    expect(bar).toContain("share-bar__inner");
     expect(CHROME_CSS).toContain(".share-bar + .site-footer .site-footer__accent");
   });
 });

@@ -429,6 +429,51 @@ export function enrichMultiPageFiles(
     out["financials/notes.html"] = html;
   }
 
+  // Legacy aggregate → secondary "All tables" surface (kept for tools/compat).
+  if (out["statements/index.html"]) {
+    let html = out["statements/index.html"];
+    html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
+    html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
+    html = html.replace(
+      /<nav class="breadcrumb"[\s\S]*?<\/nav>/i,
+      "",
+    );
+    if (!/<meta\s+name=["']robots["']/i.test(html)) {
+      html = html.replace(
+        /<head([^>]*)>/i,
+        `<head$1><meta name="robots" content="noindex,follow">`,
+      );
+    }
+    const hero = pageHero({
+      path: "statements/index.html",
+      title: "All tables",
+      company,
+      periodLabel,
+      eyebrow: "Secondary · aggregate view",
+    });
+    const finPages = plan.pages.filter(
+      (p) => p.path.startsWith("financials/") && p.path.endsWith(".html"),
+    );
+    const jumpLinks = finPages
+      .map((p) => {
+        const href = `../${p.path}`;
+        return `<a href="${escapeHtml(href)}">${escapeHtml(p.title)}</a>`;
+      })
+      .join("");
+    const jump = `<nav class="statements-aggregate__jump" data-dna-component="statements-aggregate" aria-label="Primary statement pages"><p class="statements-aggregate__label">Prefer individual statements</p>${jumpLinks}<p class="statements-aggregate__note">This page concatenates every table for tooling and offline checks. Use the Financials menu for the designed IR pages.</p></nav>`;
+    html = html.replace(
+      /(<main[^>]*>)/i,
+      (_m, open: string) => `${open}${hero}${jump}`,
+    );
+    // Demote shell class so it is not mistaken for a designed statement page.
+    html = html.replace(
+      /class="([^"]*\bpage-statement\b[^"]*)"/i,
+      (_m, cls: string) =>
+        `class="${cls.replace(/\bpage-statement\b/, "page-statement page-statement--aggregate")}"`,
+    );
+    out["statements/index.html"] = html;
+  }
+
   // Statement page heroes (eyebrow, H1, period) + Excel toolbar
   for (const page of plan.pages) {
     if (!page.path.startsWith("financials/")) continue;

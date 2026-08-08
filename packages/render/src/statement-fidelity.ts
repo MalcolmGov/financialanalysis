@@ -122,7 +122,10 @@ export function checkStatementIrFidelity(
 
   const stacked =
     /\bh-fig\b/.test(markup) &&
-    (markup.includes("h-fig__date") || /As at<br>/i.test(markup) || /ended<br>/i.test(markup));
+    (markup.includes("h-fig__date") ||
+      markup.includes("h-fig__lead") ||
+      /As at<br>/i.test(markup) ||
+      /ended<br>/i.test(markup));
   findings.push(
     finding(
       stacked || /\bh-fig\b/.test(markup),

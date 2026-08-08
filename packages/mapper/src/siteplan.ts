@@ -270,14 +270,14 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   });
   nav.push({ label: "Downloads", href: "downloads.html" });
 
-  // Compatibility aggregate for tools that still look for statements/index.html
+  // Compatibility aggregate — secondary "all tables" surface (not in primary nav).
   if (hasTemplate(blueprint, "bp:tpl_statement") || hasTemplate(blueprint, stmtTpl)) {
     const aggTpl = hasTemplate(blueprint, "bp:tpl_statement") ? "bp:tpl_statement" : stmtTpl;
     const aggRegion = firstRegionAccepting(blueprint, aggTpl, tableComponent);
     pages.push({
       path: "statements/index.html",
       template: aggTpl,
-      title: "Financial statements",
+      title: "All tables",
       regions: {
         [aggRegion]: docModel.tables.map((t) => ({
           component: tableComponent,

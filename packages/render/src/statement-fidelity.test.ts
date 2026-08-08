@@ -331,7 +331,8 @@ describe("P2 statement IR render fidelity", () => {
     expect(html).toContain("h-fig__date");
     expect(html).toContain("h-fig__unit");
     expect(html).toContain("h-fig__audit");
-    expect(html).toContain("As at<br>");
+    expect(html).toContain("h-fig__lead");
+    expect(html).toContain("As at");
     expect(html).toContain("r-section bd-tan");
     expect(html).toContain("r-line");
     expect(html).toContain("r-total");

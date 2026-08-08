@@ -385,6 +385,11 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(paths).toContain("financials/notes.html");
     expect(paths).toContain("administration.html");
     expect(paths).toContain("downloads.html");
+    expect(paths).toContain("statements/index.html");
+    expect(plan.pages.find((p) => p.path === "statements/index.html")?.title).toBe(
+      "All tables",
+    );
+    expect(plan.nav.some((n) => n.href.startsWith("statements/"))).toBe(false);
     const { files } = renderSitePlan(plan, bp, { extraction: extraction(), docModel: dm });
     expect(files["financials/income-statement.html"]).toContain("site-nav");
     expect(files["financials/income-statement.html"]).toContain("5 053.2");
@@ -396,6 +401,12 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(files["financials/income-statement.html"]).toMatch(
       /class="[^"]*\br-(?:section|line|subtotal|total)\b/,
     );
+    const agg = files["statements/index.html"]!;
+    expect(agg).toContain("All tables");
+    expect(agg).toContain("Secondary · aggregate view");
+    expect(agg).toContain("statements-aggregate");
+    expect(agg).toContain('name="robots" content="noindex,follow"');
+    expect(agg).toContain("../financials/income-statement.html");
   });
 
   it("Gate B catches a MAPPER bug (a mis-copied number) against the source extraction", () => {
