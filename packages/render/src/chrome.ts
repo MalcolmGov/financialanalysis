@@ -300,7 +300,11 @@ body{margin:0;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);font
 .share-tip-btn{font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--dna-paper,#fff);background:rgba(255,255,255,.06);border:0;padding:.42rem .55rem;cursor:pointer}
 .share-tip-btn:hover{color:var(--dna-brand,#FCAF17);background:rgba(255,255,255,.1)}
 mark.user-mark{background:color-mix(in srgb,var(--dna-brand,#FCAF17) 34%,transparent);color:inherit;border-radius:2px;padding:0 2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dna-brand,#FCAF17) 48%,transparent)}
-.reveal,.kpi-card{opacity:0;transform:translateY(18px);transition:opacity .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1)}
+/* Progressive enhancement: never blank the page if site.js fails to load
+   (console iframe sandbox / CSP / auth). Motion only arms after runtime sets html.rs-motion. */
+html.rs-motion .reveal:not(.is-visible):not(.revealed),
+html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:translateY(18px)}
+.reveal,.kpi-card{transition:opacity .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1)}
 .reveal.is-visible,.reveal.revealed,.kpi-card.is-visible,.kpi-card.revealed{opacity:1;transform:none}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15.75rem,1fr));gap:1.05rem;margin:0}
 .kpi-card{display:flex;flex-direction:column;gap:.55rem;padding:1.35rem 1.3rem 1.15rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 11%,transparent);background:linear-gradient(180deg,var(--dna-paper,#fff),color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff)));border-left:4px solid var(--dna-brand,#FCAF17);min-height:9.75rem;box-shadow:0 1px 0 color-mix(in srgb,var(--dna-ink,#111) 5%,transparent)}

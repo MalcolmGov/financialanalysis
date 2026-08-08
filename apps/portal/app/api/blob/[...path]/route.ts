@@ -4,7 +4,8 @@ import { getPrivate } from "../../../../lib/blob";
 /**
  * The ONLY path by which artifact bytes reach a browser. Operator-authed,
  * access-logged, no-store. No raw Blob URL is ever exposed; prototypes render
- * through this route into a sandboxed, cookie-less preview iframe.
+ * through this route into a sandboxed preview iframe (allow-scripts +
+ * allow-same-origin so CSP 'self' can load relative assets/site.js).
  *
  * Multipage site drafts reference relative assets (assets/brand/*, fonts,
  * site.js). CSP must allow same-origin subresources — not only data: URIs —

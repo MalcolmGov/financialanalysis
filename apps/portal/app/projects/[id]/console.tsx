@@ -1265,7 +1265,10 @@ export function ProjectConsole(props: {
                         key={`${selectedPage.path}-${previewBust}`}
                         title={selectedPage.title}
                         src={selectedPage.previewUrl}
-                        sandbox="allow-scripts"
+                        /* allow-same-origin: blob CSP uses 'self' for site.js/fonts/logos;
+                           without it the opaque sandbox origin blocks assets and reveal JS,
+                           leaving .reveal/.kpi-card at opacity:0 (blank home). */
+                        sandbox="allow-scripts allow-same-origin"
                         style={{
                           width: previewWidth === "full" ? "100%" : previewWidth,
                         }}
@@ -1342,7 +1345,7 @@ export function ProjectConsole(props: {
                   key={prototype.versionId}
                   title={`Optional prototype v${prototype.versionNumber}`}
                   src={`${prototype.previewUrl}?v=${prototype.versionNumber}`}
-                  sandbox="allow-scripts"
+                  sandbox="allow-scripts allow-same-origin"
                   style={{ width: "100%" }}
                 />
               </div>

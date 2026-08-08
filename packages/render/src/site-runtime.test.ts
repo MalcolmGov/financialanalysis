@@ -33,6 +33,7 @@ describe("SITE_RUNTIME_JS", () => {
     expect(SITE_RUNTIME_JS).toContain("data-brand-img");
     expect(SITE_RUNTIME_JS).toContain("initBrandImages");
     expect(SITE_RUNTIME_JS).toContain("nav-brand--logo");
+    expect(SITE_RUNTIME_JS).toContain("rs-motion");
   });
 });
 

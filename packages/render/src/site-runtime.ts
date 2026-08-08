@@ -17,6 +17,9 @@ export const SITE_RUNTIME_JS = `
 (function(){
   'use strict';
 
+  /* Arm scroll-reveal CSS only when runtime actually executes. */
+  try { document.documentElement.classList.add('rs-motion'); } catch (e) {}
+
   function pageKey(){
     try {
       var p = (location.pathname || '').split('/').filter(Boolean).pop() || 'index.html';
