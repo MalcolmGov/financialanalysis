@@ -193,15 +193,16 @@ async function main() {
   };
 
   // Asset 200s via the same authenticated preview path (iframe subresources).
+  // Collect every assets/* href so the rollup's broken-asset-href check sees
+  // the same tree the zip/offline audit would (xlsx/pdf/fonts/brand).
   if (site.prefix) {
-    for (const asset of REQUIRED_ASSETS) {
-      if (!(await fetchAsset(asset))) failed += 1;
+    const assetRefs = new Set<string>(REQUIRED_ASSETS);
+    for (const html of Object.values(files)) {
+      for (const m of html.matchAll(/(?:src|href)="((?:\.\.\/)*assets\/[^"#?]+)"/gi)) {
+        assetRefs.add(m[1]!.replace(/^(?:\.\.\/)+/, "").replace(/^\.\//, ""));
+      }
     }
-    const home = files["index.html"] ?? "";
-    const brandRefs = [
-      ...home.matchAll(/(?:src|href)="((?:\.\.\/)*assets\/brand\/[^"]+)"/g),
-    ].map((m) => m[1]!.replace(/^(?:\.\.\/)+/, ""));
-    for (const rel of new Set(brandRefs)) {
+    for (const rel of [...assetRefs].sort()) {
       if (!(await fetchAsset(rel))) failed += 1;
     }
   }
