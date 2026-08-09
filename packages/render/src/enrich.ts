@@ -650,10 +650,11 @@ export function enrichMultiPageFiles(
     }
     html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
     html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
-    const dualEntity =
-      /Group and Company/i.test(page.title) ||
-      (/\bGROUP\b/i.test(html) && /\bCOMPANY\b/i.test(html));
     const splitBook = /financials\/(group|company)\//i.test(page.path);
+    const dualEntity =
+      !splitBook &&
+      (/Group and Company/i.test(page.title) ||
+        (/\bGROUP\b/i.test(html) && /\bCOMPANY\b/i.test(html)));
     const bookEyebrow = page.path.includes("/group/")
       ? "Group statements"
       : page.path.includes("/company/")
