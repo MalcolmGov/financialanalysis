@@ -23,6 +23,7 @@ import {
 } from "../../../../../../lib/site-chat";
 import {
   buildExtractionEvidence,
+  buildExtractionEvidenceFallback,
   mapExtractionToDocModelForChat,
   summarizeSiteStructure,
 } from "../../../../../../lib/site-chat-context";
@@ -201,13 +202,6 @@ export async function POST(
     return Response.json({ error: `could not load page ${pagePath}` }, { status: 404 });
   }
   const fileHtml = fileBytes.toString("utf8");
-  const { text: htmlForModel, truncated: htmlTruncated } = truncateForModel(fileHtml);
-  const chromeBlock =
-    chromeFiles.length === 0
-      ? ""
-      : `\nSHARED CHROME FILES (patch these only for site-wide styles; copy search from the matching file):\n${chromeFiles
-          .map((f) => `--- ${f.path} ---\n${f.text}`)
-          .join("\n\n")}`;
 
   let dnaSummary = "(no design DNA on this run)";
   const [dnaArt] = await db()
@@ -238,6 +232,13 @@ export async function POST(
   let extractionContext =
     "SOURCE EXTRACTION CONTEXT: (unavailable — edit HTML carefully; do not invent figures)";
   let extractionTruncated = false;
+  let extractionMeta: {
+    available: boolean;
+    chars: number;
+    chunks: number;
+    truncated: boolean;
+    error?: string;
+  } = { available: false, chars: 0, chunks: 0, truncated: false };
   try {
     const [extArt] = await db()
       .select({ blobPath: schema.artifacts.blobPath })
@@ -251,33 +252,79 @@ export async function POST(
       const extraction = JSON.parse(
         (await getPrivate(extArt.blobPath)).toString("utf8"),
       ) as ExtractionResult;
-      const docModel = mapExtractionToDocModelForChat(extraction, issuerName, periodLabel);
-
-      let sitePlan: SitePlan | null = null;
-      const sitePlanBlob =
-        typeof (meta as { sitePlanBlobPath?: string }).sitePlanBlobPath === "string"
-          ? (meta as { sitePlanBlobPath: string }).sitePlanBlobPath
-          : `${prefix}/_meta/site-plan.json`;
+      let evidence;
       try {
-        sitePlan = JSON.parse((await getPrivate(sitePlanBlob)).toString("utf8")) as SitePlan;
-      } catch {
-        sitePlan = null;
+        const docModel = mapExtractionToDocModelForChat(extraction, issuerName, periodLabel);
+        let sitePlan: SitePlan | null = null;
+        const sitePlanBlob =
+          typeof (meta as { sitePlanBlobPath?: string }).sitePlanBlobPath === "string"
+            ? (meta as { sitePlanBlobPath: string }).sitePlanBlobPath
+            : `${prefix}/_meta/site-plan.json`;
+        try {
+          sitePlan = JSON.parse((await getPrivate(sitePlanBlob)).toString("utf8")) as SitePlan;
+        } catch {
+          sitePlan = null;
+        }
+        evidence = buildExtractionEvidence({
+          extraction,
+          docModel,
+          pagePath,
+          message,
+          pages,
+          sitePlan,
+        });
+      } catch (mapErr) {
+        const mapMsg = mapErr instanceof Error ? mapErr.message : String(mapErr);
+        console.error(`[site_chat] DocModel map failed for ${projectId}:`, mapMsg);
+        evidence = buildExtractionEvidenceFallback({
+          extraction,
+          pagePath,
+          message,
+          pages,
+        });
       }
-
-      const evidence = buildExtractionEvidence({
-        extraction,
-        docModel,
-        pagePath,
-        message,
-        pages,
-        sitePlan,
-      });
       extractionContext = evidence.text;
       extractionTruncated = evidence.truncated;
+      extractionMeta = {
+        available: true,
+        chars: evidence.text.length,
+        chunks: evidence.chunkCount,
+        truncated: evidence.truncated,
+      };
+    } else {
+      extractionMeta = {
+        available: false,
+        chars: 0,
+        chunks: 0,
+        truncated: false,
+        error: "no extraction_result artifact",
+      };
     }
-  } catch {
-    /* keep unavailable notice */
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[site_chat] extraction context failed for ${projectId}:`, msg);
+    extractionMeta = {
+      available: false,
+      chars: 0,
+      chunks: 0,
+      truncated: false,
+      error: msg,
+    };
   }
+
+  // Cap page HTML tighter when extraction evidence is present so grounded
+  // PDF context is not crowded out of the model window.
+  const htmlBudget = extractionMeta.available ? 100_000 : undefined;
+  const { text: htmlForModel, truncated: htmlTruncated } = truncateForModel(
+    fileHtml,
+    htmlBudget,
+  );
+  const chromeBlock =
+    chromeFiles.length === 0
+      ? ""
+      : `\nSHARED CHROME FILES (patch these only for site-wide styles; copy search from the matching file):\n${chromeFiles
+          .map((f) => `--- ${f.path} ---\n${f.text}`)
+          .join("\n\n")}`;
 
   const userPayload = buildSiteChatUserPayload({
     company: issuerName,
@@ -343,6 +390,7 @@ export async function POST(
       targetPath: pagePath,
       needsNumberOverride: false,
       costUsd: usageCost,
+      extractionContext: extractionMeta,
     });
   }
 
@@ -358,6 +406,7 @@ export async function POST(
       needsNumberOverride: true,
       numberChangeSummary: summary,
       costUsd: usageCost,
+      extractionContext: extractionMeta,
     });
   }
 
@@ -370,6 +419,7 @@ export async function POST(
       targetPath,
       needsNumberOverride: false,
       costUsd: usageCost,
+      extractionContext: extractionMeta,
     });
   }
 
@@ -525,5 +575,6 @@ export async function POST(
     pages: updatedPages,
     gateA: meta.gateA ?? null,
     gateB: meta.gateB ?? null,
+    extractionContext: extractionMeta,
   });
 }

@@ -590,6 +590,68 @@ export function mapExtractionToDocModelForChat(
   });
 }
 
+/**
+ * Lightweight fallback when full DocModel mapping fails — still grounds chat
+ * in enrichment titles, KPIs, and a slice of body prose.
+ */
+export function buildExtractionEvidenceFallback(opts: {
+  extraction: ExtractionResult;
+  pagePath: string;
+  message: string;
+  pages?: SiteChatPageMeta[];
+  budget?: number;
+}): {
+  text: string;
+  truncated: boolean;
+  chunkCount: number;
+  selectedIds: string[];
+} {
+  const budget = opts.budget ?? SITE_CHAT_EXTRACTION_CHAR_BUDGET;
+  const parts: string[] = [
+    "SOURCE EXTRACTION CONTEXT (fallback — DocModel map failed; using raw extraction slices):",
+    `PDF title: ${opts.extraction.source.pdf_meta?.title || "(none)"}`,
+    `pages=${opts.extraction.source.page_count}`,
+  ];
+  if (opts.pages?.length) {
+    parts.push("SITE STRUCTURE:", ...opts.pages.map((p) => `- ${p.path} — ${p.title}`));
+  }
+  const kpis = opts.extraction.enrichment?.key_figures?.slice(0, 16) ?? [];
+  if (kpis.length) {
+    parts.push(
+      "KEY FIGURES:",
+      ...kpis.map((k) => `- ${k.label}: ${k.value_raw} [p${k.page}]`),
+    );
+  }
+  parts.push(
+    "ENRICHMENT SECTIONS:",
+    ...(opts.extraction.enrichment?.sections ?? [])
+      .slice(0, 80)
+      .map((s) => `- ${s.title} (p${s.page_span[0]}-${s.page_span[1]})`),
+  );
+  const q = tokenize(`${opts.message} ${opts.pagePath}`).slice(0, 12);
+  const prose: string[] = [];
+  const walk = (nodes: ExtractionResult["body"]) => {
+    for (const n of nodes) {
+      if (n.text && (q.length === 0 || overlapScore(n.text, q) > 0 || prose.length < 20)) {
+        if (q.length === 0 || overlapScore(n.text, q) > 0 || /auditor|director|revenue|note/i.test(n.text)) {
+          prose.push(n.text.slice(0, 800));
+        }
+      }
+      if (n.children?.length) walk(n.children);
+      if (prose.length >= 40) return;
+    }
+  };
+  walk(opts.extraction.body);
+  parts.push("PROSE SAMPLES:", ...prose.slice(0, 30));
+  let text = parts.join("\n");
+  let truncated = false;
+  if (text.length > budget) {
+    text = `${text.slice(0, budget - 40)}\n… (truncated for budget)`;
+    truncated = true;
+  }
+  return { text, truncated, chunkCount: prose.length + kpis.length, selectedIds: ["fallback"] };
+}
+
 export function summarizeSiteStructure(pages: SiteChatPageMeta[]): string {
   if (!pages.length) return "(no pages listed)";
   return pages.map((p) => `- ${p.path} — ${p.title}`).join("\n");

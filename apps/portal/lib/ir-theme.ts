@@ -109,6 +109,23 @@ function suggestFromContext(opts: {
     }
   }
 
+  // Portal project titles for AFS demos (MTN / Spar) often omit "annual" —
+  // treat known AFS issuer packs as annual when PDF title is empty too.
+  const companyHay = `${opts.companyName ?? ""} ${opts.periodLabel ?? ""}`.toLowerCase();
+  if (
+    !docKind ||
+    docKind === "interim_unaudited"
+  ) {
+    if (
+      /\b(mtn|spar)\b/.test(companyHay) &&
+      /year\s+ended|fy\s*20|annual|afs|31\s+december|26\s+september/.test(
+        `${companyHay} ${title}`.toLowerCase(),
+      )
+    ) {
+      docKind = "annual_audited";
+    }
+  }
+
   return suggestIrThemeId({
     company: opts.companyName,
     periodLabel: opts.periodLabel,
