@@ -116,8 +116,8 @@ Local mapper work already expands Spar/MTN SitePlans beyond production drafts �
 |---|---|---|
 | **1** Adaptive sitemap + commentary never-drop | **Done** — Spar v30 / MTN v7 verified post-deploy | `classifyDocShape`, directors/auditor/policies pages, directors→commentary fallback, ACCOUNTING FRAMEWORK lexicon (`1 ACCOUNTING…`), bright-brand tokens via `buildIrTokenBlock` |
 | **2** Note numbering + Group/Company IA + brand contrast gate | **Done** — MTN v8 / Spar v31 | Continued-stub note inheritance; separate entity books; letter-less AFS theme suggest → editorial (later `statutory`) |
-| **3** Dedicated statutory-hub theme_id | **Done** — Spar v32 / MTN v9 on `statutory` | Contracts + CSS + composers + console picker; suggest for letter-less AFS |
-| **4** Complete-IR checklist + operator SLA + DRD reliability | **Done** — DRD v43 classic | Shape checklist on publish readiness; ≤2-click / ≤15 min SLA copy; DRD statement-title binding fix (ops marker no longer steals IS/BS/CF/equity) |
+| **3** Dedicated statutory-hub theme_id | **Done** — Spar v33 / MTN v10 on `statutory` | Contracts + CSS + composers + console picker; suggest for letter-less AFS |
+| **4** Complete-IR checklist + operator SLA + DRD reliability | **Done** — DRD v44 classic | Shape checklist on publish readiness; ≤2-click / ≤15 min SLA copy; DRD statement-title binding fix (ops marker no longer steals IS/BS/CF/equity) |
 
 ### Phase 2 verification matrix (2026-08-09)
 

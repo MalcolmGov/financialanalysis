@@ -9,9 +9,11 @@
  * Usage:
  *   PORTAL_URL=https://portal-production-518a.up.railway.app \
  *   PORTAL_EMAIL=… PORTAL_PASSWORD=… \
- *     pnpm exec tsx scripts/preview-vis-text-smoke.ts [projectId]
+ *     pnpm exec tsx scripts/preview-vis-text-smoke.ts [projectId] \
+ *       [--expect=DRDGOLD] [--forbid=DRD Gold 1]
  *
  * Defaults: DRD Gold 1 project + env credentials when set.
+ * For Spar/MTN pass --expect=SPAR / --expect=MTN (and omit DRD forbids).
  *
  * Offline alternative (no portal session): use smoke:corporate-reliability on a
  * local tree/zip — same vis_text floors without the authenticated path.
@@ -23,7 +25,33 @@ import {
   type SiteFiles,
 } from "@rs/render";
 
-const PROJECT_ID = process.argv[2] ?? "444cd443-97cc-4b9c-b0f6-eef4f65c2f98";
+const argv = process.argv.slice(2);
+let expectedLegalName = "DRDGOLD";
+let forbiddenProjectTitles: string[] = ["DRD Gold 1"];
+const positional: string[] = [];
+for (const arg of argv) {
+  if (arg.startsWith("--expect=")) {
+    expectedLegalName = arg.slice("--expect=".length);
+  } else if (arg.startsWith("--forbid=")) {
+    forbiddenProjectTitles = forbiddenProjectTitles.concat(arg.slice("--forbid=".length));
+  } else if (arg === "--no-forbid") {
+    forbiddenProjectTitles = [];
+  } else if (!arg.startsWith("--")) {
+    positional.push(arg);
+  }
+}
+// Non-DRD issuers: clear default forbid list unless caller set --forbid=
+if (positional[0] && positional[0] !== "444cd443-97cc-4b9c-b0f6-eef4f65c2f98") {
+  const userForbid = argv.some((a) => a.startsWith("--forbid="));
+  if (!userForbid) forbiddenProjectTitles = [];
+  if (!argv.some((a) => a.startsWith("--expect="))) {
+    // Keep DRDGOLD only for the default DRD project; otherwise require --expect
+    // or fall back to site.company substring after fetch.
+    expectedLegalName = "";
+  }
+}
+
+const PROJECT_ID = positional[0] ?? "444cd443-97cc-4b9c-b0f6-eef4f65c2f98";
 const PORTAL_URL = (process.env.PORTAL_URL ?? "https://portal-production-518a.up.railway.app").replace(
   /\/$/,
   "",
@@ -135,13 +163,24 @@ async function main() {
     prefix?: string;
     gateA?: string | null;
     gateB?: string | null;
+    company?: string | null;
     pages?: Array<{ path: string; title: string; previewUrl: string }>;
   };
+
+  if (!expectedLegalName && site.company) {
+    // Prefer a distinctive token from the legal name (SPAR / MTN / DRDGOLD).
+    const token =
+      site.company.match(/\b(DRDGOLD|SPAR|MTN)\b/i)?.[1] ??
+      site.company.split(/\s+/)[0] ??
+      site.company;
+    expectedLegalName = token;
+  }
+  if (!expectedLegalName) expectedLegalName = "DRDGOLD";
 
   const pages = site.pages ?? [];
   if (!pages.length) throw new Error("site draft has no pages");
   process.stdout.write(
-    `Draft v${site.version ?? "?"} · prefix=${site.prefix ?? "?"} · Gate A=${site.gateA ?? "—"} · Gate B=${site.gateB ?? "—"} · ${pages.length} pages\n`,
+    `Draft v${site.version ?? "?"} · prefix=${site.prefix ?? "?"} · Gate A=${site.gateA ?? "—"} · Gate B=${site.gateB ?? "—"} · ${pages.length} pages · expect=${expectedLegalName}\n`,
   );
 
   const files: Record<string, string> = {};
@@ -228,8 +267,8 @@ async function main() {
 
   const siteFiles: SiteFiles = { files, binaries };
   const audit = auditCorporateReliability(siteFiles, {
-    expectedLegalName: "DRDGOLD",
-    forbiddenProjectTitles: ["DRD Gold 1"],
+    expectedLegalName,
+    forbiddenProjectTitles: forbiddenProjectTitles.length ? forbiddenProjectTitles : undefined,
     gateA: site.gateA ? { status: site.gateA } : undefined,
     gateB: site.gateB ? { status: site.gateB } : undefined,
   });

@@ -11,6 +11,7 @@
     "test": "vitest run",
     "smoke:corporate-reliability": "tsx scripts/corporate-reliability-smoke.ts",
     "smoke:preview-vis-text": "tsx scripts/preview-vis-text-smoke.ts",
+    "smoke:e2e-issuers": "tsx scripts/e2e-issuers.ts",
     "gates:corporate": "tsx scripts/corporate-reliability-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
