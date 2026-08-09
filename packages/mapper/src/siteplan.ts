@@ -223,6 +223,24 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   });
   nav.push({ label: "Commentary", href: "commentary.html" });
 
+  // AFS expansion: when extraction has a Directors' report, give it a top-level
+  // page so an ~80pp annual report does not feel like a hollow interim shell.
+  const hasDirectorsReport = docModel.sections.some(
+    (s) =>
+      s.kind === "directorsReport" &&
+      s.blocks.some((b) => b.kind !== "table" && Boolean((b.text ?? "").trim())),
+  );
+  if (hasDirectorsReport) {
+    pages.push({
+      path: "directors-report.html",
+      template: proseTpl,
+      title: "Directors' report",
+      regions: { main: [] },
+      downloads: [],
+    });
+    nav.push({ label: "Directors' report", href: "directors-report.html" });
+  }
+
   for (const st of Object.keys(STATEMENT_PATHS) as StatementType[]) {
     const meta = STATEMENT_PATHS[st];
     const ids = byStatement[st] ?? [];
@@ -245,6 +263,22 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
     downloads: [],
   });
   nav.push({ label: "Notes", href: "financials/notes.html" });
+
+  const hasAccountingPolicies = docModel.sections.some(
+    (s) =>
+      s.kind === "accountingPolicies" &&
+      s.blocks.some((b) => b.kind !== "table" && Boolean((b.text ?? "").trim())),
+  );
+  if (hasAccountingPolicies) {
+    pages.push({
+      path: "financials/accounting-policies.html",
+      template: proseTpl,
+      title: "Accounting policies",
+      regions: { main: [] },
+      downloads: [],
+    });
+    nav.push({ label: "Accounting policies", href: "financials/accounting-policies.html" });
+  }
 
   pages.push({
     path: "administration.html",

@@ -353,4 +353,34 @@ describe("CommentaryComposer", () => {
       /id="operations"[\s\S]*commentary-ops-tables[\s\S]*980 042/,
     );
   });
+
+  it("uses Directors' report when no shareholder letter is present", () => {
+    const dm = docModel();
+    dm.sections = dm.sections.filter((s) => s.kind !== "letter");
+    dm.sections.unshift({
+      id: "doc:sec_directorsReport",
+      kind: "directorsReport",
+      title: { text: "Directors' report", src_ref: "ext:hdr-dr" },
+      blocks: [
+        {
+          kind: "paragraph",
+          text: "The directors of the Company have the pleasure in submitting their report.",
+          src_ref: "ext:blk-dr1",
+        },
+        { kind: "heading", text: "Nature of business", src_ref: "ext:blk-dr2" },
+        {
+          kind: "paragraph",
+          text: "SPAR is a warehousing and distribution business listed on the JSE.",
+          src_ref: "ext:blk-dr3",
+        },
+      ],
+      items: [],
+    });
+    const html = composeCommentaryBody(dm);
+    expect(html).toContain('id="directors-report"');
+    expect(html).toContain("Directors' report");
+    expect(html).toContain("warehousing and distribution");
+    expect(html).toContain("no separate shareholder letter");
+    expect(html).not.toContain("Commentary will appear when the extraction includes a shareholder letter.");
+  });
 });

@@ -1,5 +1,6 @@
 /**
- * CommentaryComposer — letter / operations / dividend hierarchy for commentary.html.
+ * CommentaryComposer — letter / directors' report / operations / policies /
+ * dividend hierarchy for commentary.html.
  * Prose is verbatim from DocModel sections (with data-src); layout only.
  * Ops / facts KPI tables (pre-rendered from the SitePlan region) mount under
  * Review of operations so Financials stays statements-only.
@@ -15,7 +16,12 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-type SectionKind = "letter" | "reviewOfOperations" | "dividendDeclaration";
+type SectionKind =
+  | "letter"
+  | "directorsReport"
+  | "reviewOfOperations"
+  | "accountingPolicies"
+  | "dividendDeclaration";
 
 interface CommentaryBand {
   kind: SectionKind;
@@ -32,10 +38,22 @@ const BANDS: CommentaryBand[] = [
     eyebrow: "From the Chief Executive Officer",
   },
   {
+    kind: "directorsReport",
+    id: "directors-report",
+    label: "Directors' report",
+    eyebrow: "Board report",
+  },
+  {
     kind: "reviewOfOperations",
     id: "operations",
     label: "Review of operations",
     eyebrow: "Operational performance",
+  },
+  {
+    kind: "accountingPolicies",
+    id: "accounting-policies",
+    label: "Accounting policies",
+    eyebrow: "Basis of preparation",
   },
   {
     kind: "dividendDeclaration",
@@ -48,6 +66,11 @@ const BANDS: CommentaryBand[] = [
 export interface CommentaryComposeOptions {
   /** Pre-rendered statement-table sections (ops/facts) from the SitePlan region. */
   opsTablesHtml?: string[];
+  /**
+   * When true (dedicated Directors' report / Accounting policies pages exist),
+   * keep commentary to a short lead + link rather than duplicating full prose.
+   */
+  compactAfsBands?: boolean;
 }
 
 function wrapLooseListItems(html: string): string {
@@ -57,10 +80,16 @@ function wrapLooseListItems(html: string): string {
   });
 }
 
-function sectionInnerHtml(sec: FinancialDocModel["sections"][number]): string {
+function sectionInnerHtml(
+  sec: FinancialDocModel["sections"][number],
+  opts: { maxBlocks?: number } = {},
+): string {
   const parts: string[] = [];
   let leadUsed = false;
+  let used = 0;
+  const max = opts.maxBlocks ?? Infinity;
   for (const b of sec.blocks) {
+    if (used >= max) break;
     if (b.kind === "table") continue;
     const text = b.text?.trim();
     if (!text) continue;
@@ -69,6 +98,10 @@ function sectionInnerHtml(sec: FinancialDocModel["sections"][number]): string {
       // Skip duplicate top title if it restates the band label / Dear Shareholder.
       if (/^dear shareholder/i.test(text) || /^condensed consolidated/i.test(text)) {
         parts.push(`<p class="commentary-dek"${src}>${escapeHtml(text)}</p>`);
+      } else if (/^directors['']?\s*report$/i.test(text)) {
+        // Band title already covers this.
+      } else if (/^(?:\d{1,2}\.\s*)?accounting policies\b/i.test(text)) {
+        // Band title already covers this.
       } else {
         parts.push(`<h3 class="prose-subh"${src}>${escapeHtml(text)}</h3>`);
       }
@@ -82,6 +115,7 @@ function sectionInnerHtml(sec: FinancialDocModel["sections"][number]): string {
     } else {
       parts.push(`<p class="prose-p"${src}>${escapeHtml(text)}</p>`);
     }
+    used += 1;
   }
   return wrapLooseListItems(parts.join("\n"));
 }
@@ -101,11 +135,18 @@ function bandHtml(
   band: CommentaryBand,
   sections: FinancialDocModel["sections"],
   opsTablesHtml: string[] = [],
+  compactAfsBands = false,
 ): string | null {
   const matching = sections.filter((s) => s.kind === band.kind);
+  const maxBlocks =
+    compactAfsBands && (band.kind === "directorsReport" || band.kind === "accountingPolicies")
+      ? 8
+      : band.kind === "accountingPolicies"
+        ? 24
+        : undefined;
   const bodies = matching
     .map((sec) => {
-      const inner = sectionInnerHtml(sec);
+      const inner = sectionInnerHtml(sec, { maxBlocks });
       if (!inner) return "";
       // Prefer section title when it differs from band label.
       const titleText = sec.title?.text?.trim();
@@ -114,14 +155,25 @@ function bandHtml(
         !/^dear shareholder/i.test(titleText) &&
         titleText.toLowerCase() !== band.label.toLowerCase() &&
         // Ops KPI table captions restated as band title — skip duplicate.
-        !(band.kind === "reviewOfOperations" && /review\s+of\s+operations/i.test(titleText));
+        !(band.kind === "reviewOfOperations" && /review\s+of\s+operations/i.test(titleText)) &&
+        !(band.kind === "directorsReport" && /directors['']?\s*report/i.test(titleText)) &&
+        !(band.kind === "accountingPolicies" && /accounting policies/i.test(titleText));
       const titleSrc = sec.title?.src_ref
         ? ` data-src="${escapeHtml(sec.title.src_ref)}"`
         : "";
       const sub = showTitle
         ? `<h3 class="commentary-section__doc-title"${titleSrc}>${escapeHtml(titleText)}</h3>`
         : "";
-      return `${sub}${inner}`;
+      const more =
+        compactAfsBands &&
+        (band.kind === "directorsReport" || band.kind === "accountingPolicies") &&
+        sec.blocks.filter((b) => b.kind !== "table" && (b.text ?? "").trim()).length >
+          (maxBlocks ?? 0)
+          ? band.kind === "directorsReport"
+            ? `<p class="commentary-more"><a href="directors-report.html">Read the full Directors' report</a></p>`
+            : `<p class="commentary-more"><a href="financials/accounting-policies.html">Read accounting policies</a></p>`
+          : "";
+      return `${sub}${inner}${more}`;
     })
     .filter(Boolean)
     .join("\n");
@@ -205,9 +257,10 @@ export function composeCommentaryBody(
 ): string {
   const sections = withOpsFallback(docModel.sections);
   const opsTablesHtml = opts.opsTablesHtml ?? [];
+  const compactAfsBands = Boolean(opts.compactAfsBands);
   const rendered: Array<{ band: CommentaryBand; html: string }> = [];
   for (const band of BANDS) {
-    const html = bandHtml(band, sections, opsTablesHtml);
+    const html = bandHtml(band, sections, opsTablesHtml, compactAfsBands);
     if (html) rendered.push({ band, html });
   }
   // Tables alone still warrant an ops band (prose may be absent in thin extractions).
@@ -222,12 +275,18 @@ export function composeCommentaryBody(
     });
   }
   if (!rendered.length) {
-    return `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter.</p>`;
+    return `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter, directors' report, or other narrative prose.</p>`;
   }
   const toc = tocHtml(rendered.map((r) => r.band));
   const missingOps = !rendered.some((r) => r.band.kind === "reviewOfOperations");
+  const hasLetter = rendered.some((r) => r.band.kind === "letter");
+  const hasDirectors = rendered.some((r) => r.band.kind === "directorsReport");
   const note = missingOps
-    ? `<p class="commentary-note" data-dna-component="commentary-ops-absent">Review of operations was not present as a separate section in the source extraction; letter and dividend bands are shown from available prose.</p>`
+    ? hasLetter
+      ? `<p class="commentary-note" data-dna-component="commentary-ops-absent">Review of operations was not present as a separate section in the source extraction; letter and dividend bands are shown from available prose.</p>`
+      : hasDirectors
+        ? `<p class="commentary-note" data-dna-component="commentary-ops-absent">This annual report has no separate shareholder letter; the Directors' report and other available narrative are shown instead.</p>`
+        : `<p class="commentary-note" data-dna-component="commentary-ops-absent">Narrative bands below are taken from available extraction prose.</p>`
     : "";
   return `${toc}${note}${rendered.map((r) => r.html).join("\n")}`;
 }

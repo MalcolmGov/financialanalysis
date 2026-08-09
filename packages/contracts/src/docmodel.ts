@@ -80,6 +80,10 @@ export const SectionKind = z.enum([
   "segments",
   "dividendDeclaration",
   "directors",
+  /** Full Directors' report narrative (AFS) — distinct from cover directors listing. */
+  "directorsReport",
+  /** Accounting policies intro / note 1 narrative (AFS). */
+  "accountingPolicies",
   "forwardLooking",
   "contacts",
   "disclaimers",

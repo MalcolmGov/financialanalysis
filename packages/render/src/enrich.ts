@@ -353,13 +353,23 @@ export function enrichMultiPageFiles(
         /<section[^>]*data-dna-component="statement-table"[^>]*>[\s\S]*?<\/section>/gi,
       ),
     ].map((m) => m[0]);
-    const prose = composeCommentaryBody(docModel, { opsTablesHtml });
+    const compactAfsBands = Boolean(
+      out["directors-report.html"] || out["financials/accounting-policies.html"],
+    );
+    const prose = composeCommentaryBody(docModel, { opsTablesHtml, compactAfsBands });
+    const hasLetter = docModel.sections.some((s) => s.kind === "letter");
+    const hasDirectors = docModel.sections.some((s) => s.kind === "directorsReport");
+    const eyebrow = hasLetter
+      ? "Shareholder letter & operations"
+      : hasDirectors
+        ? "Directors' report & narrative"
+        : "Narrative from the source report";
     const hero = pageHero({
       path: "commentary.html",
       title: "Commentary",
       company,
       periodLabel,
-      eyebrow: "Shareholder letter & operations",
+      eyebrow,
     });
     // Hero sits outside .prose-body so the band can full-bleed; body keeps the rail.
     let html = out["commentary.html"].replace(
@@ -368,6 +378,50 @@ export function enrichMultiPageFiles(
     );
     html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
     out["commentary.html"] = injectInto(html, "prose-body", prose);
+  }
+
+  if (out["directors-report.html"]) {
+    const prose = wrapLooseListItems(
+      sectionBlocksHtml(docModel.sections, ["directorsReport"]),
+    );
+    const hero = pageHero({
+      path: "directors-report.html",
+      title: "Directors' report",
+      company,
+      periodLabel,
+      eyebrow: "Annual financial statements",
+    });
+    const body =
+      prose ||
+      `<p class="prose-p">Directors' report prose was not present in the source extraction.</p>`;
+    let html = out["directors-report.html"].replace(
+      /<header class="page-hero"[\s\S]*?<\/header>/i,
+      "",
+    );
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    out["directors-report.html"] = injectInto(html, "prose-body", body);
+  }
+
+  if (out["financials/accounting-policies.html"]) {
+    const prose = wrapLooseListItems(
+      sectionBlocksHtml(docModel.sections, ["accountingPolicies"]),
+    );
+    const hero = pageHero({
+      path: "financials/accounting-policies.html",
+      title: "Accounting policies",
+      company,
+      periodLabel,
+      eyebrow: "Notes to the financial statements",
+    });
+    const body =
+      prose ||
+      `<p class="prose-p">Accounting policies prose was not present in the source extraction.</p>`;
+    let html = out["financials/accounting-policies.html"].replace(
+      /<header class="page-hero"[\s\S]*?<\/header>/i,
+      "",
+    );
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    out["financials/accounting-policies.html"] = injectInto(html, "prose-body", body);
   }
 
   if (out["administration.html"]) {
@@ -487,6 +541,8 @@ export function enrichMultiPageFiles(
     if (!page.path.startsWith("financials/")) continue;
     let html = out[page.path];
     if (!html) continue;
+    // Prose-only AFS pages under financials/ already have heroes above.
+    if (page.path.endsWith("accounting-policies.html")) continue;
     if (page.path.endsWith("notes.html")) {
       // Notes hero already injected above; add toolbar after hero when excel present.
       if (

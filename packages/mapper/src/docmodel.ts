@@ -205,6 +205,13 @@ const LETTER_START = /dear shareholder|shareholder letter/i;
 const HIGHLIGHTS = /^highlights$/i;
 const DIVIDEND = /cash dividend|dividend declaration|salient dates/i;
 const NOTES_START = /notes to the condensed|notes to the consolidated|notes to the financial/i;
+/** AFS Directors' report — stop before committee reports / primary statements. */
+const DIRECTORS_REPORT_START = /directors['']?\s*report/i;
+const DIRECTORS_REPORT_STOP =
+  /^(audit committee report|remuneration committee|nominations committee|independent auditor|statement of (profit or loss|financial position|changes in equity|cash flows)|notes to the)/i;
+/** Accounting policies (often note 1) — stop at the next numbered note. */
+const ACCOUNTING_POLICIES_START = /^(?:\d{1,2}\.\s*)?accounting policies\b/i;
+const ACCOUNTING_POLICIES_STOP = /^(?:[2-9]|\d{2})\.\s+\S/;
 /** Prose ends where the primary statements begin. */
 const STATEMENTS_START =
   /statement of (profit or loss|financial position|changes in equity|cash flows)|condensed consolidated financial statements|notes to the/i;
@@ -346,6 +353,53 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
       });
   }
 
+  // AFS Directors' report — primary narrative when there is no shareholder letter.
+  const drStart = flat.findIndex(
+    (b) => b.type === "heading" && DIRECTORS_REPORT_START.test((b.text ?? "").trim()),
+  );
+  if (drStart >= 0) {
+    const blocks = proseBlocks(
+      drStart,
+      (b) => b.type === "heading" && DIRECTORS_REPORT_STOP.test((b.text ?? "").trim()),
+    );
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_directorsReport",
+        kind: "directorsReport",
+        title: {
+          text: flat[drStart].text ?? "Directors' report",
+          src_ref: `ext:${flat[drStart].id}`,
+        },
+        blocks,
+        items: [],
+      });
+  }
+
+  // Accounting policies intro (note 1) — stop at note 2+; cap length for microsite density.
+  const apStart = flat.findIndex(
+    (b) => b.type === "heading" && ACCOUNTING_POLICIES_START.test((b.text ?? "").trim()),
+  );
+  if (apStart >= 0) {
+    const blocks = proseBlocks(apStart, (b, i) => {
+      if (b.type !== "heading") return false;
+      const t = (b.text ?? "").trim();
+      if (ACCOUNTING_POLICIES_STOP.test(t)) return true;
+      // Soft cap: after ~45 prose nodes the dedicated page is dense enough.
+      return i - apStart > 55;
+    });
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_accountingPolicies",
+        kind: "accountingPolicies",
+        title: {
+          text: flat[apStart].text ?? "Accounting policies",
+          src_ref: `ext:${flat[apStart].id}`,
+        },
+        blocks,
+        items: [],
+      });
+  }
+
   // Lexicon-driven short sections on the cover (shareholder info, directors, …).
   const seenKinds = new Set(sections.map((s) => s.kind));
   for (let i = 0; i < flat.length; i++) {
@@ -359,6 +413,8 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
       kind === "highlights" ||
       kind === "dividendDeclaration" ||
       kind === "note" ||
+      kind === "directorsReport" ||
+      kind === "accountingPolicies" ||
       seenKinds.has(kind)
     ) {
       continue;

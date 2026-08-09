@@ -58,14 +58,15 @@ export function groupNav(nav: Array<{ label: string; href: string }>): NavItem[]
     }
   }
   if (financials.length) {
-    // Insert Financials after Home / Commentary when present
-    const insertAt = Math.min(
-      2,
-      top.findIndex((t) => /admin|download/i.test(t.label)) >= 0
-        ? top.findIndex((t) => /admin|download/i.test(t.label))
-        : top.length,
-    );
-    top.splice(insertAt, 0, { label: "Financials", href: financials[0]!.href, children: financials });
+    // Insert Financials before Admin/Downloads so AFS pages (e.g. Directors'
+    // report) stay top-level ahead of the Financials dropdown.
+    const adminAt = top.findIndex((t) => /admin|download/i.test(t.label));
+    const insertAt = adminAt >= 0 ? adminAt : top.length;
+    top.splice(insertAt, 0, {
+      label: "Financials",
+      href: financials[0]!.href,
+      children: financials,
+    });
   }
   return top;
 }

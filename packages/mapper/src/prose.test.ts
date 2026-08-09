@@ -60,6 +60,33 @@ describe("extractProseSections", () => {
     expect(dm.sections.some((s) => s.kind === "highlights")).toBe(true);
   });
 
+  it("captures Directors' report and Accounting policies for AFS extractions", () => {
+    const ex = extraction();
+    ex.body = [
+      heading("h-dr", 10, "Directors' report"),
+      para("p-dr1", 10, "The directors of the Company have the pleasure in submitting their report."),
+      heading("h-nature", 10, "Nature of business"),
+      para("p-dr2", 10, "SPAR is a warehousing and distribution business listed on the JSE."),
+      heading("h-ac", 12, "Audit Committee report"),
+      para("p-ac", 12, "The committee met four times."),
+      heading("h-notes", 19, "Notes to the financial statements"),
+      heading("h-ap", 19, "1. Accounting policies"),
+      heading("h-soc", 19, "Statement of compliance"),
+      para("p-ap1", 19, "The consolidated annual financial statements are prepared in accordance with IFRS."),
+      heading("h-n2", 30, "2. Revenue"),
+      para("p-n2", 30, "Revenue is recognised when control transfers."),
+    ];
+    const secs = extractProseSections(ex);
+    const dr = secs.find((s) => s.kind === "directorsReport");
+    const ap = secs.find((s) => s.kind === "accountingPolicies");
+    expect(dr).toBeTruthy();
+    expect(dr!.blocks.map((b) => b.text).join(" ")).toContain("warehousing and distribution");
+    expect(dr!.blocks.map((b) => b.text).join(" ")).not.toContain("committee met four times");
+    expect(ap).toBeTruthy();
+    expect(ap!.blocks.map((b) => b.text).join(" ")).toContain("prepared in accordance with IFRS");
+    expect(ap!.blocks.map((b) => b.text).join(" ")).not.toContain("control transfers");
+  });
+
   it("splits Group Operational / Ergo ops prose out of the shareholder letter", () => {
     const ex = extraction();
     ex.body = [

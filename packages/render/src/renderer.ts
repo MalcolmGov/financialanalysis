@@ -122,18 +122,57 @@ function noteColIndex(table: FinTable): number | null {
 /**
  * Soft-break jammed OCI / long row labels for readability.
  * Display-only — data-src still points at the verbatim source cell.
+ * Does not invent rows or rewrite digits (Gate A safe).
  */
 function formatLabelCellHtml(raw: string): string {
   let html = escapeHtml(raw);
-  // Common Docling join: "...net of tax Net fair value..."
-  html = html.replace(/(net of tax)\s+(Net fair value)/gi, "$1<br>$2");
+  // Common Docling joins on dual-entity AFS statements.
+  const splits: Array<[RegExp, string]> = [
+    [/(net of tax)\s+(Net fair value)/gi, "$1<br>$2"],
+    [/(Gross profit)\s+(Revenue\s*[-–—]\s*other)/gi, "$1<br>$2"],
+    [/(Goodwill and intangible)\s*(assets?)/gi, "$1<br>$2"],
+    [/(assets)\s+(Investment in subsidiaries)/gi, "$1<br>$2"],
+    [/(Investment in subsidiaries)\s+(Investment in associa)/gi, "$1<br>$2"],
+    [/(Operating lease receivable)\s+(Loans and other receivables)/gi, "$1<br>$2"],
+    [/(Loans and other receivables)\s+(Current portion of block)/gi, "$1<br>$2"],
+    [/(Prepayments)\s+(Loans and other)/gi, "$1<br>$2"],
+  ];
+  for (const [re, rep] of splits) {
+    const next = html.replace(re, rep);
+    if (next !== html) {
+      html = next;
+      break;
+    }
+  }
   // Long run-ons: break once after a mid-label comma before a capital clause.
-  if (html.length > 88 && !html.includes("<br>")) {
+  if (html.length > 72 && !html.includes("<br>")) {
     html = html.replace(/,\s+(?=[A-Z])/g, (m, offset) =>
-      offset > 36 && offset < html.length - 28 ? `,<br>` : m,
+      offset > 28 && offset < html.length - 24 ? `,<br>` : m,
     );
   }
   return html;
+}
+
+/**
+ * Soft-break when Docling jammed two amounts into one figure cell.
+ * Display-only — one data-src span keeps Gate B numericEquivalent (whitespace
+ * including the visual break is stripped by normalizeForMatch).
+ */
+function formatNumberCellHtml(raw: string, srcRef: string): string {
+  const t = raw.trim();
+  // Two decimal amounts separated by whitespace (e.g. "14 144.8 1 950.6").
+  const dual = t.match(
+    /^(\(?-?[\d\s]+\.\d\)?)\s+(\(?-?[\d\s]+\.\d\)?)$/,
+  );
+  if (dual) {
+    return `<span class="num" data-src="${escapeHtml(srcRef)}">${escapeHtml(dual[1]!)}<br>${escapeHtml(dual[2]!)}</span>`;
+  }
+  // Nil + amount jammed ("- 406.3") — stack for readability.
+  const nilAmt = t.match(/^([—–-])\s+(\(?-?[\d\s]+\.\d\)?)$/);
+  if (nilAmt) {
+    return `<span class="num" data-src="${escapeHtml(srcRef)}">${escapeHtml(nilAmt[1]!)}<br>${escapeHtml(nilAmt[2]!)}</span>`;
+  }
+  return numberSpan(srcRef, raw);
 }
 
 /** Per-row unit column (ops/KPI / assumptions) — col 1 when most cells look like units. */
@@ -189,8 +228,12 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
     (i) => i !== 0 && i !== noteCol && i !== unitCol,
   ).length;
   // 3+ period columns (typical BS) need denser IR widths so labels/notes breathe.
-  const densityAttr =
-    colCount >= 5 && figureCols >= 3
+  const entityHeader = header_matrix.some((row) =>
+    row.some((h) => /^(group|company)$/i.test(h.raw.trim())),
+  );
+  const densityAttr = entityHeader
+    ? ` data-density="dual-entity"`
+    : colCount >= 5 && figureCols >= 3
       ? ` data-density="periods-3"`
       : noteCol != null
         ? ` data-density="notes"`
@@ -213,7 +256,9 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           col += span;
           const isCur = cur0 != null && cur0 >= start && cur0 < start + span;
           const isNote = /^notes?$/i.test(h.raw.trim());
-          const isTitle = start === 0 && !isNote && !/\b(19|20)\d{2}\b/.test(h.raw);
+          const isEntity = /^(group|company)$/i.test(h.raw.trim());
+          const isTitle =
+            start === 0 && !isNote && !isEntity && !/\b(19|20)\d{2}\b/.test(h.raw);
           // Header cells carry provenance too: they hold dates ("31 Dec 2025")
           // and unit labels whose digits must be traceable + verified. Empty
           // header slots (real tables are sparse) carry no data-src.
@@ -221,13 +266,15 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           const classes = [
             isCur ? "cur" : "",
             isNote ? "h-notes" : "",
+            isEntity ? "h-entity" : "",
             isTitle ? "h-title" : "",
-            !isNote && !isTitle && h.raw.trim() ? "h-fig" : "",
+            !isNote && !isTitle && !isEntity && h.raw.trim() ? "h-fig" : "",
           ]
             .filter(Boolean)
             .join(" ");
           const cls = classes ? ` class="${classes}"` : "";
-          const inner = isNote || isTitle ? escapeHtml(h.raw) : formatHeaderCellHtml(h.raw);
+          const inner =
+            isNote || isTitle || isEntity ? escapeHtml(h.raw) : formatHeaderCellHtml(h.raw);
           return `<th${cls}${src}${span > 1 ? ` colspan="${span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${inner}</th>`;
         })
         .join("");
@@ -254,7 +301,7 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           const curCls = isCur ? " cur" : "";
           const cmpCls = !isCur && cell.kind === "number" ? " cmp" : "";
           if (cell.kind === "number") {
-            return `<td class="cell-num${curCls}${cmpCls}">${numberSpan(cell.src_ref, cell.raw)}</td>`;
+            return `<td class="cell-num${curCls}${cmpCls}">${formatNumberCellHtml(cell.raw, cell.src_ref)}</td>`;
           }
           if (cell.kind === "noteRef" && cell.raw.trim() && notesBase) {
             const src = ` data-src="${escapeHtml(cell.src_ref)}"`;
@@ -525,40 +572,48 @@ ${STATEMENT_IR_CSS}`;
 /** WW-recognizable statement IR skin (sofp-style widths; no decorative grp rules). */
 const STATEMENT_IR_CSS = `
 /* rs-statement-ir */
-.statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:var(--rs-space-2,.7rem) 0 var(--rs-space-5,1.35rem);border:0;border-top:2px solid var(--dna-brand,#243B53);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none}
+.statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:var(--rs-space-2,.7rem) 0 var(--rs-space-5,1.35rem);border:0;border-top:2px solid var(--dna-brand,#243B53);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none;-webkit-overflow-scrolling:touch}
 .statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 var(--rs-space-2,.7rem);padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:var(--rs-fs-eyebrow,.68rem);letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
 .statement-unit__value{color:var(--dna-masthead,#1B2A3A);font-weight:800;letter-spacing:.06em}
-.fin-table{width:100%;min-width:34rem;border-collapse:collapse;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.8125rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
-.fin-table col.c-label{width:auto}
+.fin-table{width:100%;min-width:34rem;border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:.8125rem;letter-spacing:-.01em;color:var(--dna-ink,#221F1F);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif)}
+.fin-table col.c-label{width:14rem}
 .fin-table col.c-note{width:3.25rem}
 .fin-table col.c-unit{width:8.5rem}
 .fin-table col.c-cur,.fin-table col.c-cmp{width:9.25rem}
 .fin-table[data-density="notes"] col.c-cur,.fin-table[data-density="notes"] col.c-cmp{width:9.25rem}
-.fin-table[data-density="periods-3"]{min-width:42rem}
+.fin-table[data-density="periods-3"]{min-width:48rem}
+.fin-table[data-density="periods-3"] col.c-label{width:13rem}
 .fin-table[data-density="periods-3"] col.c-note{width:3rem}
-.fin-table[data-density="periods-3"] col.c-cur,.fin-table[data-density="periods-3"] col.c-cmp{width:7.25rem}
+.fin-table[data-density="periods-3"] col.c-cur,.fin-table[data-density="periods-3"] col.c-cmp{width:7.5rem}
+.fin-table[data-density="dual-entity"]{min-width:56rem}
+.fin-table[data-density="dual-entity"] col.c-label{width:15rem}
+.fin-table[data-density="dual-entity"] col.c-note{width:3rem}
+.fin-table[data-density="dual-entity"] col.c-cur,.fin-table[data-density="dual-entity"] col.c-cmp{width:8rem}
 .fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.3;border:none;border-bottom:2px solid var(--dna-brand,#243B53);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
-.fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#64748B)}
+.fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#64748B);position:sticky;left:0;z-index:3}
 .fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F);width:3.25rem;padding-left:4px;padding-right:4px}
+.fin-table thead th.h-entity{text-align:center;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:.72rem;color:#fff!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid #fff;padding:8px 10px;vertical-align:middle}
 .fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid #fff;white-space:normal;padding:7px 9px;line-height:1.3;overflow-wrap:break-word;hyphens:manual;vertical-align:bottom}
-.fin-table thead th.h-fig:first-of-type,.fin-table thead th.h-notes + th.h-fig{border-left:0}
-.fin-table[data-density="periods-3"] thead th.h-fig{padding:6px 7px;font-size:.66rem;line-height:1.28}
+.fin-table thead th.h-fig:first-of-type,.fin-table thead th.h-notes + th.h-fig,.fin-table thead th.h-entity + th.h-fig{border-left:0}
+.fin-table[data-density="periods-3"] thead th.h-fig,.fin-table[data-density="dual-entity"] thead th.h-fig{padding:6px 8px;font-size:.66rem;line-height:1.28}
 .fin-table thead th.h-fig.cur{filter:brightness(.94)}
 .fin-table thead th.h-fig .h-fig__lead,.fin-table thead th.h-fig .h-fig__date,.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:block;margin:0}
 .fin-table thead th.h-fig .h-fig__lead{font-weight:600;opacity:.92;font-size:.66rem;letter-spacing:.01em;line-height:1.25;margin-bottom:.12rem}
 .fin-table thead th.h-fig .h-fig__date{font-weight:800;letter-spacing:-.01em;line-height:1.25;margin-bottom:.1rem}
 .fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{font-weight:600;opacity:.92;font-size:.66rem;line-height:1.25}
 .fin-table td{padding:4px 8px;vertical-align:middle;line-height:1.4;border-bottom:none;border-left:0;border-right:0}
-.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px;padding-right:10px;white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:auto;line-height:1.42}
+.fin-table td.lbl,.fin-table td.cell-label,.fin-table td:first-child{text-align:left;color:var(--dna-ink,#221F1F);padding-left:2px;padding-right:10px;white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:none;-webkit-hyphens:none;line-height:1.42;position:sticky;left:0;z-index:2;background:var(--dna-paper,#fff);min-width:12rem;max-width:18rem;box-shadow:1px 0 0 color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
 .fin-table td.cell-unit{text-align:left;white-space:nowrap;color:color-mix(in srgb,var(--dna-ink,#221F1F) 72%,var(--dna-paper,#fff));font-size:.78rem;padding-left:6px;padding-right:8px}
 .fin-table td.cell-num,.fin-table td.cmp,.fin-table td.cur{text-align:right;white-space:nowrap;padding-right:10px;font-variant-numeric:tabular-nums}
+.fin-table td.cell-num br{display:block;content:"";margin-top:.1rem}
 .fin-table td.cur{font-weight:700;background:var(--dna-shading,#F2F2F2)}
 .fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
-.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:10px;padding-bottom:3px;color:var(--dna-ink,#221F1F);font-size:.8125rem;letter-spacing:.01em;background:transparent!important}
+.fin-table tbody tr.r-line:nth-child(even) td.cell-label,.fin-table tbody tr.r-line:nth-child(even) td.lbl,.fin-table tbody tr.r-line:nth-child(even) td:first-child{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
+.fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:10px;padding-bottom:3px;color:var(--dna-ink,#221F1F);font-size:.8125rem;letter-spacing:.01em;background:var(--dna-paper,#fff)!important}
 .fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:transparent!important}
-.fin-table tr.r-subtotal td{font-weight:700;background:transparent!important}
+.fin-table tr.r-subtotal td{font-weight:700;background:var(--dna-paper,#fff)!important}
 .fin-table tr.r-subtotal td.cur{background:var(--dna-shading,#F2F2F2)!important}
-.fin-table tr.r-total td{font-weight:700;border-top:1px solid #6C6C6C;border-bottom:1px solid #BAC4CA;background:transparent!important;padding-top:5px;padding-bottom:5px}
+.fin-table tr.r-total td{font-weight:700;border-top:1px solid #6C6C6C;border-bottom:1px solid #BAC4CA;background:var(--dna-paper,#fff)!important;padding-top:5px;padding-bottom:5px}
 .fin-table tr.r-total td.cur{background:var(--dna-shading,#F2F2F2)!important}
 .fin-table tr.r-line td.cell-num.cur{font-weight:700}
 .fin-table[data-cur-col] thead th.cur{background:color-mix(in srgb,var(--dna-table-header-bg,#64748B) 88%,#000)!important;color:#fff!important}
@@ -574,10 +629,11 @@ const STATEMENT_IR_CSS = `
 .fin-table tbody tr:hover td{background-color:#DCE3E7!important}
 .fin-table tbody tr:hover td.cur{background-color:#CBD4D9!important}
 @media (max-width:720px){
-  .fin-table,.fin-table[data-density="periods-3"]{table-layout:auto;font-size:.72rem;min-width:0}
+  .fin-table,.fin-table[data-density="periods-3"],.fin-table[data-density="dual-entity"]{table-layout:auto;font-size:.72rem;min-width:36rem}
   .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}
   .fin-table td.cur,.fin-table td.cmp,.fin-table td.cell-num{padding-left:4px;padding-right:6px}
   .fin-table thead th.h-fig{padding:6px 6px;font-size:.64rem}
+  .fin-table td.cell-label,.fin-table td.lbl,.fin-table td:first-child{min-width:9.5rem;max-width:12rem}
 }
 @media print{
   .site-nav,.nav-mobile,.nav-toggle,.share-bar,.page-pager,.xls-toolbar,.share-tooltip,.sel-share-mark{display:none!important}
