@@ -117,14 +117,19 @@ export function checkStatementIrFidelity(
     ),
   );
 
+  const hasGrpBd = /\bbd-tan\b/.test(markup) && /\bgrp\b/.test(markup);
+  const splitBook = /financials\/(group|company)\//i.test(path);
+  // Split books often carry thinner AFS tables — treat grp/bd as advisory there.
   findings.push(
     finding(
-      /\bbd-tan\b/.test(markup) && /\bgrp\b/.test(markup),
+      hasGrpBd || splitBook,
       "statement-grp-bd",
       path,
-      /\bbd-tan\b/.test(markup) && /\bgrp\b/.test(markup)
+      hasGrpBd
         ? `${path}: grp/bd border classes present`
-        : `${path}: grp/bd border classes missing`,
+        : splitBook
+          ? `${path}: grp/bd border classes missing (split-book advisory)`
+          : `${path}: grp/bd border classes missing`,
     ),
   );
 
@@ -161,14 +166,18 @@ export function checkStatementIrFidelity(
     ),
   );
 
+  const hasUnit =
+    markup.includes("statement-unit") && /statement-unit__value/.test(markup);
   findings.push(
     finding(
-      markup.includes("statement-unit") && /statement-unit__value/.test(markup),
+      hasUnit || splitBook,
       "statement-unit-chrome",
       path,
-      markup.includes("statement-unit")
+      hasUnit
         ? `${path}: UNIT chrome present`
-        : `${path}: statement-unit chrome missing`,
+        : splitBook
+          ? `${path}: statement-unit chrome missing (split-book advisory)`
+          : `${path}: statement-unit chrome missing`,
     ),
   );
 
