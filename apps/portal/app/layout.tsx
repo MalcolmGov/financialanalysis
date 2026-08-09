@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light" className={`${instrument.variable} ${manrope.variable}`}>
+    <html lang="en" data-theme="dark" className={`${instrument.variable} ${manrope.variable}`}>
       <body className={manrope.className}>
         <div className="rs-shell">
           <header className="rs-header">

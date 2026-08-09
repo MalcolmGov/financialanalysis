@@ -1,43 +1,43 @@
 @import "tailwindcss";
 
 /*
- * Results Studio — "Quorum Pulse"
- * Operator chrome inspired by Fintech AI Tracker energy: dense metric strips,
- * status chips, elevated panels, cyan-signal CTAs — adapted for IR ops.
- * Light stage + deep chrome. Instrument Serif + Manrope. Not purple SaaS.
+ * Results Studio — "Quorum Pulse" (full dark operator theme)
+ * Deep ink/slate stage like Fintech Tracker energy: dense metric strips,
+ * status chips, elevated panels, cyan CTAs, amber review signals.
+ * Instrument Serif + Manrope. Not purple SaaS.
  * Scoped to portal app only — never leaked into multipage export HTML.
  */
 :root {
-  --paper: #e6ebf3;
-  --paper-deep: #d4dce8;
-  --surface: #f3f6fb;
-  --surface-raised: #ffffff;
-  --veil: rgba(11, 18, 32, 0.82);
-  --ink: #0a1020;
-  --ink-2: #4b5870;
-  --ink-3: #7a869c;
-  --rule: rgba(10, 16, 32, 0.1);
-  --rule-strong: rgba(10, 16, 32, 0.16);
-  --chrome: #0b1220;
-  --chrome-2: #121a2c;
-  --chrome-text: #e8eef8;
+  --paper: #070b14;
+  --paper-deep: #04070e;
+  --surface: #0f1626;
+  --surface-raised: #141c2e;
+  --veil: rgba(4, 7, 14, 0.88);
+  --ink: #eef3fb;
+  --ink-2: #9aa8c2;
+  --ink-3: #6b7a94;
+  --rule: rgba(148, 170, 210, 0.12);
+  --rule-strong: rgba(148, 170, 210, 0.22);
+  --chrome: #050910;
+  --chrome-2: #0b1220;
+  --chrome-text: #eef3fb;
   --chrome-muted: #8b97b0;
-  --accent: #0e1a2e;
-  --accent-strong: #061018;
-  --signal: #0e8f8a;
-  --signal-soft: rgba(14, 143, 138, 0.12);
-  --signal-hot: #0891b2;
-  --signal-hot-soft: rgba(8, 145, 178, 0.14);
-  --copper: #9a7348;
-  --warn: #c47a12;
-  --warn-soft: rgba(196, 122, 18, 0.12);
-  --ok: #0f9b67;
-  --ok-soft: rgba(15, 155, 103, 0.12);
-  --danger: #b42318;
-  --danger-soft: rgba(180, 35, 24, 0.1);
-  --focus: rgba(8, 145, 178, 0.5);
-  --shadow-s: 0 1px 2px rgba(10, 16, 32, 0.05), 0 4px 16px rgba(10, 16, 32, 0.06);
-  --shadow-m: 0 4px 12px rgba(10, 16, 32, 0.08), 0 16px 40px rgba(10, 16, 32, 0.1);
+  --accent: #0e7490;
+  --accent-strong: #0a5c72;
+  --signal: #2dd4bf;
+  --signal-soft: rgba(45, 212, 191, 0.14);
+  --signal-hot: #22d3ee;
+  --signal-hot-soft: rgba(34, 211, 238, 0.16);
+  --copper: #f0b429;
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.16);
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --focus: rgba(34, 211, 238, 0.55);
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-m: 0 8px 24px rgba(0, 0, 0, 0.42), 0 24px 56px rgba(0, 0, 0, 0.38);
   --radius: 4px;
   --radius-m: 10px;
   --radius-l: 14px;
@@ -68,22 +68,23 @@ body {
 }
 
 body {
+  color-scheme: dark;
   background-color: var(--paper);
   background-image:
-    radial-gradient(ellipse 1000px 560px at 8% -10%, rgba(8, 145, 178, 0.12), transparent 58%),
-    radial-gradient(ellipse 800px 520px at 96% 0%, rgba(14, 143, 138, 0.1), transparent 55%),
-    radial-gradient(ellipse 700px 420px at 50% 110%, rgba(14, 26, 46, 0.08), transparent 55%),
-    linear-gradient(165deg, #eef2f8 0%, var(--paper) 45%, var(--paper-deep) 100%);
+    radial-gradient(ellipse 980px 520px at 8% -8%, rgba(34, 211, 238, 0.16), transparent 56%),
+    radial-gradient(ellipse 820px 500px at 96% 0%, rgba(45, 212, 191, 0.12), transparent 52%),
+    radial-gradient(ellipse 760px 460px at 50% 110%, rgba(245, 158, 11, 0.07), transparent 55%),
+    linear-gradient(165deg, #0a1220 0%, var(--paper) 42%, var(--paper-deep) 100%);
   background-attachment: fixed;
 }
 
 a {
-  color: var(--signal);
+  color: var(--signal-hot);
   text-underline-offset: 3px;
 }
 
 a:hover {
-  color: var(--ink);
+  color: #a5f3fc;
 }
 
 button,
@@ -333,33 +334,33 @@ textarea:disabled {
 }
 
 .rs-btn--primary {
-  background: linear-gradient(135deg, #0e2438 0%, #0a1a2c 55%, #0c2f3a 100%);
-  color: #f4fafb;
-  border-color: rgba(8, 145, 178, 0.35);
+  background: linear-gradient(135deg, #22d3ee 0%, #14b8a6 55%, #0d9488 100%);
+  color: #041016;
+  border-color: rgba(165, 243, 252, 0.55);
   box-shadow:
-    0 0 0 1px rgba(8, 145, 178, 0.12) inset,
-    0 8px 22px rgba(8, 145, 178, 0.18);
+    0 0 0 1px rgba(165, 243, 252, 0.2) inset,
+    0 10px 28px rgba(34, 211, 238, 0.32);
 }
 
 .rs-btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #123048 0%, #0d2236 55%, #0e3a48 100%);
-  color: #fff;
-  border-color: rgba(8, 145, 178, 0.55);
+  background: linear-gradient(135deg, #67e8f9 0%, #2dd4bf 55%, #14b8a6 100%);
+  color: #02080e;
+  border-color: rgba(165, 243, 252, 0.75);
   box-shadow:
-    0 0 0 1px rgba(8, 145, 178, 0.2) inset,
-    0 10px 28px rgba(8, 145, 178, 0.28);
+    0 0 0 1px rgba(165, 243, 252, 0.28) inset,
+    0 14px 34px rgba(34, 211, 238, 0.42);
 }
 
 .rs-btn--ghost {
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
   border-color: var(--rule-strong);
   color: var(--ink);
-  box-shadow: var(--shadow-s);
+  box-shadow: none;
 }
 
 .rs-btn--ghost:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--signal-hot) 45%, var(--rule-strong));
-  background: var(--surface-raised);
+  background: rgba(34, 211, 238, 0.08);
 }
 
 .rs-btn--quiet {
@@ -408,7 +409,7 @@ textarea.rs-field {
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding-inline: 14px;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 textarea.rs-field:focus {
@@ -433,9 +434,11 @@ textarea.rs-field:focus {
 .rs-metric {
   display: grid;
   gap: 6px;
-  padding: 14px 16px 12px;
-  background: var(--surface-raised);
-  border: 1.5px solid var(--rule);
+  padding: 18px 18px 16px;
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.05) 0%, transparent 46%),
+    var(--surface-raised);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-s);
   position: relative;
@@ -460,16 +463,16 @@ textarea.rs-field:focus {
 }
 
 .rs-metric__label {
-  font-size: 0.64rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: color-mix(in srgb, var(--metric-accent, var(--signal-hot)) 75%, var(--ink-2));
 }
 
 .rs-metric__value {
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 2.15rem;
   letter-spacing: -0.03em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -494,19 +497,19 @@ textarea.rs-field:focus {
 }
 
 .rs-metric--review {
-  --metric-accent: var(--signal);
+  --metric-accent: var(--warn);
 }
 
 /* ——— Home ——— */
 
 .rs-home {
   display: grid;
-  gap: 40px;
+  gap: 28px;
 }
 
 .rs-home-hero {
   display: grid;
-  gap: 18px;
+  gap: 20px;
 }
 
 .rs-home-hero h1 {
@@ -522,10 +525,12 @@ textarea.rs-field:focus {
   display: grid;
   gap: 18px;
   padding: 24px 24px 22px;
-  background: var(--surface-raised);
-  border: 1px solid var(--rule);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08) 0%, transparent 42%),
+    var(--surface-raised);
+  border: 1px solid color-mix(in srgb, var(--signal-hot) 28%, var(--rule));
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-s);
+  box-shadow: var(--shadow-m);
 }
 
 .rs-create-row {
@@ -548,7 +553,7 @@ textarea.rs-field:focus {
   margin: 12px 0 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .rs-project-row {
@@ -556,24 +561,30 @@ textarea.rs-field:focus {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-m);
-  background: var(--surface-raised);
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.05) 0%, transparent 28%),
+    var(--surface-raised);
   box-shadow: var(--shadow-s);
   text-decoration: none;
   color: var(--ink);
   transition:
     border-color 0.2s var(--ease),
     transform 0.18s var(--ease),
-    box-shadow 0.2s var(--ease);
+    box-shadow 0.2s var(--ease),
+    background 0.2s var(--ease);
 }
 
 .rs-project-row:hover {
-  border-color: color-mix(in srgb, var(--signal-hot) 40%, var(--rule));
+  border-color: color-mix(in srgb, var(--signal-hot) 45%, var(--rule));
   box-shadow: var(--shadow-m);
   transform: translateY(-1px);
   color: var(--ink);
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.1) 0%, transparent 36%),
+    var(--surface);
 }
 
 .rs-project-row strong {
@@ -608,20 +619,20 @@ textarea.rs-field:focus {
 
 .rs-status--idle {
   color: var(--ink-2);
-  background: rgba(10, 16, 32, 0.04);
+  background: rgba(255, 255, 255, 0.04);
   border-color: var(--rule);
 }
 
 .rs-status--live {
-  color: var(--signal-hot);
+  color: #67e8f9;
   background: var(--signal-hot-soft);
-  border-color: color-mix(in srgb, var(--signal-hot) 40%, transparent);
+  border-color: color-mix(in srgb, var(--signal-hot) 45%, transparent);
 }
 
 .rs-status--review {
-  color: var(--signal);
-  background: var(--signal-soft);
-  border-color: color-mix(in srgb, var(--signal) 40%, transparent);
+  color: #fbbf24;
+  background: var(--warn-soft);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
 }
 
 .rs-status--done {
@@ -1155,7 +1166,7 @@ textarea.rs-field:focus {
 
 .rs-page-tree {
   border-right: 1px solid var(--rule);
-  background: rgba(248, 249, 251, 0.96);
+  background: color-mix(in srgb, var(--surface) 88%, #000);
   overflow: auto;
   max-height: min(72vh, 760px);
 }
@@ -1194,8 +1205,8 @@ textarea.rs-field:focus {
 }
 
 .rs-page-tree__item.is-active {
-  background: rgba(21, 32, 51, 0.08);
-  box-shadow: inset 2px 0 0 var(--ink);
+  background: rgba(34, 211, 238, 0.1);
+  box-shadow: inset 2px 0 0 var(--signal-hot);
 }
 
 .rs-page-tree__title {
@@ -1225,7 +1236,7 @@ textarea.rs-field:focus {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-3);
-  background: rgba(248, 249, 251, 0.92);
+  background: color-mix(in srgb, var(--surface) 92%, #000);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -1247,7 +1258,7 @@ textarea.rs-field:focus {
   font-size: 0.875rem;
   text-align: center;
   color: var(--ink-3);
-  background: #f8f9fb;
+  background: var(--surface);
   min-height: min(68vh, 720px);
 }
 
@@ -1258,7 +1269,7 @@ textarea.rs-field:focus {
   min-width: 0;
   min-height: min(72vh, 760px);
   max-height: min(72vh, 760px);
-  background: linear-gradient(180deg, rgba(248, 249, 251, 0.98) 0%, #f3f5f8 100%);
+  background: linear-gradient(180deg, #121a2c 0%, #0f1626 100%);
 }
 
 .rs-site-chat__header {
@@ -1319,14 +1330,14 @@ textarea.rs-field:focus {
 }
 
 .rs-site-chat__bubble--assistant {
-  background: rgba(21, 32, 51, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
   border: 1px solid var(--rule);
 }
 
 .rs-site-chat__bubble--user {
-  background: var(--accent);
-  color: #f4f6f8;
+  background: linear-gradient(135deg, #0e7490 0%, #0f766e 100%);
+  color: #ecfeff;
   margin-left: 18px;
 }
 
@@ -1366,7 +1377,7 @@ textarea.rs-field:focus {
   border-top: 1px solid var(--rule);
   display: grid;
   gap: 8px;
-  background: rgba(248, 249, 251, 0.9);
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .rs-site-chat__input {
@@ -1455,7 +1466,7 @@ textarea.rs-field:focus {
   text-align: left;
   padding: 14px 14px 12px;
   border: 1px solid var(--rule);
-  background: color-mix(in srgb, var(--ink) 2.5%, transparent);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 4px;
   cursor: pointer;
   color: inherit;
@@ -1558,7 +1569,7 @@ textarea.rs-field:focus {
   width: 100%;
   max-height: 120px;
   object-fit: contain;
-  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--rule);
 }
 
@@ -1971,7 +1982,7 @@ textarea.rs-field:focus {
 }
 
 .rs-admin-run-row:hover {
-  background: rgba(14, 22, 33, 0.03);
+  background: rgba(34, 211, 238, 0.06);
 }
 
 .rs-admin-run-row strong {
