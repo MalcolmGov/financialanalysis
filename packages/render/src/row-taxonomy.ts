@@ -6,7 +6,7 @@
 export type RowRole = "section" | "line" | "subtotal" | "total";
 
 const SECTION_ONLY =
-  /^(assets|equity and liabilities|equity|liabilities|cash flows from .+|operating activities|investing activities|financing activities)$/i;
+  /^(assets|equity and liabilities|equity|liabilities|cash\s*flows?\s+(from|used)\s+.+|operating activities|investing activities|financing activities)$/i;
 
 const SUBTOTAL =
   /^(non-current|current)\s+(assets|liabilities)\b|\bsub[- ]?total\b|^net (cash|assets|liabilities|debt)\b|^(gross profit|operating profit|profit before|profit for the period|total comprehensive income|headline earnings)\b/i;
@@ -27,13 +27,16 @@ export function classifyStatementRow(
   label: string,
   hasNumeric: boolean,
 ): RowRole {
-  const t = label.trim();
+  const t = label.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   if (!t) return "line";
 
   if (TOTAL.test(t)) return "total";
 
+  // Section banners (ASSETS / CASH FLOWS FROM…) win even if Docling leaked
+  // a digit into the row — otherwise SPAR/AFS dual-entity CF loses bd-tan.
+  if (SECTION_ONLY.test(t)) return "section";
+
   if (!hasNumeric) {
-    if (SECTION_ONLY.test(t) || t.length < 48) return "section";
     return "section";
   }
 

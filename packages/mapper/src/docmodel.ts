@@ -149,10 +149,42 @@ function inferDefaultUnit(table: ExtractionTable): string {
   ).length;
   if (col1.length >= 2 && unitLike >= Math.ceil(col1.length * 0.5)) return "";
 
-  const m = headerText.match(/\b(Rm|R'000|R million)\b/i);
-  if (m) return m[1]!;
+  // SPAR/AFS often use "Rmillion" (no space); DRD uses "Rm" / "R million".
+  const m = headerText.match(/\b(R'?000|R\s*million|Rmillion|Rm)\b/i);
+  if (m) {
+    const raw = m[1]!;
+    if (/rmillion/i.test(raw) || /r\s*million/i.test(raw)) return "Rm";
+    return raw;
+  }
+  // Also scan first body column for a unit banner cell ("Rmillion").
+  const banner = table.cells
+    .filter((c) => c.r > 0 && c.c === 0)
+    .sort((a, b) => a.r - b.r)
+    .slice(0, 3)
+    .map((c) => c.text.trim());
+  if (banner.some((t) => /^(R'?000|R\s*million|Rmillion|Rm)$/i.test(t))) {
+    return "Rm";
+  }
   // Primary statements historically defaulted to Rm when unit sits in period headers.
   if (/statement of|financial position|cash flows|changes in equity/i.test(title)) {
+    return "Rm";
+  }
+  // Dual-entity AFS: row-0 is GROUP/COMPANY but headers carry period dates.
+  if (
+    /\b(group|company)\b/i.test(title) &&
+    /\d{4}/.test(headerText) &&
+    table.num_cols >= 4
+  ) {
+    return "Rm";
+  }
+  // Equity continuations often have column headers only (Stated capital…) —
+  // still Rand millions for JSE AFS primary statements.
+  if (
+    /stated capital|treasury shares|retained earnings|non-?\s*controlling/i.test(
+      headerText,
+    ) &&
+    table.num_cols >= 4
+  ) {
     return "Rm";
   }
   return "";
