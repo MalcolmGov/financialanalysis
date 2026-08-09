@@ -211,8 +211,8 @@ const DIRECTORS_REPORT_STOP =
   /^(audit committee report|remuneration committee|nominations committee|independent auditor|statement of (profit or loss|financial position|changes in equity|cash flows)|notes to the)/i;
 /** Accounting policies / framework (often note 1) — stop at the next numbered note. */
 const ACCOUNTING_POLICIES_START =
-  /^(?:\d{1,2}\.\s*)?(?:accounting policies|accounting framework|material accounting policies)\b/i;
-const ACCOUNTING_POLICIES_STOP = /^(?:[2-9]|\d{2})\.\s+\S/;
+  /^(?:\d{1,2}\.?\s+)?(?:accounting policies|accounting framework|material accounting policies)\b/i;
+const ACCOUNTING_POLICIES_STOP = /^(?:[2-9]|\d{2})(?:\.|\s)\s*\S/;
 /** Independent auditor's report — stop before directors' report / statements / notes. */
 const AUDITOR_REPORT_START = /independent\s+auditor'?s?\s+report|auditor'?s?\s+report/i;
 const AUDITOR_REPORT_STOP =

@@ -37,7 +37,7 @@ const SECTION_TITLE_LEXICON: { re: RegExp; kind: SectionKind }[] = [
   // AFS narrative sections — before bare "Directors" listing match.
   { re: /directors['']?\s*report/i, kind: "directorsReport" },
   {
-    re: /^(?:\d{1,2}\.\s*)?(?:accounting policies|accounting framework|material accounting policies)\b/i,
+    re: /^(?:\d{1,2}\.?\s+)?(?:accounting policies|accounting framework|material accounting policies)\b/i,
     kind: "accountingPolicies",
   },
   { re: /independent\s+auditor'?s?\s+report|auditor'?s?\s+report/i, kind: "auditorReport" },

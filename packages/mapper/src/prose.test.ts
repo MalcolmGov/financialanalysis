@@ -63,9 +63,9 @@ describe("extractProseSections", () => {
   it("captures ACCOUNTING FRAMEWORK as accounting policies (MTN-style)", () => {
     const ex = extraction();
     ex.body = [
-      heading("h-fw", 40, "ACCOUNTING FRAMEWORK AND MATERIAL ACCOUNTING POLICIES"),
+      heading("h-fw", 40, "1 ACCOUNTING FRAMEWORK AND CRITICAL JUDGEMENTS"),
       para("p-fw1", 40, "These Group financial statements have been prepared in accordance with IFRS."),
-      heading("h-n2", 42, "2. Revenue"),
+      heading("h-n2", 42, "2 Revenue"),
       para("p-n2", 42, "Revenue is recognised when control transfers."),
     ];
     const secs = extractProseSections(ex);
