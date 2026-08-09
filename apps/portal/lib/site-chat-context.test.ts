@@ -51,21 +51,21 @@ function stubExtraction(): ExtractionResult {
         id: "b1",
         type: "heading",
         text: "Independent auditor's report",
-        prov: [{ page_no: 2, bbox: { x0: 0, y0: 0, x1: 1, y1: 1 }, charspan: null }],
+        prov: [{ page_no: 2, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
         children: [],
       },
       {
         id: "b2",
         type: "paragraph",
         text: "We have audited the consolidated financial statements of MTN Group Limited.",
-        prov: [{ page_no: 2, bbox: { x0: 0, y0: 0, x1: 1, y1: 1 }, charspan: null }],
+        prov: [{ page_no: 2, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
         children: [],
       },
       {
         id: "b3",
         type: "paragraph",
         text: "Revenue from contracts with customers was R 210 000 million.",
-        prov: [{ page_no: 3, bbox: { x0: 0, y0: 0, x1: 1, y1: 1 }, charspan: null }],
+        prov: [{ page_no: 3, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
         children: [],
       },
     ],
@@ -74,7 +74,7 @@ function stubExtraction(): ExtractionResult {
       t_pnl: {
         id: "t_pnl",
         caption_block: null,
-        prov: [{ page_no: 3, bbox: { x0: 0, y0: 0, x1: 1, y1: 1 }, charspan: null }],
+        prov: [{ page_no: 3, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
         num_rows: 2,
         num_cols: 3,
         cells: [
