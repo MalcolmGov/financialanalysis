@@ -5,6 +5,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import {
   IR_THEME_META,
+  inferDocKind,
   normalizeIrThemeId,
   suggestIrThemeId,
   themeIdFromDna,
@@ -70,21 +71,58 @@ function suggestFromContext(opts: {
     ? (opts.dna.tone_words as string[])
     : [];
   const sectionKinds: string[] = [];
+  const sectionTitles: string[] = [];
   const enrichment = opts.extraction?.enrichment as
-    | { sections?: { kind?: string }[] }
+    | { sections?: { kind?: string; title?: string }[] }
     | undefined;
   for (const s of enrichment?.sections ?? []) {
     if (s.kind) sectionKinds.push(s.kind);
+    if (s.title) sectionTitles.push(s.title);
   }
+
+  // Enrichment sections are title/page spans (no kind). Classify titles so
+  // letter-less AFS (MTN/Spar) can suggest Statutory Hub instead of Classic.
+  for (const title of sectionTitles) {
+    const t = title.toLowerCase();
+    if (/directors['']?\s*report/.test(t)) sectionKinds.push("directorsReport");
+    else if (/independent\s+auditor|auditor'?s?\s+report/.test(t))
+      sectionKinds.push("auditorReport");
+    else if (/accounting\s+polic/.test(t)) sectionKinds.push("accountingPolicies");
+    else if (/dear\s+shareholder|shareholder\s+letter|letter\s+to\s+shareholders/.test(t))
+      sectionKinds.push("letter");
+    else if (/review\s+of\s+operations|operating\s+review/.test(t))
+      sectionKinds.push("reviewOfOperations");
+  }
+
   const title =
     (opts.extraction?.source as { pdf_meta?: { title?: string } } | undefined)?.pdf_meta
       ?.title ?? "";
+  const coverHints = [title, ...sectionTitles.slice(0, 12), opts.periodLabel ?? ""];
+  let docKind: string | null = inferDocKind(coverHints, opts.periodLabel ?? "");
+  if (!docKind) {
+    const hay = coverHints.join(" ").toLowerCase();
+    if (
+      /annual\s+financial|afs\b|year\s+ended/.test(hay) &&
+      !/interim|half[\s-]?year|hy\d/.test(hay)
+    ) {
+      docKind = "annual_audited";
+    }
+  }
+
   return suggestIrThemeId({
     company: opts.companyName,
     periodLabel: opts.periodLabel,
+    docKind,
     toneWords,
-    sectionKinds,
-    signals: [title, ...toneWords, opts.companyName ?? "", opts.periodLabel ?? ""],
+    sectionKinds: [...new Set(sectionKinds)],
+    signals: [
+      title,
+      ...toneWords,
+      ...sectionTitles.slice(0, 8),
+      opts.companyName ?? "",
+      opts.periodLabel ?? "",
+      docKind ?? "",
+    ],
   });
 }
 

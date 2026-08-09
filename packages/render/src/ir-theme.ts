@@ -66,21 +66,27 @@ export function suggestIrThemeId(input: IrThemeSuggestInput): {
     .join(" ")
     .toLowerCase();
 
+  const kinds = input.sectionKinds ?? [];
+  const hasLetter = kinds.some((k) => /letter/i.test(k));
+  const hasStatutoryProse = kinds.some((k) =>
+    /directorsReport|auditorReport|accountingPolicies/i.test(k),
+  );
+  const isAnnual =
+    input.docKind === "annual_audited" ||
+    /\b(annual_audited|afs|annual\s*financial)\b/.test(hay);
+
   const editorialHits =
     /\b(retail|consumer|grocery|supermarket|spar|woolworth|shoprite|pick\s*n\s*pay|letter|editorial|brand-led)\b/.test(
       hay,
-    ) ||
-    (input.sectionKinds ?? []).some((k) =>
-      /letter|opsReview|dividendDeclaration/i.test(k),
-    );
+    ) || kinds.some((k) => /letter|opsReview|reviewOfOperations|dividendDeclaration/i.test(k));
 
   // Letter-less AFS with statutory prose → dedicated Statutory Hub theme.
+  // Also accept annual_audited + statutory section kinds without requiring
+  // "afs" string in the company name (MTN Group Limited).
   const statutoryHub =
-    /\b(annual_audited|afs|annual\s*financial)\b/.test(hay) &&
-    (input.sectionKinds ?? []).some((k) =>
-      /directorsReport|auditorReport|accountingPolicies/i.test(k),
-    ) &&
-    !(input.sectionKinds ?? []).some((k) => /letter/i.test(k));
+    isAnnual &&
+    hasStatutoryProse &&
+    !hasLetter;
 
   const classicHits =
     /\b(mining|gold|platinum|coal|metal|drdgold|drd|resource|interim\s*results|industrial)\b/.test(
@@ -91,6 +97,14 @@ export function suggestIrThemeId(input: IrThemeSuggestInput): {
     return {
       themeId: "statutory",
       reason: "Letter-less AFS → Statutory Hub (directors/auditor-first)",
+    };
+  }
+  // Prefer statutory over classic when AFS signals are clear even if a weak
+  // classic token appears in the haystack (e.g. "Group").
+  if (statutoryHub && classicHits && isAnnual) {
+    return {
+      themeId: "statutory",
+      reason: "Letter-less AFS outweighs weak classic signals → Statutory Hub",
     };
   }
   if (editorialHits && !classicHits) {
@@ -109,6 +123,14 @@ export function suggestIrThemeId(input: IrThemeSuggestInput): {
     return {
       themeId: "editorial",
       reason: "Mixed signals; preferring Editorial when prose/retail cues present",
+    };
+  }
+  // Annual AFS without letter and without classified statutory kinds yet —
+  // still lean Statutory when title/docKind screams AFS.
+  if (isAnnual && !hasLetter && !editorialHits) {
+    return {
+      themeId: "statutory",
+      reason: "Annual AFS without shareholder letter → Statutory Hub",
     };
   }
   return {

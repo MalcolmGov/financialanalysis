@@ -82,14 +82,18 @@ export const SITE_CHAT_SCHEMA = {
 
 export const SITE_CHAT_SYSTEM = `You are Results Studio's multipage site editor for investor-results HTML microsites.
 
-You help the operator surgically tweak and fix the current site draft AFTER the multipage HTML has been generated. You see one target file (usually a page) plus brand/DNA context.
+You help the operator surgically tweak and fix the current site draft AFTER the multipage HTML has been generated. You receive:
+1) SOURCE EXTRACTION CONTEXT — verbatim PDF extraction / DocModel slices (tables, prose, notes, KPIs, page text) relevant to the selected page and request
+2) Brand / DNA summary and site structure
+3) The current target HTML (and optional shared chrome CSS)
 
 HARD RULES:
 - Return ONLY JSON matching the schema. No markdown fences.
 - Prefer the smallest patch set that satisfies the request (typically 0–8 patches).
 - search must be copied EXACTLY from the provided file (including whitespace) and be unique, or set occurrence.
 - Apply surgical HTML/CSS/JS fixes only. Preserve structure, navigation, and accessibility unless asked otherwise.
-- NEVER invent financial numbers, KPIs, percentages, or dates. Do not invent external CDNs, fonts, or asset URLs.
+- NEVER invent financial numbers, KPIs, percentages, or dates. Ground wording and figures in SOURCE EXTRACTION CONTEXT and/or the current HTML only. Do not invent external CDNs, fonts, or asset URLs.
+- When fixing labels, note titles, commentary, or table presentation, prefer strings from the extraction evidence over guessing.
 - Preserve Gate A/B number integrity: do not alter digit-bearing figures unless the operator EXPLICITLY asked to change that figure. If they did, set number_change_requested=true and summarize which figures.
 - If the request is ambiguous or unsafe, return patches=[] and ask a short clarifying question in message.
 - target_path must be one of the allowed paths provided by the user message (selected page or listed chrome files).
@@ -156,6 +160,10 @@ export function buildSiteChatUserPayload(opts: {
   history: SiteChatTurn[];
   message: string;
   allowNumberOverride: boolean;
+  /** Verbatim PDF extraction / DocModel evidence for grounded edits. */
+  extractionContext?: string;
+  extractionTruncated?: boolean;
+  siteStructure?: string;
 }): string {
   const historyBlock =
     opts.history.length === 0
@@ -172,7 +180,16 @@ export function buildSiteChatUserPayload(opts: {
     `SELECTED PAGE: ${opts.selectedPagePath}`,
     `ALLOWED TARGET PATHS:\n${opts.allowedPaths.map((p) => `- ${p}`).join("\n")}`,
     `NUMBER OVERRIDE AUTHORIZED: ${opts.allowNumberOverride ? "yes — operator confirmed" : "no — refuse numeral edits"}`,
+    opts.siteStructure
+      ? `\nSITE STRUCTURE:\n${opts.siteStructure}`
+      : "",
     `\nBRAND / DNA SUMMARY:\n${opts.dnaSummary}`,
+    opts.extractionContext
+      ? `\n${opts.extractionContext}`
+      : "\nSOURCE EXTRACTION CONTEXT: (unavailable — edit HTML carefully; do not invent figures)",
+    opts.extractionTruncated
+      ? "\nNOTE: Extraction evidence was truncated to fit context; switch page or narrow the request if you need another section."
+      : "",
     `\nRECENT CHAT:\n${historyBlock}`,
     `\nOPERATOR REQUEST:\n${opts.message}`,
     opts.htmlTruncated

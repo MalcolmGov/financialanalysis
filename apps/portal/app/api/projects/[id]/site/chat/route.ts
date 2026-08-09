@@ -21,6 +21,12 @@ import {
   type SiteChatModelReply,
   type SiteChatTurn,
 } from "../../../../../../lib/site-chat";
+import {
+  buildExtractionEvidence,
+  mapExtractionToDocModelForChat,
+  summarizeSiteStructure,
+} from "../../../../../../lib/site-chat-context";
+import type { ExtractionResult, SitePlan } from "@rs/contracts";
 
 type PageMeta = { path: string; title: string };
 
@@ -227,10 +233,55 @@ export async function POST(
     (typeof meta.company === "string" && meta.company.trim()) ||
     project.companyName ||
     "Company";
+  const periodLabel = project.periodLabel ?? "";
+
+  let extractionContext =
+    "SOURCE EXTRACTION CONTEXT: (unavailable — edit HTML carefully; do not invent figures)";
+  let extractionTruncated = false;
+  try {
+    const [extArt] = await db()
+      .select({ blobPath: schema.artifacts.blobPath })
+      .from(schema.artifacts)
+      .where(
+        and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "extraction_result")),
+      )
+      .orderBy(desc(schema.artifacts.createdAt))
+      .limit(1);
+    if (extArt) {
+      const extraction = JSON.parse(
+        (await getPrivate(extArt.blobPath)).toString("utf8"),
+      ) as ExtractionResult;
+      const docModel = mapExtractionToDocModelForChat(extraction, issuerName, periodLabel);
+
+      let sitePlan: SitePlan | null = null;
+      const sitePlanBlob =
+        typeof (meta as { sitePlanBlobPath?: string }).sitePlanBlobPath === "string"
+          ? (meta as { sitePlanBlobPath: string }).sitePlanBlobPath
+          : `${prefix}/_meta/site-plan.json`;
+      try {
+        sitePlan = JSON.parse((await getPrivate(sitePlanBlob)).toString("utf8")) as SitePlan;
+      } catch {
+        sitePlan = null;
+      }
+
+      const evidence = buildExtractionEvidence({
+        extraction,
+        docModel,
+        pagePath,
+        message,
+        pages,
+        sitePlan,
+      });
+      extractionContext = evidence.text;
+      extractionTruncated = evidence.truncated;
+    }
+  } catch {
+    /* keep unavailable notice */
+  }
 
   const userPayload = buildSiteChatUserPayload({
     company: issuerName,
-    periodLabel: project.periodLabel ?? "",
+    periodLabel,
     selectedPagePath: pagePath,
     allowedPaths,
     dnaSummary,
@@ -241,6 +292,9 @@ export async function POST(
     history,
     message,
     allowNumberOverride,
+    extractionContext,
+    extractionTruncated,
+    siteStructure: summarizeSiteStructure(pages),
   });
 
   let modelReply: SiteChatModelReply;

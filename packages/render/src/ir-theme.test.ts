@@ -39,6 +39,16 @@ describe("ir-theme", () => {
     expect(s.themeId).toBe("statutory");
   });
 
+  it("suggests statutory for annual_audited even without classified section kinds", () => {
+    const s = suggestIrThemeId({
+      company: "MTN Group Limited",
+      docKind: "annual_audited",
+      sectionKinds: [],
+      signals: ["MTN Group Limited Annual Financial Statements"],
+    });
+    expect(s.themeId).toBe("statutory");
+  });
+
   it("suggests classic for mining interim signals", () => {
     const s = suggestIrThemeId({
       company: "DRDGOLD Limited",
