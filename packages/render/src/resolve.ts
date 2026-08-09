@@ -28,8 +28,8 @@ export interface ResolveContext {
   docModel: FinancialDocModel;
   /** Present when BrandAssetBundle figures were resolved for this render. */
   brandAssets?: BrandAssetUris;
-  /** IR chrome/layout preset from DesignDNA.theme_id (classic | editorial). */
-  themeId?: "classic" | "editorial";
+  /** IR chrome/layout preset from DesignDNA.theme_id (classic | editorial | statutory). */
+  themeId?: "classic" | "editorial" | "statutory";
 }
 
 const CELL_REF = /^ext:(.+):r(\d+)c(\d+)$/;

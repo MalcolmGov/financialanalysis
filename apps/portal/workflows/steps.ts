@@ -1369,6 +1369,8 @@ export async function buildSiteDraftArtifact(
     company_source: built.companySource,
     brand_logo: built.brandLogo,
     brand_banner: built.brandBanner,
+    theme_id: built.themeId,
+    doc_shape: built.docShape,
     created_at: new Date().toISOString(),
   };
   const manifestPut = await putPrivate(

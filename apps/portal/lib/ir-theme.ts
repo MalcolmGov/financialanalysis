@@ -1,5 +1,5 @@
 /**
- * Portal helpers for IR theme presets (classic | editorial).
+ * Portal helpers for IR theme presets (classic | editorial | statutory).
  * Persists theme_id on the DesignDNA artifact; rebuild reads it via buildMultipageExport.
  */
 import { and, desc, eq } from "drizzle-orm";

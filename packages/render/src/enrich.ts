@@ -24,8 +24,8 @@ export interface DownloadEnrichOptions {
 export interface EnrichContext {
   brandAssets?: BrandAssetUris;
   extraction?: ExtractionResult | null;
-  /** IR chrome/layout preset (classic | editorial). */
-  themeId?: "classic" | "editorial";
+  /** IR chrome/layout preset (classic | editorial | statutory). */
+  themeId?: "classic" | "editorial" | "statutory";
 }
 
 /**
@@ -348,8 +348,11 @@ function mergeNotesPage(html: string, proseHtml: string): string {
     (full, id: string) => (existing.has(id) ? "" : full),
   );
   // Insert prose notes after the page hero / before first table section.
-  if (/<\/header>/i.test(html) && /page-hero/.test(html)) {
-    return html.replace(/<\/header>/i, (m) => `${m}${keep}`);
+  if (/<header class="page-hero"/i.test(html)) {
+    return html.replace(
+      /(<header class="page-hero"[\s\S]*?<\/header>)/i,
+      (m) => `${m}${keep}`,
+    );
   }
   return html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${keep}`);
 }
@@ -670,7 +673,7 @@ export function enrichMultiPageFiles(
       !/data-dna-component="statement-empty"/.test(html)
     ) {
       html = html.replace(
-        /(<\/header>(?:\s*<div class="xls-toolbar"[\s\S]*?<\/div>)?)/i,
+        /(<header class="page-hero"[\s\S]*?<\/header>(?:\s*<div class="xls-toolbar"[\s\S]*?<\/div>)?)/i,
         (m) => `${m}${STATEMENT_EMPTY_HTML}`,
       );
       if (!/data-dna-component="statement-empty"/.test(html)) {
@@ -736,8 +739,11 @@ export function applyDownloadArtifacts(
         /<div class="xls-toolbar"[^>]*data-dna-component="xls-toolbar"[\s\S]*?<\/div>/i,
         () => bar,
       );
-    } else if (/<\/header>/i.test(html) && /page-hero/.test(html)) {
-      html = html.replace(/<\/header>/i, (m) => `${m}${bar}`);
+    } else if (/<header class="page-hero"/i.test(html)) {
+      html = html.replace(
+        /(<header class="page-hero"[\s\S]*?<\/header>)/i,
+        (m) => `${m}${bar}`,
+      );
     }
     out[page.path] = html;
   }

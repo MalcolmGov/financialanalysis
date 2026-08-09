@@ -567,6 +567,132 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(ids("financials/income-statement.html")).not.toContain(bsId);
   });
 
+
+  it("does not let a prior Group Operational heading steal later statement tables (DRD)", () => {
+    const cell = (
+      r: number,
+      c: number,
+      text: string,
+      flags: Partial<{ is_col_header: boolean; is_row_header: boolean; is_section: boolean }> = {},
+    ): Cell => ({
+      r,
+      c,
+      row_span: 1,
+      col_span: 1,
+      text,
+      is_col_header: flags.is_col_header ?? r === 0,
+      is_row_header: flags.is_row_header ?? (c === 0 && r > 0),
+      is_section: flags.is_section ?? false,
+    });
+    const pnl: Cell[] = [
+      cell(0, 0, "Statement of Profit or Loss and Other Comprehensive Income"),
+      cell(0, 1, "Six months ended 31 Dec 2025 Rm Unaudited"),
+      cell(0, 2, "Six months ended 31 Dec 2024 Rm Unaudited"),
+      cell(1, 0, "Revenue"),
+      cell(1, 1, "5 053.2"),
+      cell(1, 2, "3 802.3"),
+      cell(2, 0, 'Other comprehensive income ("OCI")', { is_section: true }),
+      cell(2, 1, ""),
+      cell(2, 2, ""),
+    ];
+    const bs: Cell[] = [
+      cell(0, 0, "Statement of Financial Position"),
+      cell(0, 1, "As at 31 Dec 2025 Rm Unaudited"),
+      cell(0, 2, "As at 30 Jun 2025 Rm Audited"),
+      cell(1, 0, "Assets", { is_section: true }),
+      cell(1, 1, ""),
+      cell(1, 2, ""),
+      cell(2, 0, "Total assets"),
+      cell(2, 1, "14 639.9"),
+      cell(2, 2, "12 246.0"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      body: [
+        {
+          id: "h-ops",
+          type: "heading",
+          text: "Group Operational, Financial and ESG Performance Summary",
+          prov: [{ page_no: 3, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          children: [],
+        },
+        {
+          id: "h-stub",
+          type: "heading",
+          text: "Condensed Consolidated",
+          prov: [{ page_no: 5, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          children: [],
+        },
+      ],
+      tables: {
+        t_pnl: {
+          id: "t_pnl",
+          caption_block: null,
+          prov: [{ page_no: 5, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 3,
+          num_cols: 3,
+          cells: pnl,
+          column_roles: null,
+        },
+        t_bs: {
+          id: "t_bs",
+          caption_block: null,
+          prov: [{ page_no: 5, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 3,
+          num_cols: 3,
+          cells: bs,
+          column_roles: null,
+        },
+      },
+    };
+    const dm = mapToDocModel(ex, meta);
+    const pnlSec = dm.sections.find(
+      (s) => s.statement_type === "pnl_oci" && s.blocks.some((b) => b.kind === "table"),
+    );
+    const bsSec = dm.sections.find(
+      (s) =>
+        s.statement_type === "financial_position" &&
+        s.blocks.some((b) => b.kind === "table"),
+    );
+    expect(pnlSec?.kind).toBe("statement");
+    expect(bsSec?.kind).toBe("statement");
+    expect(pnlSec?.title?.text).toMatch(/Profit or Loss/i);
+    expect(bsSec?.title?.text).toMatch(/Financial Position/i);
+
+    const bp = blueprint();
+    bp.page_templates.push(
+      {
+        id: "bp:tpl_home",
+        name: "Home",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_statement_page",
+        name: "Statement page",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_prose",
+        name: "Prose",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+    );
+    const plan = buildSitePlan(dm, bp);
+    const ids = (path: string) =>
+      Object.values(plan.pages.find((p) => p.path === path)!.regions)
+        .flat()
+        .map((i) => Object.values(i.slots).flat())
+        .flat();
+    const pnlId = pnlSec!.blocks.find((b) => b.kind === "table")!.table_ref!;
+    const bsId = bsSec!.blocks.find((b) => b.kind === "table")!.table_ref!;
+    expect(ids("financials/income-statement.html")).toContain(pnlId);
+    expect(ids("financials/balance-sheet.html")).toContain(bsId);
+    expect(ids("financials/income-statement.html")).not.toContain(bsId);
+  });
+
   it("Gate B catches a MAPPER bug (a mis-copied number) against the source extraction", () => {
     const ex = extraction();
     const dm = mapToDocModel(ex, meta);

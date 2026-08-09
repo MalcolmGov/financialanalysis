@@ -15,7 +15,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const PutBody = z.object({
-  themeId: z.enum(["classic", "editorial"]),
+  themeId: z.enum(["classic", "editorial", "statutory"]),
   /** When true (default), rebuild multipage site draft after persist. */
   rebuild: z.boolean().optional().default(true),
 });

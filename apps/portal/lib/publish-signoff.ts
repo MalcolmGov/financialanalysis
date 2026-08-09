@@ -36,12 +36,151 @@ export type PublishReadinessInput = {
   mastheadHex?: string | null;
   /** Optional DNA role map for bright-brand contrast gate. */
   dnaRoles?: Record<string, { hex?: string } | undefined> | null;
-  pages: Array<{ path: string }>;
+  pages: Array<{ path: string; title?: string }>;
   files?: string[];
   pdfBundled?: boolean;
   excelPresent?: boolean;
   deliveryPackOk?: boolean;
+  /** Soft doc-shape hint from SitePlan / draft meta (interim vs AFS). */
+  docShape?: string | null;
 };
+
+/**
+ * Shape-complete IR pack checks beyond Gate A/B + corporate reliability.
+ * Interim packs stay lean; AFS requires statutory pages when the tree implies them.
+ */
+export function assessCompleteIrShape(input: {
+  pages: Array<{ path: string; title?: string }>;
+  company?: string | null;
+  companyLooksLikeSlug?: boolean;
+  docShape?: string | null;
+}): PublishChecklistItem[] {
+  const paths = input.pages.map((p) => p.path);
+  const has = (re: RegExp) => paths.some((p) => re.test(p));
+  const shape = (input.docShape ?? "").toLowerCase();
+  const looksAfs =
+    shape.includes("afs") ||
+    has(/directors-report\.html$/i) ||
+    has(/auditors-report\.html$/i) ||
+    has(/accounting-policies\.html$/i) ||
+    has(/financials\/(?:group|company)\//i);
+
+  const commentary = has(/commentary\.html$/i);
+  const directors = has(/directors-report\.html$/i);
+  const auditor = has(/auditors-report\.html$/i);
+  const policies = has(/accounting-policies\.html$/i);
+  const noteGroups = paths.filter((p) =>
+    /financials\/(?:(?:group|company)\/)?notes-(?:\d+(?:-\d+)?|part-\d+)\.html$/i.test(p),
+  ).length;
+  const notesIndex = has(/financials\/(?:(?:group|company)\/)?notes\.html$/i);
+  const dualColumns = input.pages.some((p) => /group and company/i.test(p.title ?? ""));
+  const groupBook = has(/financials\/group\//i);
+  const companyBook = has(/financials\/company\//i);
+  const legalOk = Boolean(input.company?.trim()) && !input.companyLooksLikeSlug;
+
+  const narrativeOk = looksAfs ? directors || commentary : commentary || directors;
+  const auditorStatus: PublishChecklistItem["status"] = !looksAfs
+    ? "na"
+    : auditor
+      ? "pass"
+      : directors
+        ? "fail"
+        : "na";
+  const policiesStatus: PublishChecklistItem["status"] = !looksAfs
+    ? "na"
+    : policies
+      ? "pass"
+      : "warn";
+  const notesStatus: PublishChecklistItem["status"] = !looksAfs
+    ? notesIndex || has(/notes\.html$/i)
+      ? "pass"
+      : "na"
+    : noteGroups >= 1 || notesIndex
+      ? "pass"
+      : "warn";
+  const entityOk =
+    !looksAfs ||
+    dualColumns ||
+    (groupBook && companyBook) ||
+    has(/financials\/income-statement\.html$/i);
+
+  return [
+    {
+      id: "shape_narrative",
+      label: looksAfs
+        ? "Narrative non-empty (directors' report or commentary)"
+        : "Narrative non-empty (commentary / letter band)",
+      status: narrativeOk ? "pass" : "fail",
+      detail: narrativeOk
+        ? directors && commentary
+          ? "directors-report.html + commentary.html"
+          : directors
+            ? "directors-report.html"
+            : "commentary.html"
+        : "Missing directors' report and commentary pages",
+      critical: true,
+    },
+    {
+      id: "shape_auditor",
+      label: "Auditor page when AFS",
+      status: auditorStatus,
+      detail:
+        auditorStatus === "pass"
+          ? "auditors-report.html present"
+          : auditorStatus === "fail"
+            ? "AFS has directors' report but no auditor page"
+            : "N/A for interim / no auditor section",
+      critical: auditorStatus === "fail",
+    },
+    {
+      id: "shape_policies",
+      label: "Policies / framework page when AFS",
+      status: policiesStatus,
+      detail:
+        policiesStatus === "pass"
+          ? "accounting-policies.html present"
+          : policiesStatus === "warn"
+            ? "AFS tree without dedicated policies page"
+            : "N/A for interim",
+      critical: false,
+    },
+    {
+      id: "shape_notes_ux",
+      label: "Notes UX (index / groups for large packs)",
+      status: notesStatus,
+      detail:
+        noteGroups > 0
+          ? `${noteGroups} note group page(s)${notesIndex ? " + index" : ""}`
+          : notesIndex
+            ? "Single notes page / index"
+            : looksAfs
+              ? "No notes pages detected"
+              : "Interim notes optional",
+      critical: false,
+    },
+    {
+      id: "shape_entity",
+      label: "Entity coverage (consolidated / dual / Group+Company)",
+      status: entityOk ? "pass" : "warn",
+      detail:
+        groupBook && companyBook
+          ? "Group + Company statement books"
+          : dualColumns
+            ? "Dual-entity columns"
+            : has(/financials\/income-statement\.html$/i)
+              ? "Consolidated statement pages"
+              : "Statement pages incomplete",
+      critical: false,
+    },
+    {
+      id: "shape_legal_name",
+      label: "Legal name (not project slug / TOC title)",
+      status: legalOk ? "pass" : "fail",
+      detail: input.company ?? "missing",
+      critical: true,
+    },
+  ];
+}
 
 /**
  * Publish gate for high-luminance brand chrome (MTN yellow, etc.).
@@ -214,6 +353,20 @@ export function buildPublishChecklist(input: PublishReadinessInput): PublishChec
       status: deliveryOk ? "pass" : "fail",
       detail: deliveryOk ? "README + _meta/export.json present" : "Incomplete delivery pack",
       critical: true,
+    },
+    ...assessCompleteIrShape({
+      pages,
+      company: input.company,
+      companyLooksLikeSlug: input.companyLooksLikeSlug,
+      docShape: input.docShape,
+    }),
+    {
+      id: "operator_sla",
+      label: "Operator SLA path (≤2-click rebuild / ≤15 min polish)",
+      status: "pass",
+      detail:
+        "Theme or Brand kit → Apply & rebuild (≤2 clicks). Aim ≤15 min polish after extraction finishes.",
+      critical: false,
     },
   ];
   return items;

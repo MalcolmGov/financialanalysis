@@ -75,7 +75,7 @@ export const DnaTableStyle = z.object({
  * Distinct from `theme.mode` (light/dark from the PDF). Brand DNA colors still apply.
  * Future: minimal | bold.
  */
-export const IrThemeId = z.enum(["classic", "editorial"]);
+export const IrThemeId = z.enum(["classic", "editorial", "statutory"]);
 export type IrThemeId = z.infer<typeof IrThemeId>;
 
 export const DesignDNA = z.object({
@@ -140,7 +140,7 @@ export const DesignDNA = z.object({
     rationale: z.string(),
   }),
   /**
-   * IR chrome/layout preset (classic | editorial). Operator-selectable;
+   * IR chrome/layout preset (classic | editorial | statutory). Operator-selectable;
    * defaults to classic (current dark-masthead look). Does not invent content.
    */
   theme_id: IrThemeId.default("classic"),

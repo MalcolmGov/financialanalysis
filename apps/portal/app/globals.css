@@ -1475,14 +1475,20 @@ textarea.rs-field:focus {
 
 .rs-theme-picker__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .rs-theme-picker__grid {
     grid-template-columns: 1fr;
   }
+}
+
+.rs-theme-picker__sla {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .rs-theme-card {

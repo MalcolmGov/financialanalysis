@@ -91,7 +91,7 @@ type ExtractionProgress = {
   error?: string | null;
 };
 
-type IrThemeId = "classic" | "editorial";
+type IrThemeId = "classic" | "editorial" | "statutory";
 
 type IrThemeMeta = { label: string; blurb: string; bestFor: string };
 
@@ -101,7 +101,7 @@ type DnaSummary = {
   confidence: number | null;
   flags: { path: string; reason: string; confidence: number }[];
   theme: { mode?: string; rationale?: string };
-  /** IR chrome/layout preset (classic | editorial). Distinct from theme.mode. */
+  /** IR chrome/layout preset (classic | editorial | statutory). Distinct from theme.mode. */
   themeId?: IrThemeId;
   suggestedThemeId?: IrThemeId;
   suggestReason?: string;
@@ -136,6 +136,11 @@ const DEFAULT_THEME_META: Record<IrThemeId, IrThemeMeta> = {
     label: "Editorial Light",
     blurb: "Lighter hero, commentary-first emphasis, airier cards.",
     bestFor: "Retail, consumer, AFS-style packs with strong prose",
+  },
+  statutory: {
+    label: "Statutory Hub",
+    blurb: "Directors / auditor / committee-first for letter-less AFS.",
+    bestFor: "Audited AFS without a shareholder letter",
   },
 };
 
@@ -935,8 +940,8 @@ export function ProjectConsole(props: {
           ) : null}
         </div>
         <div className="rs-theme-picker__grid" role="radiogroup" aria-label="IR theme">
-          {(["classic", "editorial"] as const).map((id) => {
-            const m = meta[id];
+          {(["classic", "editorial", "statutory"] as const).map((id) => {
+            const m = meta[id] ?? DEFAULT_THEME_META[id];
             const selected = irTheme === id;
             const suggested = themeSuggest?.themeId === id;
             return (
@@ -963,6 +968,10 @@ export function ProjectConsole(props: {
             );
           })}
         </div>
+        <p className="rs-theme-picker__sla rs-muted">
+          Operator path: pick theme → Apply &amp; rebuild (≤2 clicks) · aim ≤15 min polish after
+          extract finishes.
+        </p>
         {opts.showApply ? (
           <div className="rs-theme-picker__actions">
             <button
@@ -1942,9 +1951,10 @@ export function ProjectConsole(props: {
                   Publish readiness checklist
                 </h3>
                 <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-                  Formal accept of the multipage pack. Checklist includes brand differentiation
-                  (issuer DNA accent + logo). Sign-off unlocks Approve &amp; export when critical
-                  gates pass.
+                  Formal accept of the multipage pack. Includes Gate A/B, corporate reliability,
+                  brand contrast, and complete-IR shape checks. Operator path: ≤2-click rebuild
+                  (theme/brand → Apply) · aim ≤15 min polish after extract. Sign-off unlocks
+                  Approve &amp; export when critical gates pass.
                 </p>
               </div>
               {publishReady?.signoff && !publishReady.signoffStale ? (

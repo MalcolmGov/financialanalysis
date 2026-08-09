@@ -607,6 +607,26 @@ function extractionTableTitle(
     (marker?.entity as "group" | "company" | undefined) ??
     (page > 0 ? activeEntityForPage(markers, page) : undefined);
 
+  // Prefer an intrinsic statement title in row 0 over a stale page marker.
+  // DRD: "Group Operational…" (reviewOfOperations) on p3 must not steal SoPL/SoFP
+  // tables on p5–6 whose IFRS titles live only in the table tip cell.
+  const row0Cells = table.cells
+    .filter((c) => c.r === 0)
+    .sort((a, b) => a.c - b.c)
+    .map((c) => c.text.trim())
+    .filter(Boolean);
+  const row0Tip = row0Cells[0] ?? "";
+  if (row0Tip && !isWeakTableTitle(row0Tip)) {
+    const row0Cls = classifySectionTitle(row0Tip);
+    if (row0Cls.statement_type) {
+      return {
+        title: row0Tip,
+        statement_type: row0Cls.statement_type,
+        entity: entityBookOf(row0Tip) ?? entity,
+      };
+    }
+  }
+
   if (marker?.kind === "statement" && marker.statement_type) {
     return {
       title: marker.title,
@@ -648,14 +668,9 @@ function extractionTableTitle(
 
   if (caption && !isWeakTableTitle(caption)) return { title: caption, entity };
 
-  const row0 = table.cells
-    .filter((c) => c.r === 0)
-    .sort((a, b) => a.c - b.c)
-    .map((c) => c.text.trim())
-    .filter(Boolean);
-  if (row0[0] && !isWeakTableTitle(row0[0])) return { title: row0[0], entity };
+  if (row0Tip && !isWeakTableTitle(row0Tip)) return { title: row0Tip, entity };
 
-  return { title: caption || row0[0] || `Table ${extId}`, entity };
+  return { title: caption || row0Tip || `Table ${extId}`, entity };
 }
 
 export function mapToDocModel(

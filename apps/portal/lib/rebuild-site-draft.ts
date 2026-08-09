@@ -45,7 +45,7 @@ export type RebuildSiteDraftOptions = {
    * Optional IR theme override applied for this rebuild (avoids blob read-after-write
    * races right after persistProjectTheme). Written through to DesignDNA for render.
    */
-  themeId?: "classic" | "editorial";
+  themeId?: "classic" | "editorial" | "statutory";
 };
 
 async function resolveBrand(
@@ -288,6 +288,7 @@ export async function rebuildProjectSiteDraft(
     brand_logo: built.brandLogo,
     brand_banner: built.brandBanner,
     theme_id: built.themeId,
+    doc_shape: built.docShape,
     delivery_pack: "client-delivery",
   };
   const manifestPut = await putPrivate(
@@ -322,6 +323,7 @@ export async function rebuildProjectSiteDraft(
       brandLogo: built.brandLogo,
       brandBanner: built.brandBanner,
       themeId: built.themeId,
+      docShape: built.docShape,
       rebuiltOffline: true,
       rebuiltVia: "rebuildProjectSiteDraft",
     },

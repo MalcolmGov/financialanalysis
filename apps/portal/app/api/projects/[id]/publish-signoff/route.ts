@@ -28,6 +28,7 @@ type DraftMeta = {
   draftId?: string;
   fileCount?: number;
   pdfBundled?: boolean;
+  docShape?: string;
 };
 
 async function loadDraftContext(projectId: string) {
@@ -193,6 +194,11 @@ async function readinessFromDraft(projectId: string) {
     pdfBundled:
       typeof m.pdf_bundled === "boolean" ? m.pdf_bundled : meta.pdfBundled,
     excelPresent: files.some((f) => /\.xlsx$/i.test(f)),
+    docShape:
+      (typeof m.doc_shape === "string" && m.doc_shape) ||
+      (typeof (meta as { docShape?: string }).docShape === "string"
+        ? (meta as { docShape?: string }).docShape
+        : null),
   });
 
   const blockers = checklistBlockers(checklist);

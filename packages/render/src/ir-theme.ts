@@ -3,7 +3,7 @@
  * Brand DNA (--dna-*) and logo still apply on top of the preset.
  */
 
-export const IR_THEME_IDS = ["classic", "editorial"] as const;
+export const IR_THEME_IDS = ["classic", "editorial", "statutory"] as const;
 export type IrThemeId = (typeof IR_THEME_IDS)[number];
 
 export const IR_THEME_META: Record<
@@ -20,10 +20,16 @@ export const IR_THEME_META: Record<
     blurb: "Lighter hero, commentary-first emphasis, airier cards.",
     bestFor: "Retail, consumer, AFS-style packs with strong prose",
   },
+  statutory: {
+    label: "Statutory Hub",
+    blurb: "Directors / auditor / committee-first nav for letter-less AFS.",
+    bestFor: "Audited AFS without a shareholder letter (Spar, MTN-style)",
+  },
 };
 
 export function normalizeIrThemeId(raw: unknown): IrThemeId {
   if (raw === "editorial") return "editorial";
+  if (raw === "statutory") return "statutory";
   return "classic";
 }
 
@@ -61,15 +67,14 @@ export function suggestIrThemeId(input: IrThemeSuggestInput): {
     .toLowerCase();
 
   const editorialHits =
-    /\b(retail|consumer|grocery|supermarket|spar|woolworth|shoprite|pick\s*n\s*pay|afs|annual\s*financial|letter|editorial|brand-led)\b/.test(
+    /\b(retail|consumer|grocery|supermarket|spar|woolworth|shoprite|pick\s*n\s*pay|letter|editorial|brand-led)\b/.test(
       hay,
     ) ||
     (input.sectionKinds ?? []).some((k) =>
       /letter|opsReview|dividendDeclaration/i.test(k),
     );
 
-  // Letter-less AFS with statutory prose → editorial (statutory-hub personality
-  // until a dedicated theme_id ships in week 3–4).
+  // Letter-less AFS with statutory prose → dedicated Statutory Hub theme.
   const statutoryHub =
     /\b(annual_audited|afs|annual\s*financial)\b/.test(hay) &&
     (input.sectionKinds ?? []).some((k) =>
@@ -84,8 +89,8 @@ export function suggestIrThemeId(input: IrThemeSuggestInput): {
 
   if (statutoryHub && !classicHits) {
     return {
-      themeId: "editorial",
-      reason: "Letter-less AFS statutory hub → Editorial Light (directors/auditor-first)",
+      themeId: "statutory",
+      reason: "Letter-less AFS → Statutory Hub (directors/auditor-first)",
     };
   }
   if (editorialHits && !classicHits) {

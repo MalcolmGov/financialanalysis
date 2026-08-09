@@ -992,5 +992,99 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 [data-theme="editorial"] .site-footer__bar{border-top-color:color-mix(in srgb,var(--dna-ink,#111) 10%,transparent)}
 [data-theme="editorial"] .share-bar{border-top-width:2px}
 [data-theme="editorial"] .commentary-section__hdr{border-left-width:3px;padding-left:1.25rem}
+
+/* Statutory Hub — letter-less AFS: light chrome like editorial, formal hub CTAs.
+   Shares light-paper personality; directors/auditor emphasis is compositional. */
+[data-theme="statutory"]{
+  --rs-lh-body:1.62;
+  --rs-space-6:2.65rem;
+}
+[data-theme="statutory"] .site-nav{
+  background:color-mix(in srgb,var(--dna-paper,#fff) 94%,var(--dna-shading,#F2F2F2));
+  border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 14%,transparent);
+  border-top:3px solid var(--dna-masthead,#1B2A3A);
+  box-shadow:0 6px 22px rgba(15,23,42,.06);
+}
+[data-theme="statutory"] .site-nav.is-scrolled{
+  background:var(--dna-paper,#fff);
+  box-shadow:0 10px 28px rgba(15,23,42,.09);
+}
+[data-theme="statutory"] .nav-brand__name{color:var(--dna-ink,#231F20)}
+[data-theme="statutory"] .nav-brand--logo .nav-brand__logo--svg{filter:none}
+[data-theme="statutory"] .nav-brand__logo--raster{mix-blend-mode:multiply}
+[data-theme="statutory"] .site-nav a,[data-theme="statutory"] .site-nav .nav-dd-btn{
+  color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff));
+}
+[data-theme="statutory"] .site-nav a:hover,[data-theme="statutory"] .site-nav .nav-dd-btn:hover{
+  color:var(--dna-ink,#231F20);background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 7%,var(--dna-paper,#fff));
+}
+[data-theme="statutory"] .site-nav a[aria-current="page"],[data-theme="statutory"] .site-nav .is-active>a,[data-theme="statutory"] .site-nav .is-active>.nav-dd-btn{
+  color:var(--dna-ink,#231F20);box-shadow:inset 0 -3px 0 var(--dna-masthead,#1B2A3A);
+}
+[data-theme="statutory"] .nav-dd-menu{
+  background:var(--dna-paper,#fff);border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);
+  border-top:2px solid var(--dna-masthead,#1B2A3A);box-shadow:0 16px 36px rgba(15,23,42,.12);
+}
+[data-theme="statutory"] .nav-dd-menu a{color:color-mix(in srgb,var(--dna-ink,#111) 82%,var(--dna-paper,#fff))}
+[data-theme="statutory"] .nav-dd-menu a:hover,[data-theme="statutory"] .nav-dd-menu a[aria-current="page"]{
+  background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 7%,var(--dna-paper,#fff));color:var(--dna-ink,#231F20);
+}
+[data-theme="statutory"] .nav-toggle span{background:var(--dna-ink,#231F20)}
+[data-theme="statutory"] .nav-mobile{
+  background:var(--dna-paper,#fff);border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);
+}
+[data-theme="statutory"] .nav-mobile__link{color:color-mix(in srgb,var(--dna-ink,#111) 82%,var(--dna-paper,#fff));border-bottom-color:color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
+[data-theme="statutory"] .nav-mobile__heading{color:color-mix(in srgb,var(--dna-ink,#111) 45%,var(--dna-paper,#fff))}
+[data-theme="statutory"] .home-hero,[data-theme="statutory"] .home-hero--atmosphere,[data-theme="statutory"] .home-hero--photo{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--dna-masthead,#1B2A3A) 8%,var(--dna-paper,#fff)) 0%,var(--dna-paper,#fff) 48%,color-mix(in srgb,var(--dna-shading,#F2F2F2) 32%,var(--dna-paper,#fff)) 100%);
+  color:var(--dna-ink,#231F20);min-height:0;
+}
+[data-theme="statutory"] .home-hero--composition{min-height:min(68vh,40rem);padding-bottom:clamp(1.5rem,3vh,2.25rem)}
+[data-theme="statutory"] .home-hero__atmosphere{opacity:.35}
+[data-theme="statutory"] .home-hero__mesh{opacity:.22;background:radial-gradient(ellipse 90% 70% at 90% 0%,color-mix(in srgb,var(--dna-masthead,#1B2A3A) 14%,transparent),transparent 60%)}
+[data-theme="statutory"] .home-hero__beam,[data-theme="statutory"] .home-hero__orb,[data-theme="statutory"] .home-hero__grain{opacity:.18}
+[data-theme="statutory"] .home-hero--photo .home-hero__photo{
+  opacity:.08;filter:saturate(.4) contrast(1.05);mix-blend-mode:multiply;object-fit:contain;object-position:92% 35%;
+}
+[data-theme="statutory"] .home-hero--photo::after{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--dna-paper,#fff) 78%,transparent) 0%,var(--dna-paper,#fff) 86%);
+}
+[data-theme="statutory"] .home-hero__company{color:var(--dna-ink,#231F20);text-shadow:none;letter-spacing:.05em}
+[data-theme="statutory"] .home-hero__logo--svg{filter:none}
+[data-theme="statutory"] .home-hero__logo--raster{mix-blend-mode:multiply}
+[data-theme="statutory"] .home-kicker{color:var(--dna-masthead,#1B2A3A);letter-spacing:.14em}
+[data-theme="statutory"] .home-hero h1{color:var(--dna-ink,#231F20);text-shadow:none;max-width:28ch;font-size:clamp(1.9rem,4vw,2.85rem)}
+[data-theme="statutory"] .home-lede{color:color-mix(in srgb,var(--dna-ink,#111) 76%,var(--dna-paper,#fff));max-width:42rem;font-size:clamp(1.02rem,1.55vw,1.15rem);line-height:1.68}
+[data-theme="statutory"] .home-period{color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff))}
+[data-theme="statutory"] .home-meta__chip{
+  color:var(--dna-ink,#231F20);background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 6%,var(--dna-paper,#fff));
+  border:1px solid color-mix(in srgb,var(--dna-masthead,#1B2A3A) 28%,transparent);
+}
+[data-theme="statutory"] .home-cta__secondary{color:var(--dna-ink,#231F20);border-bottom-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,transparent)}
+[data-theme="statutory"] .home-cta__primary{
+  color:var(--dna-on-brand,#fff)!important;
+  background:var(--dna-masthead,#1B2A3A)!important;
+  box-shadow:0 8px 22px color-mix(in srgb,var(--dna-masthead,#1B2A3A) 28%,transparent);
+}
+[data-theme="statutory"] .home-body__kpi-stage{margin:0 0 var(--rs-space-5)}
+[data-theme="statutory"] .home-body__kpi-stage .kpi-band{box-shadow:0 12px 32px rgba(15,23,42,.05);border-radius:2px}
+[data-theme="statutory"] .kpi-card{
+  border-left:3px solid var(--dna-masthead,#1B2A3A);
+  background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 35%,var(--dna-paper,#fff));
+}
+[data-theme="statutory"] .kpi-card:nth-child(even){border-left-color:transparent;border-top-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,var(--dna-brand,#243B53))}
+[data-theme="statutory"] .highlight-card,[data-theme="statutory"] .explore-card{
+  border-top:2px solid color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,var(--dna-brand,#243B53));
+}
+[data-theme="statutory"] .page-hero{
+  border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);
+}
+[data-theme="statutory"] .site-footer{
+  background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 92%,#05080d);
+}
+[data-theme="statutory"] .site-footer__accent{height:3px;background:var(--dna-brand,#243B53)}
+[data-theme="statutory"] .site-footer__heading{color:rgba(255,255,255,.92)}
+[data-theme="statutory"] .share-bar{border-top-width:2px;border-top-color:var(--dna-masthead,#1B2A3A)}
+[data-theme="statutory"] .commentary-section__hdr{border-left-width:3px;border-left-color:var(--dna-masthead,#1B2A3A);padding-left:1.25rem}
 `.trim();
 

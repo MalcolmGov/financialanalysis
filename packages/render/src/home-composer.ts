@@ -167,7 +167,7 @@ export function listingMeta(
 export interface HomeComposeOptions {
   brandAssets?: BrandAssetUris;
   extraction?: ExtractionResult | null;
-  /** IR chrome/layout preset — classic (default) | editorial. */
+  /** IR chrome/layout preset — classic (default) | editorial | statutory. */
   themeId?: IrThemeId | string;
 }
 
@@ -370,9 +370,10 @@ function homeHero(
   kpis: HomeKpiCard[],
   opts: HomeComposeOptions = {},
   financialsHref = "financials/income-statement.html",
+  navHrefs: string[] = [],
 ): string {
   const themeId = normalizeIrThemeId(opts.themeId);
-  const editorial = themeId === "editorial";
+  const lightHero = themeId === "editorial" || themeId === "statutory";
   const company = escapeHtml(docModel.meta.company || "Results");
   const coverTexts = coverTextSources(docModel, opts.extraction);
   const kind = escapeHtml(
@@ -390,7 +391,12 @@ function homeHero(
   const modeClass = banner
     ? ` home-hero--photo home-hero--${bannerKind ?? "photo"}`
     : " home-hero--atmosphere";
-  const themeClass = editorial ? " home-hero--editorial" : " home-hero--classic";
+  const themeClass =
+    themeId === "editorial"
+      ? " home-hero--editorial"
+      : themeId === "statutory"
+        ? " home-hero--statutory"
+        : " home-hero--classic";
   const photo = banner
     ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" fetchpriority="high" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}" data-banner-img onerror="${BANNER_IMG_ONERROR}">`
     : "";
@@ -402,12 +408,21 @@ function homeHero(
   // Results headline from period / cover phrase; brand is company wordmark.
   const headline = resultsHeadline(docModel, opts.extraction);
   const headlineAttr = /\d/.test(headline) ? " data-allow-number" : "";
-  // Editorial: commentary-first hero; KPIs move to the body band (same figures).
-  const stage = editorial ? "" : kpiStage(kpis);
+  // Editorial / statutory: prose-first hero; KPIs move to the body band (same figures).
+  const stage = lightHero ? "" : kpiStage(kpis);
   const finHref = escapeHtml(financialsHref);
-  const ctaPrimary = editorial
-    ? `<a class="home-cta__primary" href="commentary.html">Read the commentary</a><a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
-    : `<a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`;
+  const hasDirectors =
+    navHrefs.includes("directors-report.html") ||
+    docModel.sections.some((s) => s.kind === "directorsReport");
+  const hasAuditor =
+    navHrefs.includes("auditors-report.html") ||
+    docModel.sections.some((s) => s.kind === "auditorReport");
+  const ctaPrimary =
+    themeId === "statutory"
+      ? `<a class="home-cta__primary" href="${hasDirectors ? "directors-report.html" : "commentary.html"}">${hasDirectors ? "Directors' report" : "Read the commentary"}</a>${hasAuditor ? `<a class="home-cta__secondary" href="auditors-report.html">Auditor's report</a>` : ""}<a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
+      : themeId === "editorial"
+        ? `<a class="home-cta__primary" href="commentary.html">Read the commentary</a><a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
+        : `<a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`;
   // Logo present → avoid double-branding the company wordmark beside the lockup.
   const brandClass = logo ? " home-hero__brand--has-logo" : "";
 
@@ -568,13 +583,19 @@ export function composeHome(
 ): HomeComposition {
   const themeId = normalizeIrThemeId(opts.themeId);
   const kpis = extractHomeKpis(docModel);
-  // Editorial: KPIs sit in the body (airier paper band) so the hero stays commentary-led.
+  // Editorial / statutory: KPIs sit in the body so the hero stays narrative-led.
   const bodyKpis =
-    themeId === "editorial" && kpis.length
+    (themeId === "editorial" || themeId === "statutory") && kpis.length
       ? `<div class="home-body__kpi-stage" data-dna-component="home-kpi-stage">${kpiStage(kpis)}</div>`
       : "";
   return {
-    heroHtml: homeHero(docModel, kpis, opts, firstFinancialsHref(plan)),
+    heroHtml: homeHero(
+      docModel,
+      kpis,
+      opts,
+      firstFinancialsHref(plan),
+      plan.nav.map((n) => n.href),
+    ),
     bodyHtml: `${bodyKpis}${highlightsBand(docModel, kpis)}${exploreCards(plan)}`,
     kpis,
   };

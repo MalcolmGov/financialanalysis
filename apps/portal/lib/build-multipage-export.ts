@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Blueprint, DesignDNA, ExtractionResult, SitePlan } from "@rs/contracts";
 import { Blueprint as BlueprintSchema } from "@rs/contracts";
-import { buildSitePlan, mapToDocModel } from "@rs/mapper";
+import { buildSitePlan, classifyDocShape, mapToDocModel } from "@rs/mapper";
 import {
   applyDownloadArtifacts,
   auditCorporateReliability,
@@ -88,7 +88,9 @@ export interface MultipageExportResult {
   /** Display period used in SEO/chrome/delivery meta. */
   periodLabel: string;
   /** IR chrome/layout preset applied to HTML (`data-theme`). */
-  themeId: "classic" | "editorial";
+  themeId: "classic" | "editorial" | "statutory";
+  /** Doc-shape classifier label for operator gates / checklist. */
+  docShape: string;
 }
 
 function sha256Hex(body: string | Buffer): string {
@@ -187,6 +189,7 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   docModel.meta.doc_kind = docKind;
 
   const sitePlan = buildSitePlan(docModel, blueprint);
+  const docShape = classifyDocShape(docModel);
 
   const binaries: Record<string, Uint8Array> = {
     ...fontAssetBinaries(),
@@ -320,5 +323,6 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     companySource: legal.source,
     periodLabel,
     themeId,
+    docShape,
   };
 }
