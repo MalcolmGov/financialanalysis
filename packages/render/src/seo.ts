@@ -46,11 +46,77 @@ export function docKindLabel(kind?: FinancialDocModel["meta"]["doc_kind"]): stri
     case "interim_reviewed":
       return "Condensed Consolidated Reviewed Interim Results";
     case "annual_audited":
-      return "Audited Annual Financial Results";
+      return "Annual Financial Statements";
     case "interim_unaudited":
     default:
       return "Condensed Consolidated Unaudited Interim Results";
   }
+}
+
+type DocKind = FinancialDocModel["meta"]["doc_kind"];
+
+/**
+ * Infer doc_kind from cover/title prose + period label.
+ * Portal pipelines historically defaulted to interim_unaudited — AFS packs
+ * (year ended / "Annual Financial Statements") must not keep that label.
+ */
+export function inferDocKind(
+  texts: Iterable<string>,
+  periodLabel?: string,
+): DocKind {
+  const blob = [...texts]
+    .map((t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+  const period = (periodLabel ?? "").replace(/\u00a0/g, " ").trim();
+
+  if (
+    /\b(annual\s+financial\s+statements|audited\s+annual(?:\s+financial)?|group\s+annual\s+financial)\b/i.test(
+      blob,
+    )
+  ) {
+    return "annual_audited";
+  }
+  if (/\b(reviewed\s+interim|interim\s+reviewed)\b/i.test(blob)) {
+    return "interim_reviewed";
+  }
+  if (
+    /\b(interim|six\s+months\s+ended|half[\s-]?year)\b/i.test(blob) ||
+    /^HY\d/i.test(period)
+  ) {
+    return "interim_unaudited";
+  }
+  if (/\byear\s+ended\b/i.test(blob) || /^FY\d{4}$/i.test(period)) {
+    return "annual_audited";
+  }
+  return "interim_unaudited";
+}
+
+/**
+ * Hero/SEO document-type line. Prefers a short cover phrase when present;
+ * otherwise the canonical label for the inferred/stored kind.
+ */
+export function resolveDocKindLabel(
+  kind: DocKind | undefined,
+  opts?: { texts?: Iterable<string>; periodLabel?: string },
+): string {
+  for (const raw of opts?.texts ?? []) {
+    const t = raw.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (!t || t.length > 96) continue;
+    if (/\bannual\s+financial\s+statements\b/i.test(t)) {
+      return "Annual Financial Statements";
+    }
+    if (/\bcondensed\s+consolidated\s+reviewed\s+interim\b/i.test(t)) {
+      return "Condensed Consolidated Reviewed Interim Results";
+    }
+    if (/\bcondensed\s+consolidated\s+unaudited\s+interim\b/i.test(t)) {
+      return "Condensed Consolidated Unaudited Interim Results";
+    }
+  }
+  const inferred =
+    kind ??
+    inferDocKind(opts?.texts ?? [], opts?.periodLabel);
+  return docKindLabel(inferred);
 }
 
 function shortCompany(company: string): string {

@@ -13,6 +13,7 @@ import {
   renderClientDeliveryReadme,
   renderSitePlan,
   looksLikeProjectSlug,
+  inferDocKind,
   resolveDisplayPeriodLabel,
   resolveLegalCompanyName,
   themeIdFromDna,
@@ -161,10 +162,21 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     );
   }
 
+  const coverTexts: string[] = [];
+  const collectCover = (nodes: ExtractionResult["body"] | undefined) => {
+    for (const n of nodes ?? []) {
+      if (n.text?.trim()) coverTexts.push(n.text);
+      if (n.children?.length) collectCover(n.children);
+    }
+  };
+  collectCover(input.extraction.body);
+  collectCover(input.extraction.furniture);
+  const docKind = inferDocKind(coverTexts, input.periodLabel);
+
   const meta = {
     company: legal.company,
     period_label: input.periodLabel,
-    doc_kind: "interim_unaudited" as const,
+    doc_kind: docKind,
     currency: "ZAR",
   };
   const docModel = mapToDocModel(input.extraction, meta);
@@ -172,6 +184,7 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   const periodLabel =
     resolveDisplayPeriodLabel(docModel, input.extraction) || input.periodLabel || "";
   if (periodLabel) docModel.meta.period_label = periodLabel;
+  docModel.meta.doc_kind = docKind;
 
   const sitePlan = buildSitePlan(docModel, blueprint);
 

@@ -15,7 +15,7 @@ import {
   segmentHighlightKpis,
   type HomeKpiCard,
 } from "./home-kpis.js";
-import { docKindLabel } from "./seo.js";
+import { resolveDocKindLabel } from "./seo.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -295,6 +295,30 @@ export function resolveDisplayPeriodLabel(
   return metaPeriod || cover || "";
 }
 
+/** Collect short prose strings for cover/doc-kind inference (DocModel + extraction). */
+function coverTextSources(
+  docModel: FinancialDocModel,
+  extraction?: ExtractionResult | null,
+): string[] {
+  const sources: string[] = [];
+  for (const sec of docModel.sections) {
+    for (const b of sec.blocks) {
+      if (b.text?.trim()) sources.push(b.text);
+    }
+  }
+  if (extraction) {
+    const collect = (nodes: ExtractionResult["body"] | undefined) => {
+      for (const n of nodes ?? []) {
+        if (n.text?.trim()) sources.push(n.text);
+        if (n.children?.length) collect(n.children);
+      }
+    };
+    collect(extraction.body);
+    collect(extraction.furniture);
+  }
+  return sources;
+}
+
 /** Prefer rich cover period over thin project labels like "FY2025". */
 export function resultsHeadline(
   docModel: FinancialDocModel,
@@ -311,7 +335,10 @@ export function resultsHeadline(
   if (cover && thinMeta) return cover;
   if (metaPeriod) return metaPeriod;
   if (cover) return cover;
-  return docKindLabel(docModel.meta.doc_kind);
+  return resolveDocKindLabel(docModel.meta.doc_kind, {
+    texts: coverTextSources(docModel, extraction),
+    periodLabel: metaPeriod,
+  });
 }
 
 function homeHero(
@@ -322,7 +349,13 @@ function homeHero(
   const themeId = normalizeIrThemeId(opts.themeId);
   const editorial = themeId === "editorial";
   const company = escapeHtml(docModel.meta.company || "Results");
-  const kind = escapeHtml(docKindLabel(docModel.meta.doc_kind));
+  const coverTexts = coverTextSources(docModel, opts.extraction);
+  const kind = escapeHtml(
+    resolveDocKindLabel(docModel.meta.doc_kind, {
+      texts: coverTexts,
+      periodLabel: docModel.meta.period_label,
+    }),
+  );
   const meta = listingMeta(docModel, opts.extraction);
   const lede = supportingLede(docModel);
   const banner = opts.brandAssets?.banner;
@@ -349,11 +382,13 @@ function homeHero(
   const ctaPrimary = editorial
     ? `<a class="home-cta__primary" href="commentary.html">Read the commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
     : `<a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`;
+  // Logo present → avoid double-branding the company wordmark beside the lockup.
+  const brandClass = logo ? " home-hero__brand--has-logo" : "";
 
   return `<header class="home-hero home-hero--composition${themeClass}${modeClass}" data-dna-component="home-hero" data-ir-theme="${themeId}">
 ${atmosphere}${photo}<div class="home-hero__mast"></div>
 <div class="home-hero__inner">
-<div class="home-hero__brand">
+<div class="home-hero__brand${brandClass}">
 ${lockup}<p class="home-hero__company" data-allow-number>${company}</p>
 </div>
 <p class="home-kicker">${kind}</p>

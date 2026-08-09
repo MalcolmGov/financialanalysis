@@ -59,6 +59,34 @@ export interface StudioResult {
   stopReason: string | null;
 }
 
+function srgbToLinear(c: number): number {
+  const s = c / 255;
+  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+function relativeLuminance(hex: string): number {
+  const h = hex.replace("#", "");
+  if (h.length !== 6) return 0;
+  const r = parseInt(h.slice(0, 2), 16) || 0;
+  const g = parseInt(h.slice(2, 4), 16) || 0;
+  const b = parseInt(h.slice(4, 6), 16) || 0;
+  return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+}
+
+function contrastRatio(hex1: string, hex2: string): number {
+  const l1 = relativeLuminance(hex1);
+  const l2 = relativeLuminance(hex2);
+  const [lighter, darker] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** Text on brand CTA fill: paper on dark brands, ink on light (gold) brands. */
+function onBrandHex(brandHex: string, inkHex: string, paperHex: string): string {
+  const vsPaper = contrastRatio(brandHex, paperHex);
+  const vsInk = contrastRatio(brandHex, inkHex);
+  return vsPaper >= vsInk ? paperHex : inkHex;
+}
+
 /** Build the verbatim :root token block from the approved DNA. */
 export function buildTokenBlock(dna: DesignDNA): string {
   const r = dna.palette.roles;
@@ -67,17 +95,21 @@ export function buildTokenBlock(dna: DesignDNA): string {
     if (hex) decl.push(`--dna-${name}:${hex}`);
   };
   // Always emit load-bearing roles. Missing DNA → neutral IR (not DRDGOLD).
-  push("paper", r.paper?.hex ?? IR_NEUTRAL_FALLBACKS.paper);
-  push("ink", r.ink?.hex ?? IR_NEUTRAL_FALLBACKS.ink);
-  push("brand", r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.brand);
-  push("accent", r.accent?.hex ?? r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.accent);
+  const paper = r.paper?.hex ?? IR_NEUTRAL_FALLBACKS.paper;
+  const ink = r.ink?.hex ?? IR_NEUTRAL_FALLBACKS.ink;
+  const brand = r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.brand;
+  push("paper", paper);
+  push("ink", ink);
+  push("brand", brand);
+  push("accent", r.accent?.hex ?? brand ?? IR_NEUTRAL_FALLBACKS.accent);
   push("masthead", r["masthead-bg"]?.hex ?? IR_NEUTRAL_FALLBACKS.masthead);
+  push("on-brand", onBrandHex(brand, ink, paper));
   push("table-header-bg", r["table-header-bg"]?.hex ?? IR_NEUTRAL_FALLBACKS.tableHeaderBg);
   push("table-header-text", r["table-header-text"]?.hex ?? IR_NEUTRAL_FALLBACKS.tableHeaderText);
   push("shading", r["table-shading"]?.hex ?? IR_NEUTRAL_FALLBACKS.shading);
   push(
     "footer-accent",
-    r["footer-accent"]?.hex ?? r.brand?.hex ?? IR_NEUTRAL_FALLBACKS.footerAccent,
+    r["footer-accent"]?.hex ?? brand ?? IR_NEUTRAL_FALLBACKS.footerAccent,
   );
   const heading = dna.type.stack.heading;
   const body = dna.type.stack.body;
