@@ -4,7 +4,7 @@
  * Results Studio — "Quorum Pulse" (full dark operator theme)
  * Deep ink/slate stage like Fintech Tracker energy: dense metric strips,
  * status chips, elevated panels, cyan CTAs, amber review signals.
- * Instrument Serif + Manrope. Not purple SaaS.
+ * Plus Jakarta Sans throughout — modern SaaS UI, not editorial serif.
  * Scoped to portal app only — never leaked into multipage export HTML.
  */
 :root {
@@ -13,28 +13,28 @@
   --surface: #0f1626;
   --surface-raised: #141c2e;
   --veil: rgba(4, 7, 14, 0.88);
-  --ink: #eef3fb;
-  --ink-2: #9aa8c2;
-  --ink-3: #6b7a94;
-  --rule: rgba(148, 170, 210, 0.12);
-  --rule-strong: rgba(148, 170, 210, 0.22);
+  --ink: #f5f8fd;
+  --ink-2: #c0cadc;
+  --ink-3: #97a4bc;
+  --rule: rgba(148, 170, 210, 0.14);
+  --rule-strong: rgba(148, 170, 210, 0.26);
   --chrome: #050910;
   --chrome-2: #0b1220;
-  --chrome-text: #eef3fb;
-  --chrome-muted: #8b97b0;
+  --chrome-text: #f5f8fd;
+  --chrome-muted: #b0bbd0;
   --accent: #0e7490;
   --accent-strong: #0a5c72;
   --signal: #2dd4bf;
-  --signal-soft: rgba(45, 212, 191, 0.14);
+  --signal-soft: rgba(45, 212, 191, 0.16);
   --signal-hot: #22d3ee;
-  --signal-hot-soft: rgba(34, 211, 238, 0.16);
-  --copper: #f0b429;
-  --warn: #f59e0b;
-  --warn-soft: rgba(245, 158, 11, 0.16);
+  --signal-hot-soft: rgba(34, 211, 238, 0.18);
+  --copper: #f6c453;
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.18);
   --ok: #34d399;
-  --ok-soft: rgba(52, 211, 153, 0.14);
+  --ok-soft: rgba(52, 211, 153, 0.16);
   --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.14);
+  --danger-soft: rgba(248, 113, 113, 0.16);
   --focus: rgba(34, 211, 238, 0.55);
   --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
   --shadow-m: 0 8px 24px rgba(0, 0, 0, 0.42), 0 24px 56px rgba(0, 0, 0, 0.38);
@@ -42,8 +42,8 @@
   --radius-m: 10px;
   --radius-l: 14px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --font-display: var(--font-instrument), "Iowan Old Style", Georgia, serif;
-  --font-sans: var(--font-manrope), "Segoe UI", sans-serif;
+  --font-sans: var(--font-jakarta), "Segoe UI", sans-serif;
+  --font-display: var(--font-sans);
   --header-h: 60px;
   --max: 1180px;
   --stage-pad: clamp(28px, 4vw, 48px);
@@ -61,7 +61,8 @@ body {
   min-height: 100%;
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 500;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -158,22 +159,24 @@ textarea:disabled {
 }
 
 .rs-brand-mark {
-  font-family: var(--font-display);
-  font-size: 1.28rem;
-  font-weight: 400;
-  letter-spacing: -0.025em;
+  font-family: var(--font-sans);
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 
 .rs-brand-sub {
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--chrome-muted);
 }
 
 .rs-header-meta {
-  font-size: 0.68rem;
+  font-size: 0.7rem;
+  font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--chrome-muted);
@@ -213,9 +216,9 @@ textarea:disabled {
 
 .rs-kicker {
   margin: 0 0 10px;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--copper);
 }
@@ -223,9 +226,10 @@ textarea:disabled {
 .rs-lede {
   margin: 12px 0 0;
   color: var(--ink-2);
-  max-width: 36rem;
-  font-size: 1.02rem;
-  line-height: 1.6;
+  max-width: 38rem;
+  font-size: 1.06rem;
+  font-weight: 500;
+  line-height: 1.65;
 }
 
 .rs-muted {
@@ -233,16 +237,17 @@ textarea:disabled {
 }
 
 .rs-tiny {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--ink-3);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 
 .rs-section-title {
-  font-family: var(--font-display);
-  font-size: 1.45rem;
-  font-weight: 400;
-  letter-spacing: -0.025em;
+  font-family: var(--font-sans);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
   line-height: 1.2;
 }
@@ -399,7 +404,18 @@ textarea:disabled {
 }
 
 .rs-field::placeholder {
-  color: var(--ink-3);
+  color: #b8c4da;
+  opacity: 1;
+}
+
+.rs-field::-webkit-input-placeholder {
+  color: #b8c4da;
+  opacity: 1;
+}
+
+.rs-field::-moz-placeholder {
+  color: #b8c4da;
+  opacity: 1;
 }
 
 textarea.rs-field {
@@ -463,24 +479,26 @@ textarea.rs-field:focus {
 }
 
 .rs-metric__label {
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--metric-accent, var(--signal-hot)) 75%, var(--ink-2));
+  color: color-mix(in srgb, var(--metric-accent, var(--signal-hot)) 82%, var(--ink-2));
 }
 
 .rs-metric__value {
-  font-family: var(--font-display);
-  font-size: 2.15rem;
-  letter-spacing: -0.03em;
+  font-family: var(--font-sans);
+  font-size: 2.05rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
 .rs-metric__hint {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   color: var(--ink-3);
 }
 
@@ -513,11 +531,11 @@ textarea.rs-field:focus {
 }
 
 .rs-home-hero h1 {
-  font-family: var(--font-display);
-  font-size: clamp(3rem, 7vw, 4.4rem);
-  font-weight: 400;
-  letter-spacing: -0.035em;
-  line-height: 0.98;
+  font-family: var(--font-sans);
+  font-size: clamp(2.6rem, 6vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
   margin: 0;
 }
 
@@ -588,15 +606,16 @@ textarea.rs-field:focus {
 }
 
 .rs-project-row strong {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .rs-project-meta {
   font-family: var(--font-sans);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 500;
   color: var(--ink-2);
 }
 
@@ -604,35 +623,35 @@ textarea.rs-field:focus {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 10px;
+  padding: 6px 11px;
   border-radius: 999px;
-  font-size: 0.64rem;
-  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--signal);
+  color: #5eead4;
   background: var(--signal-soft);
-  border: 1px solid color-mix(in srgb, var(--signal) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent);
   white-space: nowrap;
 }
 
 .rs-status--idle {
   color: var(--ink-2);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--rule);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--rule-strong);
 }
 
 .rs-status--live {
   color: #67e8f9;
   background: var(--signal-hot-soft);
-  border-color: color-mix(in srgb, var(--signal-hot) 45%, transparent);
+  border-color: color-mix(in srgb, var(--signal-hot) 55%, transparent);
 }
 
 .rs-status--review {
-  color: #fbbf24;
+  color: #fcd34d;
   background: var(--warn-soft);
-  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 60%, transparent);
 }
 
 .rs-status--done {
@@ -684,12 +703,12 @@ textarea.rs-field:focus {
 }
 
 .rs-signin-card h1 {
-  font-family: var(--font-display);
-  font-size: clamp(2.8rem, 6vw, 3.6rem);
-  font-weight: 400;
-  letter-spacing: -0.035em;
+  font-family: var(--font-sans);
+  font-size: clamp(2.4rem, 5.5vw, 3.1rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
   margin: 0;
-  line-height: 0.98;
+  line-height: 1.02;
 }
 
 .rs-signin form {
@@ -713,11 +732,11 @@ textarea.rs-field:focus {
 .rs-back {
   display: inline-flex;
   margin-bottom: 28px;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-2);
   text-decoration: none;
   transition: color 0.2s var(--ease), letter-spacing 0.2s var(--ease);
 }
@@ -760,11 +779,11 @@ textarea.rs-field:focus {
 }
 
 .rs-stage-head h1 {
-  font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5.5vw, 3.6rem);
-  font-weight: 400;
+  font-family: var(--font-sans);
+  font-size: clamp(2.1rem, 4.8vw, 3rem);
+  font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 1;
+  line-height: 1.05;
   margin: 0 0 12px;
   color: var(--chrome-text);
 }
@@ -776,7 +795,8 @@ textarea.rs-field:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  font-size: 0.92rem;
+  font-size: 0.98rem;
+  font-weight: 500;
 }
 
 .rs-stage .rs-btn--quiet {
@@ -887,12 +907,12 @@ textarea.rs-field:focus {
 }
 
 .rs-directive h2 {
-  font-family: var(--font-display);
-  font-size: clamp(1.7rem, 3.2vw, 2.15rem);
-  font-weight: 400;
-  letter-spacing: -0.03em;
+  font-family: var(--font-sans);
+  font-size: clamp(1.45rem, 2.8vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
   margin: 0 0 8px;
-  line-height: 1.15;
+  line-height: 1.2;
   color: var(--chrome-text);
 }
 
@@ -900,7 +920,8 @@ textarea.rs-field:focus {
   margin: 0;
   color: var(--chrome-muted);
   max-width: 34rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  font-weight: 500;
 }
 
 .rs-stage .rs-btn--primary {
@@ -965,8 +986,9 @@ textarea.rs-field:focus {
 }
 
 .rs-dropzone__title {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-family: var(--font-sans);
+  font-size: 1.2rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
 }
@@ -974,7 +996,8 @@ textarea.rs-field:focus {
 .rs-dropzone__hint {
   margin: 0;
   color: var(--ink-2);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 500;
   max-width: 28rem;
 }
 
@@ -1024,18 +1047,18 @@ textarea.rs-field:focus {
 }
 
 .rs-stat-label {
-  font-size: 0.64rem;
-  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-3);
-  font-weight: 600;
+  color: var(--ink-2);
+  font-weight: 700;
 }
 
 .rs-stat-value {
   margin-top: 6px;
-  font-family: var(--font-display);
-  font-size: 1.85rem;
-  font-weight: 400;
+  font-family: var(--font-sans);
+  font-size: 1.75rem;
+  font-weight: 700;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
@@ -1282,16 +1305,18 @@ textarea.rs-field:focus {
 }
 
 .rs-site-chat__eyebrow {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   color: var(--ink);
   line-height: 1.2;
 }
 
 .rs-site-chat__context {
   margin-top: 2px;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--ink-3);
 }
 
@@ -1726,11 +1751,11 @@ textarea.rs-field:focus {
 
 .rs-admin-hero h1 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5vw, 3.4rem);
-  font-weight: 400;
+  font-family: var(--font-sans);
+  font-size: clamp(2.1rem, 4.5vw, 2.9rem);
+  font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 1.05;
+  line-height: 1.08;
 }
 
 .rs-admin-section {
@@ -1829,8 +1854,9 @@ textarea.rs-field:focus {
 
 .rs-admin-chart-total {
   margin: 4px 0 0;
-  font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-family: var(--font-sans);
+  font-size: 1.55rem;
+  font-weight: 700;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }

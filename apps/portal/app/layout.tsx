@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Manrope } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { ShellNav } from "./shell-nav";
 import "./globals.css";
 
-const instrument = Instrument_Serif({
-  subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-instrument",
-  display: "swap",
-});
-
-const manrope = Manrope({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-manrope",
+  variable: "--font-jakarta",
   display: "swap",
 });
 
@@ -24,8 +17,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" className={`${instrument.variable} ${manrope.variable}`}>
-      <body className={manrope.className}>
+    <html lang="en" data-theme="dark" className={jakarta.variable}>
+      <body className={jakarta.className}>
         <div className="rs-shell">
           <header className="rs-header">
             <a href="/" className="rs-brand">
