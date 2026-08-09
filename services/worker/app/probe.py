@@ -257,6 +257,7 @@ def probe_design_dna(pdf_bytes: bytes, project_id: str, sha256: str, pages: int)
         },
         "components": [], "motifs": [], "tone_words": [],
         "theme": {"mode": "single-light", "rationale": "probe default; confirmed by vision"},
+        "theme_id": "classic",
         "human_edits": [],
     }
 

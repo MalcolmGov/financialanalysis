@@ -276,6 +276,7 @@ export async function rebuildProjectSiteDraft(
     pdf_bundled: built.pdfBundled,
     brand_logo: built.brandLogo,
     brand_banner: built.brandBanner,
+    theme_id: built.themeId,
     delivery_pack: "client-delivery",
   };
   const manifestPut = await putPrivate(
@@ -309,6 +310,7 @@ export async function rebuildProjectSiteDraft(
       company: built.company,
       brandLogo: built.brandLogo,
       brandBanner: built.brandBanner,
+      themeId: built.themeId,
       rebuiltOffline: true,
       rebuiltVia: "rebuildProjectSiteDraft",
     },

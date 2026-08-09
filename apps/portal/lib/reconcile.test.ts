@@ -23,6 +23,7 @@ function probeDna(measured: string[]): DesignDNA {
     table_style: { header_bg: "table-header-bg", header_text: "table-header-text", header_case: "sentence", rules: {}, zebra: false, period_shading: null, numeric_alignment: "right", negative_format: "parentheses", thousands_separator: "thin-space", decimal_places: "as-source" },
     components: [], motifs: [], tone_words: [],
     theme: { mode: "single-light", rationale: "" },
+    theme_id: "classic" as const,
     human_edits: [],
   };
 }

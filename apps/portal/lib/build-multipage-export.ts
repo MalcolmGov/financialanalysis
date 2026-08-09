@@ -15,6 +15,7 @@ import {
   looksLikeProjectSlug,
   resolveDisplayPeriodLabel,
   resolveLegalCompanyName,
+  themeIdFromDna,
   SOURCE_PDF_HREF,
   type BrandAssetUris,
   type GateAResult,
@@ -85,6 +86,8 @@ export interface MultipageExportResult {
   companySource: string;
   /** Display period used in SEO/chrome/delivery meta. */
   periodLabel: string;
+  /** IR chrome/layout preset applied to HTML (`data-theme`). */
+  themeId: "classic" | "editorial";
 }
 
 function sha256Hex(body: string | Buffer): string {
@@ -177,10 +180,12 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   };
   const brandUris = materializeBrandAssets(input.brandAssets, binaries);
 
+  const themeId = themeIdFromDna(input.dna);
   const ctx = {
     extraction: input.extraction,
     docModel,
     brandAssets: brandUris,
+    themeId,
   };
   const a = gateA(sitePlan, ctx);
   const { files } = renderSitePlan(sitePlan, blueprint, ctx);
@@ -301,5 +306,6 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     company: legal.company,
     companySource: legal.source,
     periodLabel,
+    themeId,
   };
 }

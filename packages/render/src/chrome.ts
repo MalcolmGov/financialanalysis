@@ -868,5 +868,108 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .statements-aggregate__jump a{color:var(--dna-masthead,#1B2A3A);text-decoration:none;font-size:.88rem;font-weight:700;border-bottom:1px solid transparent}
 .statements-aggregate__jump a:hover{border-bottom-color:var(--dna-brand,#243B53)}
 .statements-aggregate__note{margin:0;flex:1 1 100%;font-size:var(--rs-fs-caption);line-height:1.45;color:color-mix(in srgb,var(--dna-ink,#111) 62%,var(--dna-paper,#fff))}
+/* ── IR theme presets (data-theme on <html>) ─────────────────────────────
+   classic = default styles above (dark masthead, statement-forward).
+   editorial = lighter hero/nav, commentary-first, airier cards.
+   Brand DNA tokens (--dna-*) still drive color; presets only change composition. */
+[data-theme="editorial"]{
+  --rs-lh-body:1.65;
+  --rs-space-6:2.85rem;
+}
+[data-theme="editorial"] .site-nav{
+  background:color-mix(in srgb,var(--dna-paper,#fff) 94%,var(--dna-shading,#F2F2F2));
+  border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);
+  border-top:3px solid var(--dna-brand,#243B53);
+  box-shadow:0 4px 18px rgba(15,23,42,.06);
+}
+[data-theme="editorial"] .site-nav.is-scrolled{
+  background:color-mix(in srgb,var(--dna-paper,#fff) 98%,var(--dna-shading,#F2F2F2));
+  box-shadow:0 8px 28px rgba(15,23,42,.1);
+}
+[data-theme="editorial"] .nav-brand__name{color:var(--dna-masthead,#1B2A3A)}
+[data-theme="editorial"] .nav-brand--logo .nav-brand__logo--svg{filter:none}
+[data-theme="editorial"] .site-nav a,[data-theme="editorial"] .site-nav .nav-dd-btn{
+  color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff));
+}
+[data-theme="editorial"] .site-nav a:hover,[data-theme="editorial"] .site-nav .nav-dd-btn:hover{
+  color:var(--dna-masthead,#1B2A3A);background:color-mix(in srgb,var(--dna-brand,#243B53) 8%,var(--dna-paper,#fff));
+}
+[data-theme="editorial"] .site-nav a[aria-current="page"],[data-theme="editorial"] .site-nav .is-active>a,[data-theme="editorial"] .site-nav .is-active>.nav-dd-btn{
+  color:var(--dna-masthead,#1B2A3A);box-shadow:inset 0 -3px 0 var(--dna-brand,#243B53);
+}
+[data-theme="editorial"] .nav-dd-menu{
+  background:var(--dna-paper,#fff);border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);
+  border-top:2px solid var(--dna-brand,#243B53);box-shadow:0 16px 36px rgba(15,23,42,.12);
+}
+[data-theme="editorial"] .nav-dd-menu a{color:color-mix(in srgb,var(--dna-ink,#111) 82%,var(--dna-paper,#fff))}
+[data-theme="editorial"] .nav-dd-menu a:hover,[data-theme="editorial"] .nav-dd-menu a[aria-current="page"]{
+  background:color-mix(in srgb,var(--dna-brand,#243B53) 8%,var(--dna-paper,#fff));color:var(--dna-masthead,#1B2A3A);
+}
+[data-theme="editorial"] .nav-toggle span{background:var(--dna-masthead,#1B2A3A)}
+[data-theme="editorial"] .nav-mobile{
+  background:var(--dna-paper,#fff);border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);
+}
+[data-theme="editorial"] .nav-mobile__link{color:color-mix(in srgb,var(--dna-ink,#111) 82%,var(--dna-paper,#fff));border-bottom-color:color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
+[data-theme="editorial"] .nav-mobile__heading{color:color-mix(in srgb,var(--dna-ink,#111) 45%,var(--dna-paper,#fff))}
+[data-theme="editorial"] .home-hero,[data-theme="editorial"] .home-hero--atmosphere,[data-theme="editorial"] .home-hero--photo{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--dna-brand,#243B53) 7%,var(--dna-paper,#fff)) 0%,var(--dna-paper,#fff) 55%,color-mix(in srgb,var(--dna-shading,#F2F2F2) 35%,var(--dna-paper,#fff)) 100%);
+  color:var(--dna-ink,#231F20);min-height:0;
+}
+[data-theme="editorial"] .home-hero--composition{min-height:min(72vh,42rem);padding-bottom:clamp(1.5rem,3vh,2.25rem)}
+[data-theme="editorial"] .home-hero__atmosphere{opacity:.35}
+[data-theme="editorial"] .home-hero__mesh{opacity:.2;background:radial-gradient(ellipse 90% 70% at 90% 0%,color-mix(in srgb,var(--dna-brand,#243B53) 14%,transparent),transparent 60%)}
+[data-theme="editorial"] .home-hero__beam,[data-theme="editorial"] .home-hero__orb,[data-theme="editorial"] .home-hero__grain{opacity:.25}
+[data-theme="editorial"] .home-hero--photo .home-hero__photo{opacity:.22;filter:saturate(.85)}
+[data-theme="editorial"] .home-hero--photo::after{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--dna-paper,#fff) 55%,transparent) 0%,var(--dna-paper,#fff) 78%);
+}
+[data-theme="editorial"] .home-hero__company{color:var(--dna-masthead,#1B2A3A);text-shadow:none;letter-spacing:.04em}
+[data-theme="editorial"] .home-hero__logo--svg{filter:none}
+[data-theme="editorial"] .home-hero h1{color:var(--dna-masthead,#1B2A3A);text-shadow:none;max-width:26ch;font-size:clamp(2rem,4.2vw,3.05rem)}
+[data-theme="editorial"] .home-lede{color:color-mix(in srgb,var(--dna-ink,#111) 78%,var(--dna-paper,#fff));max-width:40rem;font-size:clamp(1.05rem,1.65vw,1.2rem);line-height:1.7}
+[data-theme="editorial"] .home-period{color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff))}
+[data-theme="editorial"] .home-meta__chip{
+  color:var(--dna-masthead,#1B2A3A);background:color-mix(in srgb,var(--dna-brand,#243B53) 10%,var(--dna-paper,#fff));
+  border:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 28%,transparent);
+}
+[data-theme="editorial"] .home-cta__secondary{color:var(--dna-masthead,#1B2A3A)}
+[data-theme="editorial"] .home-cta__primary{box-shadow:0 8px 22px color-mix(in srgb,var(--dna-brand,#243B53) 28%,transparent)}
+[data-theme="editorial"] .home-body__kpi-stage{margin:0 0 var(--rs-space-5)}
+[data-theme="editorial"] .home-body__kpi-stage .kpi-band{box-shadow:0 12px 32px rgba(15,23,42,.06);border-radius:2px}
+[data-theme="editorial"] .kpi-card{
+  border:0;border-top:3px solid var(--dna-brand,#243B53);border-left:0;border-radius:2px;
+  padding:1.65rem 1.5rem 1.4rem;min-height:10.5rem;
+  background:var(--dna-paper,#fff);box-shadow:0 1px 0 color-mix(in srgb,var(--dna-ink,#111) 5%,transparent),0 14px 36px rgba(15,23,42,.05);
+}
+[data-theme="editorial"] .kpi-card:nth-child(even){border-left-color:transparent;border-top-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,var(--dna-brand,#243B53))}
+[data-theme="editorial"] .kpi-grid{gap:1.35rem}
+[data-theme="editorial"] .highlight-card,[data-theme="editorial"] .explore-card{
+  border-radius:2px;padding:2rem 1.85rem 1.65rem;min-height:12rem;
+  border:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent);
+  border-top:3px solid var(--dna-brand,#243B53);
+  box-shadow:0 10px 28px rgba(15,23,42,.04);
+}
+[data-theme="editorial"] .highlight-grid,[data-theme="editorial"] .explore-grid{gap:1.65rem 1.85rem}
+[data-theme="editorial"] .page-hero{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--dna-brand,#243B53) 5%,var(--dna-paper,#fff)),var(--dna-paper,#fff) 85%);
+}
+[data-theme="editorial"] .site-footer{
+  background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,var(--dna-paper,#fff));
+  color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff));
+  border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent);
+}
+[data-theme="editorial"] .site-footer__accent{height:3px;background:var(--dna-brand,#243B53)}
+[data-theme="editorial"] .site-footer__heading{color:var(--dna-masthead,#1B2A3A)}
+[data-theme="editorial"] .site-footer__links a{color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff))}
+[data-theme="editorial"] .site-footer__links a:hover,[data-theme="editorial"] .site-footer__links a:focus-visible{color:var(--dna-brand,#243B53)}
+[data-theme="editorial"] .site-footer__logo--svg{filter:none}
+[data-theme="editorial"] .site-footer__brand--text{color:var(--dna-brand,#243B53)}
+[data-theme="editorial"] .site-footer__blurb,[data-theme="editorial"] .site-footer__note,[data-theme="editorial"] .site-footer__copy,[data-theme="editorial"] .site-footer__meta{
+  color:color-mix(in srgb,var(--dna-ink,#111) 48%,var(--dna-paper,#fff));
+}
+[data-theme="editorial"] .site-footer__period{color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff))}
+[data-theme="editorial"] .site-footer__bar{border-top-color:color-mix(in srgb,var(--dna-ink,#111) 10%,transparent)}
+[data-theme="editorial"] .share-bar{border-top-width:2px}
+[data-theme="editorial"] .commentary-section__hdr{border-left-width:3px;padding-left:1.25rem}
 `.trim();
 

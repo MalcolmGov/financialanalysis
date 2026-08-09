@@ -56,6 +56,7 @@ const dna: DesignDNA = {
   ],
   tone_words: ["grounded", "premium", "operational", "renewal", "confident"],
   theme: { mode: "single-light", rationale: "PDF identity is light with a dark masthead; a dark theme would be invented" },
+  theme_id: "classic",
   human_edits: [],
 };
 

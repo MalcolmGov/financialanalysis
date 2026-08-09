@@ -37,6 +37,7 @@ const dna: DesignDNA = {
   motifs: [],
   tone_words: ["grounded"],
   theme: { mode: "single-light", rationale: "" },
+  theme_id: "classic",
   human_edits: [],
 };
 

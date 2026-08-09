@@ -215,9 +215,10 @@ describe("HomeComposer", () => {
     });
     expect(home.heroHtml).toContain("home-hero--photo");
     expect(home.heroHtml).toContain("home-hero--strip");
-    // Class on <header> is photo/strip; atmosphere class only appears in onerror fallback.
+    // Class on <header> is classic + photo/strip; atmosphere class only appears in onerror fallback.
+    expect(home.heroHtml).toContain("home-hero--classic");
     expect(home.heroHtml).toMatch(
-      /<header class="home-hero home-hero--composition home-hero--photo home-hero--strip"/,
+      /<header class="home-hero home-hero--composition home-hero--classic home-hero--photo home-hero--strip"/,
     );
     expect(home.heroHtml).not.toMatch(/<header class="[^"]*home-hero--atmosphere/);
     expect(home.heroHtml).toContain("home-hero__atmosphere");
@@ -275,6 +276,18 @@ describe("HomeComposer", () => {
     const home = composeHome(plan(), dm, { extraction });
     expect(home.heroHtml).toMatch(/<h1[^>]*>for the six months ended 31 December 2025<\/h1>/i);
     expect(home.heroHtml).not.toMatch(/<h1[^>]*>FY2025<\/h1>/);
+  });
+
+  it("editorial theme moves KPIs to body and marks light hero", () => {
+    const home = composeHome(plan(), docModel(), { themeId: "editorial" });
+    expect(home.heroHtml).toContain("home-hero--editorial");
+    expect(home.heroHtml).toContain('data-ir-theme="editorial"');
+    expect(home.heroHtml).toContain("Read the commentary");
+    expect(home.heroHtml).not.toContain('data-dna-component="kpi-band"');
+    expect(home.bodyHtml).toContain("home-body__kpi-stage");
+    expect(home.bodyHtml).toContain('data-dna-component="kpi-band"');
+    expect(home.bodyHtml).toContain("2 712.8");
+    expect(home.kpis.length).toBeGreaterThanOrEqual(5);
   });
 });
 

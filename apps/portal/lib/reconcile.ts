@@ -88,6 +88,14 @@ export async function reconcileDna(
 
   const overall = weightedOverall(roles);
 
+  const toneWords = vision.tone_words;
+  const { suggestIrThemeId } = await import("@rs/render");
+  const suggested = suggestIrThemeId({
+    company: probeDna.project_id,
+    toneWords,
+    signals: toneWords,
+  });
+
   return {
     ...probeDna,
     revision: probeDna.revision,
@@ -107,8 +115,10 @@ export async function reconcileDna(
       ...(m.value ? { value: m.value } : {}),
       ...(m.kind === "photography" ? { asset_role: "banner" } : m.kind === "logo" ? { asset_role: "logo" } : {}),
     })),
-    tone_words: vision.tone_words,
+    tone_words: toneWords,
     theme: { mode: vision.theme_mode, rationale: "assigned by vision from the document's own light/dark treatment" },
+    // Soft default — operator can override at DNA approve / site review.
+    theme_id: suggested.themeId,
   };
 }
 

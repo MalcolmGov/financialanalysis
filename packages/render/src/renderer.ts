@@ -17,6 +17,7 @@ import {
   renderStickyNav,
 } from "./chrome.js";
 import { enrichMultiPageFiles } from "./enrich.js";
+import { normalizeIrThemeId } from "./ir-theme.js";
 import { extractHomeKpis, resolveDisplayPeriodLabel } from "./home-composer.js";
 import { linkNoteRefHtml, notesBaseHref } from "./notes-linker.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
@@ -371,6 +372,7 @@ export function renderSitePlan(
   const footerExtras = ctx.docModel
     ? collectFooterExtras(ctx.docModel, ctx.extraction)
     : null;
+  const themeId = normalizeIrThemeId(ctx.themeId);
   // Exclude legacy aggregate from prev/next so WW IA pages chain cleanly.
   const pageOrder = plan.pages
     .filter((p) => !p.path.startsWith("statements/"))
@@ -452,7 +454,7 @@ export function renderSitePlan(
       }
     }
 
-    const doc = `<!doctype html><html lang="en"><head>${head}</head><body>${body}</body></html>`;
+    const doc = `<!doctype html><html lang="en" data-theme="${themeId}"><head>${head}</head><body>${body}</body></html>`;
     files[page.path] = doc;
   }
 
@@ -465,6 +467,7 @@ export function renderSitePlan(
       files: enrichMultiPageFiles(files, plan, ctx.docModel, undefined, {
         brandAssets: ctx.brandAssets,
         extraction: ctx.extraction,
+        themeId,
       }),
     };
   }

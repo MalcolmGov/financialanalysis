@@ -70,6 +70,14 @@ export const DnaTableStyle = z.object({
   units_header: z.string().optional(),
 });
 
+/**
+ * IR multipage chrome/layout preset — shared engine, different visual personality.
+ * Distinct from `theme.mode` (light/dark from the PDF). Brand DNA colors still apply.
+ * Future: minimal | bold.
+ */
+export const IrThemeId = z.enum(["classic", "editorial"]);
+export type IrThemeId = z.infer<typeof IrThemeId>;
+
 export const DesignDNA = z.object({
   schema_version: z.literal("dna/1"),
   dna_id: z.string(),
@@ -131,6 +139,11 @@ export const DesignDNA = z.object({
     mode: z.enum(["single-light", "single-dark", "dual"]),
     rationale: z.string(),
   }),
+  /**
+   * IR chrome/layout preset (classic | editorial). Operator-selectable;
+   * defaults to classic (current dark-masthead look). Does not invent content.
+   */
+  theme_id: IrThemeId.default("classic"),
   human_edits: z.array(
     z.object({
       path: z.string(),

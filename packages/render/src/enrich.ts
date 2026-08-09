@@ -24,6 +24,8 @@ export interface DownloadEnrichOptions {
 export interface EnrichContext {
   brandAssets?: BrandAssetUris;
   extraction?: ExtractionResult | null;
+  /** IR chrome/layout preset (classic | editorial). */
+  themeId?: "classic" | "editorial";
 }
 
 /**
@@ -335,6 +337,7 @@ export function enrichMultiPageFiles(
     const home = composeHome(plan, docModel, {
       brandAssets: enrichCtx.brandAssets,
       extraction: enrichCtx.extraction,
+      themeId: enrichCtx.themeId,
     });
     let html = replaceHomeHero(out["index.html"], home.heroHtml);
     html = injectInto(html, "home-body", home.bodyHtml);

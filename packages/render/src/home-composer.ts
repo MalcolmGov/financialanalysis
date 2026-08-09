@@ -6,6 +6,7 @@
 
 import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
 import { BANNER_IMG_ONERROR, BRAND_IMG_ONERROR } from "./chrome.js";
+import { normalizeIrThemeId, type IrThemeId } from "./ir-theme.js";
 import type { BrandAssetUris } from "./resolve.js";
 import {
   presentKpiLabel,
@@ -152,6 +153,8 @@ export function listingMeta(
 export interface HomeComposeOptions {
   brandAssets?: BrandAssetUris;
   extraction?: ExtractionResult | null;
+  /** IR chrome/layout preset — classic (default) | editorial. */
+  themeId?: IrThemeId | string;
 }
 
 /** Truncate source prose at a sentence boundary — never invents words. */
@@ -316,6 +319,8 @@ function homeHero(
   kpis: HomeKpiCard[],
   opts: HomeComposeOptions = {},
 ): string {
+  const themeId = normalizeIrThemeId(opts.themeId);
+  const editorial = themeId === "editorial";
   const company = escapeHtml(docModel.meta.company || "Results");
   const kind = escapeHtml(docKindLabel(docModel.meta.doc_kind));
   const meta = listingMeta(docModel, opts.extraction);
@@ -327,6 +332,7 @@ function homeHero(
   const modeClass = banner
     ? ` home-hero--photo home-hero--${bannerKind ?? "photo"}`
     : " home-hero--atmosphere";
+  const themeClass = editorial ? " home-hero--editorial" : " home-hero--classic";
   const photo = banner
     ? `<img class="home-hero__photo" src="${escapeHtml(banner)}" alt="" decoding="async" fetchpriority="high" data-banner-kind="${escapeHtml(bannerKind ?? "photo")}" data-banner-img onerror="${BANNER_IMG_ONERROR}">`
     : "";
@@ -338,8 +344,13 @@ function homeHero(
   // Results headline from period / cover phrase; brand is company wordmark.
   const headline = resultsHeadline(docModel, opts.extraction);
   const headlineAttr = /\d/.test(headline) ? " data-allow-number" : "";
+  // Editorial: commentary-first hero; KPIs move to the body band (same figures).
+  const stage = editorial ? "" : kpiStage(kpis);
+  const ctaPrimary = editorial
+    ? `<a class="home-cta__primary" href="commentary.html">Read the commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
+    : `<a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`;
 
-  return `<header class="home-hero home-hero--composition${modeClass}" data-dna-component="home-hero">
+  return `<header class="home-hero home-hero--composition${themeClass}${modeClass}" data-dna-component="home-hero" data-ir-theme="${themeId}">
 ${atmosphere}${photo}<div class="home-hero__mast"></div>
 <div class="home-hero__inner">
 <div class="home-hero__brand">
@@ -350,9 +361,9 @@ ${lockup}<p class="home-hero__company" data-allow-number>${company}</p>
 <span class="home-hero__rule" aria-hidden="true"></span>
 ${lede}
 ${meta}
-<p class="home-cta"><a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a></p>
+<p class="home-cta">${ctaPrimary}</p>
 </div>
-${kpiStage(kpis)}
+${stage}
 </header>`;
 }
 
@@ -452,10 +463,16 @@ export function composeHome(
   docModel: FinancialDocModel,
   opts: HomeComposeOptions = {},
 ): HomeComposition {
+  const themeId = normalizeIrThemeId(opts.themeId);
   const kpis = extractHomeKpis(docModel);
+  // Editorial: KPIs sit in the body (airier paper band) so the hero stays commentary-led.
+  const bodyKpis =
+    themeId === "editorial" && kpis.length
+      ? `<div class="home-body__kpi-stage" data-dna-component="home-kpi-stage">${kpiStage(kpis)}</div>`
+      : "";
   return {
     heroHtml: homeHero(docModel, kpis, opts),
-    bodyHtml: `${highlightsBand(docModel, kpis)}${exploreCards(plan)}`,
+    bodyHtml: `${bodyKpis}${highlightsBand(docModel, kpis)}${exploreCards(plan)}`,
     kpis,
   };
 }

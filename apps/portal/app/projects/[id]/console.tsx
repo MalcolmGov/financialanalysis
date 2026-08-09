@@ -90,12 +90,21 @@ type ExtractionProgress = {
   error?: string | null;
 };
 
+type IrThemeId = "classic" | "editorial";
+
+type IrThemeMeta = { label: string; blurb: string; bestFor: string };
+
 type DnaSummary = {
   dnaId: string | null;
   revision: number;
   confidence: number | null;
   flags: { path: string; reason: string; confidence: number }[];
   theme: { mode?: string; rationale?: string };
+  /** IR chrome/layout preset (classic | editorial). Distinct from theme.mode. */
+  themeId?: IrThemeId;
+  suggestedThemeId?: IrThemeId;
+  suggestReason?: string;
+  themes?: Record<IrThemeId, IrThemeMeta>;
   toneWords: string[];
   type: {
     heading: string | null;
@@ -114,6 +123,19 @@ type DnaSummary = {
   };
   componentIds: string[];
   blobPath: string;
+};
+
+const DEFAULT_THEME_META: Record<IrThemeId, IrThemeMeta> = {
+  classic: {
+    label: "Classic IR",
+    blurb: "Dark masthead, statement-forward chrome (current default).",
+    bestFor: "Mining, industrial, traditional interim packs",
+  },
+  editorial: {
+    label: "Editorial Light",
+    blurb: "Lighter hero, commentary-first emphasis, airier cards.",
+    bestFor: "Retail, consumer, AFS-style packs with strong prose",
+  },
 };
 
 function isBusyWaitStatus(status: string): status is BusyWaitKind {
@@ -286,6 +308,13 @@ export function ProjectConsole(props: {
   const [forceRegen, setForceRegen] = useState(false);
   const [dna, setDna] = useState<DnaSummary | null>(null);
   const [dnaError, setDnaError] = useState<string | null>(null);
+  const [irTheme, setIrTheme] = useState<IrThemeId>("classic");
+  const [themeSuggest, setThemeSuggest] = useState<{
+    themeId: IrThemeId;
+    reason: string;
+  } | null>(null);
+  const [themeMeta, setThemeMeta] = useState(DEFAULT_THEME_META);
+  const [themeNote, setThemeNote] = useState<string | null>(null);
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
   const [siteError, setSiteError] = useState<string | null>(null);
   const [publishReady, setPublishReady] = useState<PublishReadiness | null>(null);
@@ -489,6 +518,16 @@ export function ProjectConsole(props: {
         }
         setDna(data);
         setDnaError(null);
+        if (data.themes) setThemeMeta({ ...DEFAULT_THEME_META, ...data.themes });
+        const nextTheme =
+          data.themeId ?? data.suggestedThemeId ?? ("classic" as IrThemeId);
+        setIrTheme(nextTheme);
+        if (data.suggestedThemeId) {
+          setThemeSuggest({
+            themeId: data.suggestedThemeId,
+            reason: data.suggestReason ?? "",
+          });
+        }
       } catch (err) {
         if (!cancelled) {
           setDna(null);
@@ -500,6 +539,37 @@ export function ProjectConsole(props: {
       cancelled = true;
     };
   }, [status, props.projectId]);
+
+  useEffect(() => {
+    if (!showSiteReview) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${props.projectId}/theme`);
+        const data = (await res.json().catch(() => ({}))) as {
+          themeId?: IrThemeId;
+          suggestedThemeId?: IrThemeId;
+          suggestReason?: string;
+          themes?: Record<IrThemeId, IrThemeMeta>;
+          error?: string;
+        };
+        if (cancelled || !res.ok) return;
+        if (data.themes) setThemeMeta({ ...DEFAULT_THEME_META, ...data.themes });
+        if (data.themeId) setIrTheme(data.themeId);
+        if (data.suggestedThemeId) {
+          setThemeSuggest({
+            themeId: data.suggestedThemeId,
+            reason: data.suggestReason ?? "",
+          });
+        }
+      } catch {
+        /* soft — picker still usable with defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSiteReview, props.projectId]);
 
   const refreshEvents = useCallback(async () => {
     try {
@@ -768,13 +838,61 @@ export function ProjectConsole(props: {
     currentStepIndex === 0;
   const next = nextActionForStatus(status, !!documentId);
 
+  async function persistIrTheme(rebuild: boolean): Promise<boolean> {
+    setThemeNote(null);
+    try {
+      const res = await fetch(`/api/projects/${props.projectId}/theme`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ themeId: irTheme, rebuild }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        themeId?: IrThemeId;
+        rebuildHint?: string;
+        rebuildError?: string;
+        draft?: { draftVersion?: number };
+      };
+      if (!res.ok) {
+        setThemeNote(data.error ?? res.statusText);
+        return false;
+      }
+      if (data.themeId) setIrTheme(data.themeId);
+      setThemeNote(
+        data.rebuildHint ??
+          (rebuild
+            ? `Theme “${irTheme}” applied.`
+            : `Theme “${irTheme}” saved on DNA.`),
+      );
+      if (data.rebuildError) {
+        setThemeNote((prev) => `${prev ?? ""} (${data.rebuildError})`);
+      }
+      if (rebuild && data.draft?.draftVersion) {
+        await refreshSiteDraft();
+        setPreviewBust(Date.now());
+      }
+      return true;
+    } catch (err) {
+      setThemeNote((err as Error).message);
+      return false;
+    }
+  }
+
   async function approveDna() {
+    // Persist IR theme on DNA before the workflow builds the site draft.
+    setBusy(true);
+    const themeOk = await persistIrTheme(false);
+    setBusy(false);
+    if (!themeOk) {
+      setNote("Could not save IR theme — fix and approve again.");
+      return;
+    }
     const ok = await gate(
       "dna",
       {
         schema_version: "dna-correction/1",
         dna_id: dna?.dnaId ?? "",
-        edits: [],
+        edits: [{ path: "theme_id", value: irTheme }],
         approve: true,
         approved_by: "operator",
       },
@@ -784,6 +902,89 @@ export function ProjectConsole(props: {
       setStatus("prototype_generating");
       setClientBusyStartedAt(Date.now());
     }
+  }
+
+  async function applyThemeAndRebuild() {
+    setBusy(true);
+    try {
+      const ok = await persistIrTheme(true);
+      if (ok) setNote(`IR theme “${irTheme}” applied — draft rebuilt.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function renderThemePicker(opts: { showApply?: boolean }) {
+    const meta = themeMeta;
+    return (
+      <div className="rs-theme-picker">
+        <div className="rs-theme-picker__head">
+          <div>
+            <div className="rs-stat-label">IR theme</div>
+            <p className="rs-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+              Chrome and layout personality only — numbers stay from extraction. Brand DNA
+              colors and logo still apply.
+            </p>
+          </div>
+          {themeSuggest ? (
+            <p className="rs-theme-picker__suggest">
+              Suggested: <strong>{meta[themeSuggest.themeId]?.label ?? themeSuggest.themeId}</strong>
+              {themeSuggest.reason ? ` — ${themeSuggest.reason}` : ""}
+            </p>
+          ) : null}
+        </div>
+        <div className="rs-theme-picker__grid" role="radiogroup" aria-label="IR theme">
+          {(["classic", "editorial"] as const).map((id) => {
+            const m = meta[id];
+            const selected = irTheme === id;
+            const suggested = themeSuggest?.themeId === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={
+                  selected ? "rs-theme-card is-selected" : "rs-theme-card"
+                }
+                disabled={busy}
+                onClick={() => setIrTheme(id)}
+              >
+                <span className="rs-theme-card__label">
+                  {m.label}
+                  {suggested ? (
+                    <span className="rs-theme-card__badge">Suggested</span>
+                  ) : null}
+                </span>
+                <span className="rs-theme-card__blurb">{m.blurb}</span>
+                <span className="rs-theme-card__best">{m.bestFor}</span>
+              </button>
+            );
+          })}
+        </div>
+        {opts.showApply ? (
+          <div className="rs-theme-picker__actions">
+            <button
+              type="button"
+              className="rs-btn rs-btn--ghost"
+              disabled={busy}
+              onClick={() => void applyThemeAndRebuild()}
+            >
+              Apply theme &amp; rebuild
+            </button>
+            {themeNote ? (
+              <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+                {themeNote}
+              </p>
+            ) : null}
+          </div>
+        ) : themeNote ? (
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            {themeNote}
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   async function refreshSiteDraft() {
@@ -1306,7 +1507,7 @@ export function ProjectConsole(props: {
                   </div>
                 </div>
                 <div>
-                  <div className="rs-stat-label">Theme</div>
+                  <div className="rs-stat-label">Light / dark</div>
                   <div className="rs-stat-value" style={{ fontSize: "1.15rem" }}>
                     {dna.theme.mode ?? "—"}
                   </div>
@@ -1321,6 +1522,7 @@ export function ProjectConsole(props: {
                   {dna.theme.rationale}
                 </p>
               ) : null}
+              {renderThemePicker({ showApply: false })}
               <div>
                 <div className="rs-stat-label" style={{ marginBottom: 8 }}>
                   Palette roles
@@ -1615,6 +1817,8 @@ export function ProjectConsole(props: {
               </div>
             </>
           ) : null}
+
+          {renderThemePicker({ showApply: true })}
 
           <div className="rs-brand-kit">
             <div className="rs-brand-kit__head">

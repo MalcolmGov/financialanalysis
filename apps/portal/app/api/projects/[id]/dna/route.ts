@@ -3,6 +3,11 @@ import { requireOperator } from "../../../../../lib/authz";
 import { getPrivate } from "../../../../../lib/blob";
 import { db, schema } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
+import {
+  IR_THEME_META,
+  suggestIrThemeId,
+  themeIdFromDna,
+} from "../../../../../lib/ir-theme";
 
 /** Operator-facing Design DNA summary for the DNA approval gate. */
 export async function GET(
@@ -81,12 +86,32 @@ export async function GET(
     name: role,
   }));
 
+  const [project] = await db()
+    .select({
+      companyName: schema.projects.companyName,
+      periodLabel: schema.projects.periodLabel,
+    })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+  const themeId = themeIdFromDna(dna as { theme_id?: unknown });
+  const suggested = suggestIrThemeId({
+    company: project?.companyName,
+    periodLabel: project?.periodLabel,
+    toneWords,
+    signals: [project?.companyName ?? "", project?.periodLabel ?? "", ...toneWords],
+  });
+
   return Response.json({
     dnaId: dna.dna_id ?? null,
     revision: dna.revision ?? 1,
     confidence: confidence.overall ?? null,
     flags: confidence.flags ?? [],
     theme,
+    themeId,
+    suggestedThemeId: suggested.themeId,
+    suggestReason: suggested.reason,
+    themes: IR_THEME_META,
     toneWords,
     type: {
       heading: type.stack?.heading ?? null,

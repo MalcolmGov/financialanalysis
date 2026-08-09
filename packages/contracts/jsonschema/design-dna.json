@@ -508,6 +508,14 @@
       ],
       "additionalProperties": false
     },
+    "theme_id": {
+      "default": "classic",
+      "type": "string",
+      "enum": [
+        "classic",
+        "editorial"
+      ]
+    },
     "human_edits": {
       "type": "array",
       "items": {
@@ -551,6 +559,7 @@
     "motifs",
     "tone_words",
     "theme",
+    "theme_id",
     "human_edits"
   ],
   "additionalProperties": false,
