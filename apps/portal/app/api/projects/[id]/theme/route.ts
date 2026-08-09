@@ -86,11 +86,13 @@ export async function PUT(
       themeId: body.themeId,
       by: operator.email,
     });
+    // Trust the request body for rebuild/response — never a re-read of DNA.
+    const themeId = body.themeId;
 
     if (!body.rebuild) {
       return Response.json({
         ok: true,
-        themeId: snap.themeId,
+        themeId,
         revision: snap.revision,
         rebuilt: false,
         rebuildHint: "Theme saved. Rebuild the multipage site draft to apply it in preview.",
@@ -101,18 +103,18 @@ export async function PUT(
     try {
       const draft = await rebuildProjectSiteDraft({
         projectId,
-        note: `rebuilt after IR theme → ${snap.themeId} by ${operator.email}`,
+        note: `rebuilt after IR theme → ${themeId} by ${operator.email}`,
         hardFailGates: true,
         // Pass through so render does not depend on blob read-after-write.
-        themeId: snap.themeId,
+        themeId,
       });
       return Response.json({
         ok: true,
-        themeId: snap.themeId,
+        themeId,
         revision: snap.revision,
         rebuilt: true,
         draft,
-        rebuildHint: `Site draft rebuilt to v${draft.draftVersion} with theme “${snap.themeId}”.`,
+        rebuildHint: `Site draft rebuilt to v${draft.draftVersion} with theme “${themeId}”.`,
         themes: IR_THEME_META,
       });
     } catch (err) {
@@ -120,7 +122,7 @@ export async function PUT(
         return Response.json(
           {
             ok: true,
-            themeId: snap.themeId,
+            themeId,
             revision: snap.revision,
             rebuilt: false,
             rebuildError: err.message,

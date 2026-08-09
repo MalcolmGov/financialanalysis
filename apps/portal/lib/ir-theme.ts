@@ -176,23 +176,23 @@ export async function persistProjectTheme(opts: {
     revision?: number;
     human_edits?: unknown[];
   };
+  // Blob reads can be briefly stale after a prior write — never skip persist based
+  // on a getPrivate comparison alone. Always stamp the operator-requested theme.
   const from = themeIdFromDna(dna);
-  if (from === themeId) {
-    return loadProjectTheme(opts.projectId);
-  }
-
   const now = new Date().toISOString();
   const edits = Array.isArray(dna.human_edits) ? [...dna.human_edits] : [];
-  edits.push({
-    path: "theme_id",
-    from,
-    to: themeId,
-    by: opts.by,
-    at: now,
-  });
+  if (from !== themeId) {
+    edits.push({
+      path: "theme_id",
+      from,
+      to: themeId,
+      by: opts.by,
+      at: now,
+    });
+    dna.revision = (typeof dna.revision === "number" ? dna.revision : 1) + 1;
+    dna.human_edits = edits;
+  }
   dna.theme_id = themeId;
-  dna.revision = (typeof dna.revision === "number" ? dna.revision : 1) + 1;
-  dna.human_edits = edits;
 
   const body = JSON.stringify(dna, null, 2);
   await putPrivate(art.blobPath, body, "application/json");
