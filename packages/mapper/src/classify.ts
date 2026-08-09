@@ -9,6 +9,8 @@ import type { ExtractionResult, ExtractionTable, SectionKind, StatementType } fr
 
 const STATEMENT_TITLES: { re: RegExp; type: StatementType }[] = [
   { re: /profit or loss|comprehensive income|statement of (?:profit|income)/i, type: "pnl_oci" },
+  // MTN-style short titles: "Group income statement" / "Company income statement"
+  { re: /\bincome\s+statement\b/i, type: "pnl_oci" },
   { re: /financial position|balance\s*sheet/i, type: "financial_position" },
   { re: /changes in\s+equity/i, type: "changes_in_equity" },
   { re: /cash\s*flows?/i, type: "cash_flows" },
@@ -46,7 +48,19 @@ const SECTION_TITLE_LEXICON: { re: RegExp; kind: SectionKind }[] = [
   { re: /for further information|registered address/i, kind: "contacts" },
 ];
 
-const NOTE_HEADING = /^(\d{1,2})\.\s+\S/;
+/**
+ * Top-level note number from IFRS / JSE headings:
+ * - "2. Revenue" / "2.1 Operating segments" → 2
+ * - "2 RESULTS OF OPERATIONS" (MTN, no period) → 2
+ * - "Notes to the Group financial statements (continued)" → null
+ * Years (e.g. 2025) are rejected.
+ */
+const NOTE_NUMBER_HEADING = /^(\d{1,2})(?:\.\d+)*(?:\.|\s)\s*\S/;
+
+/** Strip trailing "(continued)" used on multi-page note banners. */
+export function stripContinuedSuffix(title: string): string {
+  return title.replace(/\s*\(\s*continued\s*\)\s*$/i, "").trim();
+}
 
 /** Column-header fingerprints that identify a financial table. */
 const PERIOD_HEADER =
@@ -59,21 +73,42 @@ export interface TableClassification {
   note_number?: number;
 }
 
+/** Group vs Company book label from a heading (MTN split AFS). */
+export function entityBookOf(title: string): "group" | "company" | null {
+  const t = title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  if (/notes\s+to\s+the\s+company\b/i.test(t)) return "company";
+  if (/notes\s+to\s+the\s+group\b/i.test(t)) return "group";
+  if (/^company\s+(financial statements|statement|income)\b/i.test(t)) return "company";
+  if (/^group\s+(financial statements|statement|income)\b/i.test(t)) return "group";
+  if (/\bcompany\s+statement\s+of\b/i.test(t)) return "company";
+  if (/\bgroup\s+statement\s+of\b/i.test(t)) return "group";
+  if (/^company\s+financial statements$/i.test(t)) return "company";
+  if (/^group\s+financial statements$/i.test(t)) return "group";
+  return null;
+}
+
 /** Classify a section title string. */
 export function classifySectionTitle(title: string): { kind: SectionKind; statement_type?: StatementType } {
   const normalized = title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-  for (const s of STATEMENT_TITLES) {
-    if (s.re.test(normalized)) return { kind: "statement", statement_type: s.type };
+  const stripped = stripContinuedSuffix(normalized);
+  const noteNum = noteNumberOf(stripped);
+  const isNumberedNote = noteNum != null;
+
+  // Numbered note / sub-note titles must not be mistaken for primary statements
+  // (e.g. "1.5.2 … comprehensive income").
+  if (!isNumberedNote) {
+    for (const s of STATEMENT_TITLES) {
+      if (s.re.test(normalized)) return { kind: "statement", statement_type: s.type };
+    }
   }
   // Notes band — stop assigning primary statements once notes begin.
   if (/^notes?\s+to\s+the\b/i.test(normalized) || /^notes?\s+to\s+the\s+financial/i.test(normalized)) {
     return { kind: "note" };
   }
   for (const e of SECTION_TITLE_LEXICON) {
-    if (e.re.test(normalized)) return { kind: e.kind };
+    if (e.re.test(normalized) || e.re.test(stripped)) return { kind: e.kind };
   }
-  const note = NOTE_HEADING.exec(normalized);
-  if (note) return { kind: "note" };
+  if (isNumberedNote) return { kind: "note" };
   return { kind: "other" };
 }
 
@@ -100,8 +135,14 @@ export function statementTypeFromRowLabels(table: ExtractionTable): StatementTyp
 }
 
 export function noteNumberOf(title: string): number | null {
-  const m = NOTE_HEADING.exec(title.trim());
-  return m ? Number(m[1]) : null;
+  const t = stripContinuedSuffix(title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim());
+  if (!t || /^notes?\s+to\s+the\b/i.test(t)) return null;
+  const m = NOTE_NUMBER_HEADING.exec(t);
+  if (!m) return null;
+  const n = Number(m[1]);
+  // Reject years / oversized integers masquerading as note numbers.
+  if (!Number.isFinite(n) || n < 1 || n > 99) return null;
+  return n;
 }
 
 /** Header cells of a table = the top rows flagged is_col_header. */

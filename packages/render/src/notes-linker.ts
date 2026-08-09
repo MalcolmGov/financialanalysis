@@ -3,16 +3,20 @@
  */
 
 const NOTE_NUMS = /\d{1,2}/g;
-const NOTE_HEADING = /^(\d{1,2})\.\s+\S/;
+const NOTE_HEADING = /^(\d{1,2})(?:\.\d+)*(?:\.|\s)\s*\S/;
 
 export function noteNumberFromTitle(title: string): number | null {
-  const m = NOTE_HEADING.exec(title.trim());
-  return m ? Number(m[1]) : null;
+  const t = title.replace(/\s*\(\s*continued\s*\)\s*$/i, "").trim();
+  const m = NOTE_HEADING.exec(t);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 1 && n <= 99 ? n : null;
 }
 
 /** Relative notes base href for a page path, or null when linking is N/A. */
 export function notesBaseHref(pagePath: string): string | null {
-  if (pagePath.endsWith("notes.html")) return null;
+  if (/notes(?:-\d+(?:-\d+)?|-part-\d+)?\.html$/.test(pagePath)) return null;
+  // Same-directory notes.html for flat financials/ and group|company books.
   if (pagePath.startsWith("financials/")) return "notes.html";
   if (pagePath.startsWith("statements/")) return "../financials/notes.html";
   return null;

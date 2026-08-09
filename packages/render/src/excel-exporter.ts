@@ -629,11 +629,32 @@ export function assetHrefFromPage(pagePath: string, assetPath: string): string {
 
 /** Map financials/*.html → per-statement excel slug. */
 export function statementExcelSlugForPage(pagePath: string): string | null {
-  if (pagePath === "financials/income-statement.html") return "income-statement";
-  if (pagePath === "financials/balance-sheet.html") return "balance-sheet";
-  if (pagePath === "financials/changes-in-equity.html") return "changes-in-equity";
-  if (pagePath === "financials/cash-flows.html") return "cash-flows";
-  if (pagePath === "financials/notes.html" || /^financials\/notes-\d/.test(pagePath)) {
+  if (/income-statement\.html$/.test(pagePath)) {
+    if (pagePath.includes("/company/")) return "company-income-statement";
+    if (pagePath.includes("/group/")) return "group-income-statement";
+    return "income-statement";
+  }
+  if (/balance-sheet\.html$/.test(pagePath)) {
+    if (pagePath.includes("/company/")) return "company-balance-sheet";
+    if (pagePath.includes("/group/")) return "group-balance-sheet";
+    return "balance-sheet";
+  }
+  if (/changes-in-equity\.html$/.test(pagePath)) {
+    if (pagePath.includes("/company/")) return "company-changes-in-equity";
+    if (pagePath.includes("/group/")) return "group-changes-in-equity";
+    return "changes-in-equity";
+  }
+  if (/cash-flows\.html$/.test(pagePath)) {
+    if (pagePath.includes("/company/")) return "company-cash-flows";
+    if (pagePath.includes("/group/")) return "group-cash-flows";
+    return "cash-flows";
+  }
+  if (
+    /(?:^|\/)notes\.html$/.test(pagePath) ||
+    /(?:^|\/)notes-(?:\d+(?:-\d+)?|part-\d+)\.html$/.test(pagePath)
+  ) {
+    if (pagePath.includes("/company/")) return "company-notes";
+    if (pagePath.includes("/group/")) return "group-notes";
     return "notes";
   }
   return null;

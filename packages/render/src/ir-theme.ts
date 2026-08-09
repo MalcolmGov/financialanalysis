@@ -68,11 +68,26 @@ export function suggestIrThemeId(input: IrThemeSuggestInput): {
       /letter|opsReview|dividendDeclaration/i.test(k),
     );
 
+  // Letter-less AFS with statutory prose → editorial (statutory-hub personality
+  // until a dedicated theme_id ships in week 3–4).
+  const statutoryHub =
+    /\b(annual_audited|afs|annual\s*financial)\b/.test(hay) &&
+    (input.sectionKinds ?? []).some((k) =>
+      /directorsReport|auditorReport|accountingPolicies/i.test(k),
+    ) &&
+    !(input.sectionKinds ?? []).some((k) => /letter/i.test(k));
+
   const classicHits =
     /\b(mining|gold|platinum|coal|metal|drdgold|drd|resource|interim\s*results|industrial)\b/.test(
       hay,
     );
 
+  if (statutoryHub && !classicHits) {
+    return {
+      themeId: "editorial",
+      reason: "Letter-less AFS statutory hub → Editorial Light (directors/auditor-first)",
+    };
+  }
   if (editorialHits && !classicHits) {
     return {
       themeId: "editorial",

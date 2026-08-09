@@ -146,6 +146,7 @@ async function readinessFromDraft(projectId: string) {
   let brandHex: string | null = null;
   let accentHex: string | null = null;
   let mastheadHex: string | null = null;
+  let dnaRoles: Record<string, { hex?: string } | undefined> | null = null;
   try {
     const [dnaArt] = await db()
       .select({ blobPath: schema.artifacts.blobPath })
@@ -160,6 +161,7 @@ async function readinessFromDraft(projectId: string) {
         palette?: { roles?: Record<string, { hex?: string }> };
       };
       const roles = dna.palette?.roles ?? {};
+      dnaRoles = roles;
       brandHex = roles.brand?.hex ?? null;
       accentHex = roles.accent?.hex ?? null;
       mastheadHex = roles["masthead-bg"]?.hex ?? null;
@@ -185,6 +187,7 @@ async function readinessFromDraft(projectId: string) {
     brandHex,
     accentHex,
     mastheadHex,
+    dnaRoles,
     pages,
     files,
     pdfBundled:

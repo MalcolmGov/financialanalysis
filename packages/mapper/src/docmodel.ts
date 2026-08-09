@@ -9,10 +9,12 @@ import type {
 import {
   classifySectionTitle,
   classifyTable,
+  entityBookOf,
   headerRows,
   isWeakTableTitle,
   noteNumberOf,
   statementTypeFromRowLabels,
+  stripContinuedSuffix,
 } from "./classify.js";
 
 /**
@@ -466,8 +468,10 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
 type SectionMarker = {
   page: number;
   title: string;
-  kind: "statement" | "note" | "reviewOfOperations" | "other";
+  kind: "statement" | "note" | "reviewOfOperations" | "other" | "entityBook";
   statement_type?: StatementType;
+  note_number?: number;
+  entity?: "group" | "company";
 };
 
 function walkBlocks(nodes: BlockNode[] | undefined, visit: (b: BlockNode) => void): void {
@@ -483,23 +487,57 @@ function walkBlocks(nodes: BlockNode[] | undefined, visit: (b: BlockNode) => voi
 /**
  * Collect statement / notes / ops headings with page numbers so dual-entity AFS
  * tables whose row-0 is "GROUP"/"COMPANY" still route to the right statement page.
+ * MTN continued stubs inherit the last numbered note + Group/Company book entity.
  */
 function collectSectionMarkers(extraction: ExtractionResult): SectionMarker[] {
   const markers: SectionMarker[] = [];
   const seen = new Set<string>();
+  let lastNoteNumber: number | undefined;
+  let lastEntity: "group" | "company" | undefined;
+
   const push = (title: string, page: number) => {
     const cleaned = title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
     if (!cleaned || page < 1) return;
+
+    const book = entityBookOf(cleaned);
+    if (book && /financial statements$/i.test(stripContinuedSuffix(cleaned))) {
+      lastEntity = book;
+      const key = `${page}|entityBook|${book}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        markers.push({ page, title: cleaned, kind: "entityBook", entity: book });
+      }
+    }
+    if (book) lastEntity = book;
+
     const cls = classifySectionTitle(cleaned);
+    const n = noteNumberOf(cleaned);
+    if (n != null) lastNoteNumber = n;
+
     let kind: SectionMarker["kind"] = "other";
     if (cls.statement_type) kind = "statement";
-    else if (cls.kind === "note" || /^notes?\s+to\s+the\b/i.test(cleaned)) kind = "note";
-    else if (cls.kind === "reviewOfOperations") kind = "reviewOfOperations";
+    else if (
+      cls.kind === "note" ||
+      n != null ||
+      /^notes?\s+to\s+the\b/i.test(cleaned)
+    ) {
+      kind = "note";
+    } else if (cls.kind === "reviewOfOperations") kind = "reviewOfOperations";
     else return;
-    const key = `${page}|${kind}|${cls.statement_type ?? ""}|${cleaned.toLowerCase()}`;
+
+    const entity = book ?? lastEntity;
+    const note_number = kind === "note" ? (n ?? lastNoteNumber) : undefined;
+    const key = `${page}|${kind}|${cls.statement_type ?? ""}|${note_number ?? ""}|${entity ?? ""}|${cleaned.toLowerCase()}`;
     if (seen.has(key)) return;
     seen.add(key);
-    markers.push({ page, title: cleaned, kind, statement_type: cls.statement_type });
+    markers.push({
+      page,
+      title: cleaned,
+      kind,
+      statement_type: cls.statement_type,
+      note_number,
+      entity,
+    });
   };
 
   walkBlocks(extraction.body, (b) => {
@@ -518,17 +556,36 @@ function collectSectionMarkers(extraction: ExtractionResult): SectionMarker[] {
 function activeMarkerForPage(markers: SectionMarker[], page: number): SectionMarker | null {
   let active: SectionMarker | null = null;
   for (const m of markers) {
-    if (m.page <= page) active = m;
-    else break;
+    if (m.page <= page && m.kind !== "entityBook") active = m;
+    else if (m.page > page) break;
   }
   return active;
+}
+
+function activeEntityForPage(
+  markers: SectionMarker[],
+  page: number,
+): "group" | "company" | undefined {
+  let entity: "group" | "company" | undefined;
+  for (const m of markers) {
+    if (m.page > page) break;
+    if (m.entity) entity = m.entity;
+  }
+  return entity;
 }
 
 function extractionTableTitle(
   table: ExtractionTable,
   extId: string,
   markers: SectionMarker[],
-): { title: string; statement_type?: StatementType; forceNote?: boolean; forceOps?: boolean } {
+): {
+  title: string;
+  statement_type?: StatementType;
+  forceNote?: boolean;
+  forceOps?: boolean;
+  note_number?: number;
+  entity?: "group" | "company";
+} {
   const caption = table.caption_block?.trim() ?? "";
   if (caption) {
     const cls = classifySectionTitle(caption);
@@ -538,20 +595,42 @@ function extractionTableTitle(
         statement_type: cls.statement_type,
         forceNote: cls.kind === "note",
         forceOps: cls.kind === "reviewOfOperations",
+        note_number: noteNumberOf(caption) ?? undefined,
+        entity: entityBookOf(caption) ?? undefined,
       };
     }
   }
 
   const page = table.prov?.[0]?.page_no ?? 0;
   const marker = page > 0 ? activeMarkerForPage(markers, page) : null;
+  const entity =
+    (marker?.entity as "group" | "company" | undefined) ??
+    (page > 0 ? activeEntityForPage(markers, page) : undefined);
+
   if (marker?.kind === "statement" && marker.statement_type) {
-    return { title: marker.title, statement_type: marker.statement_type };
+    return {
+      title: marker.title,
+      statement_type: marker.statement_type,
+      entity,
+    };
   }
   if (marker?.kind === "note") {
-    return { title: marker.title, forceNote: true };
+    const n = marker.note_number;
+    // Prefer a numbered title so siteplan note splits and anchors work when
+    // the active banner is only "Notes … (continued)".
+    const title =
+      n != null && /^notes?\s+to\s+the\b/i.test(marker.title)
+        ? `${n}. ${stripContinuedSuffix(marker.title)}`
+        : marker.title;
+    return {
+      title,
+      forceNote: true,
+      note_number: n,
+      entity,
+    };
   }
   if (marker?.kind === "reviewOfOperations") {
-    return { title: marker.title, forceOps: true };
+    return { title: marker.title, forceOps: true, entity };
   }
 
   const fromRows = statementTypeFromRowLabels(table);
@@ -564,19 +643,19 @@ function extractionTableTitle(
           : fromRows === "changes_in_equity"
             ? "Statement of changes in equity"
             : "Statement of profit or loss and other comprehensive income";
-    return { title: labelTitle, statement_type: fromRows };
+    return { title: labelTitle, statement_type: fromRows, entity };
   }
 
-  if (caption && !isWeakTableTitle(caption)) return { title: caption };
+  if (caption && !isWeakTableTitle(caption)) return { title: caption, entity };
 
   const row0 = table.cells
     .filter((c) => c.r === 0)
     .sort((a, b) => a.c - b.c)
     .map((c) => c.text.trim())
     .filter(Boolean);
-  if (row0[0] && !isWeakTableTitle(row0[0])) return { title: row0[0] };
+  if (row0[0] && !isWeakTableTitle(row0[0])) return { title: row0[0], entity };
 
-  return { title: caption || row0[0] || `Table ${extId}` };
+  return { title: caption || row0[0] || `Table ${extId}`, entity };
 }
 
 export function mapToDocModel(
@@ -596,9 +675,24 @@ export function mapToDocModel(
     const mustAppear = true;
     tables.push(buildFinTable(table, docId, mustAppear));
     const resolved = extractionTableTitle(table, extId, markers);
-    const title = resolved.title;
+    let title = resolved.title;
+    // Stamp entity book on titles so SitePlan can split Group vs Company pages
+    // without a schema change (MTN separate statement books).
+    if (
+      resolved.entity &&
+      !entityBookOf(title) &&
+      (resolved.forceNote ||
+        resolved.statement_type ||
+        classifySectionTitle(title).kind === "note" ||
+        classifySectionTitle(title).statement_type)
+    ) {
+      const prefix = resolved.entity === "company" ? "Company" : "Group";
+      if (!new RegExp(`\\b${prefix}\\b`, "i").test(title)) {
+        title = `${prefix} — ${title}`;
+      }
+    }
     const titleCls = classifySectionTitle(title);
-    const noteNum = noteNumberOf(title);
+    const noteNum = noteNumberOf(title) ?? resolved.note_number ?? null;
     const statement_type =
       resolved.statement_type ?? titleCls.statement_type ?? cls.statement_type;
     const sectionKind =

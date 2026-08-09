@@ -311,13 +311,27 @@ function notesProseBlocks(
     .join("\n");
 }
 
-/** Parse notes-1-10.html / notes-3.html into an inclusive note-number range. */
+/** Parse notes-1-10.html / notes-3.html (incl. group/company books) into a range. */
 function noteRangeFromPath(path: string): { lo: number; hi: number } | null {
-  const m = /^financials\/notes-(\d+)(?:-(\d+))?\.html$/.exec(path);
+  const m =
+    /^financials\/(?:(?:group|company)\/)?notes-(\d+)(?:-(\d+))?\.html$/.exec(path);
   if (!m) return null;
   const lo = Number(m[1]);
   const hi = m[2] != null ? Number(m[2]) : lo;
   return { lo, hi };
+}
+
+function isNotesIndexPath(path: string): boolean {
+  return /^financials\/(?:(?:group|company)\/)?notes\.html$/.test(path);
+}
+
+function isNotesPagePath(path: string): boolean {
+  return (
+    isNotesIndexPath(path) ||
+    /^financials\/(?:(?:group|company)\/)?notes-(?:\d+(?:-\d+)?|part-\d+)\.html$/.test(
+      path,
+    )
+  );
 }
 
 /**
@@ -511,18 +525,21 @@ export function enrichMultiPageFiles(
   }
 
   // Notes index + optional paginated note-group pages from adaptive SitePlan.
-  const notePages = plan.pages.filter(
-    (p) =>
-      p.path === "financials/notes.html" ||
-      /^financials\/notes-\d/.test(p.path),
-  );
-  const hasNoteGroups = notePages.some((p) => p.path !== "financials/notes.html");
+  // Supports flat financials/notes* and Group/Company books under financials/{group|company}/.
+  const notePages = plan.pages.filter((p) => isNotesPagePath(p.path));
   for (const page of notePages) {
     let html = out[page.path];
     if (!html) continue;
     html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
     html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
-    const isIndex = page.path === "financials/notes.html";
+    const isIndex = isNotesIndexPath(page.path);
+    const bookPrefix = page.path.startsWith("financials/group/")
+      ? "financials/group/"
+      : page.path.startsWith("financials/company/")
+        ? "financials/company/"
+        : "financials/";
+    const siblingNotes = notePages.filter((p) => p.path.startsWith(bookPrefix));
+    const hasNoteGroups = siblingNotes.some((p) => !isNotesIndexPath(p.path));
     const hero = pageHero({
       path: page.path,
       title: isIndex ? "Notes to the financial statements" : page.title,
@@ -536,10 +553,10 @@ export function enrichMultiPageFiles(
     });
     let toc = "";
     if (isIndex && hasNoteGroups) {
-      const links = notePages
-        .filter((p) => p.path !== "financials/notes.html")
+      const links = siblingNotes
+        .filter((p) => !isNotesIndexPath(p.path))
         .map((p) => {
-          const href = p.path.replace(/^financials\//, "");
+          const href = p.path.slice(bookPrefix.length);
           return `<li><a href="${escapeHtml(href)}">${escapeHtml(p.title)}</a></li>`;
         })
         .join("");
@@ -616,7 +633,7 @@ export function enrichMultiPageFiles(
     if (!html) continue;
     // Prose-only AFS pages under financials/ already have heroes above.
     if (page.path.endsWith("accounting-policies.html")) continue;
-    if (page.path === "financials/notes.html" || /^financials\/notes-\d/.test(page.path)) {
+    if (isNotesPagePath(page.path)) {
       // Notes hero already injected above; add toolbar after hero when excel present.
       if (
         downloadOpts.excel &&

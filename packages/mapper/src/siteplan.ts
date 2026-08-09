@@ -122,9 +122,10 @@ function sectionHasProse(docModel: FinancialDocModel, kind: string): boolean {
   );
 }
 
-/** Detect dual-entity AFS (GROUP × COMPANY column bands) from table headers. */
+/** Detect dual-entity AFS (GROUP × COMPANY column bands) from statement tables. */
 export function docModelHasDualEntity(docModel: FinancialDocModel): boolean {
   for (const t of docModel.tables) {
+    if (t.table_type !== "statement") continue;
     const joined = t.header_matrix
       .flat()
       .map((c) => (c.raw ?? "").replace(/\u00a0/g, " ").trim())
@@ -132,6 +133,32 @@ export function docModelHasDualEntity(docModel: FinancialDocModel): boolean {
     if (/\bGROUP\b/i.test(joined) && /\bCOMPANY\b/i.test(joined)) return true;
   }
   return false;
+}
+
+/** Separate Group vs Company statement books (MTN) — not dual column bands. */
+export function docModelHasSeparateEntityBooks(docModel: FinancialDocModel): boolean {
+  let hasGroup = false;
+  let hasCompany = false;
+  for (const sec of docModel.sections) {
+    const t = sec.title?.text ?? "";
+    if (sec.kind !== "statement" && !sec.statement_type) continue;
+    if (/\bgroup\b/i.test(t)) hasGroup = true;
+    if (/\bcompany\b/i.test(t)) hasCompany = true;
+  }
+  // Prefer titled books even when a stray dual-header table exists.
+  return hasGroup && hasCompany;
+}
+
+function entityFromTitle(title: string): "group" | "company" | null {
+  if (/notes\s+to\s+the\s+company|\bcompany\b/i.test(title) && !/\bgroup\b.*\band\b.*\bcompany\b/i.test(title)) {
+    if (/\bcompany\b/i.test(title) && !/\bgroup\b/i.test(title)) return "company";
+    if (/^company\b|company\s+[—-]|notes\s+to\s+the\s+company/i.test(title)) return "company";
+  }
+  if (/\bgroup\b/i.test(title) && !/\bcompany\b/i.test(title)) return "group";
+  if (/^group\b|group\s+[—-]|notes\s+to\s+the\s+group/i.test(title)) return "group";
+  if (/\bcompany\b/i.test(title)) return "company";
+  if (/\bgroup\b/i.test(title)) return "group";
+  return null;
 }
 
 type NoteGroup = {
@@ -145,15 +172,19 @@ type NoteGroup = {
 
 /**
  * When note volume is high, split into notes index + numbered ranges.
- * Returns null to keep a single financials/notes.html page (interim shape).
+ * Returns null to keep a single notes.html page (interim shape).
+ * `pathPrefix` is "" for flat financials/, or "group/" / "company/".
  */
 export function planNotePages(
   docModel: FinancialDocModel,
   noteTables: string[],
   titleByTableId: Map<string, string>,
-): { indexTableIds: string[]; groups: NoteGroup[] } | null {
+  pathPrefix = "",
+): { indexTableIds: string[]; groups: NoteGroup[]; indexPath: string } | null {
   const byNum = new Map<number, string[]>();
   const unnumbered: string[] = [];
+  const prefix = pathPrefix.replace(/^\/+|\/+$/g, "");
+  const base = prefix ? `financials/${prefix}` : "financials";
 
   for (const id of noteTables) {
     const sec = docModel.sections.find(
@@ -188,8 +219,30 @@ export function planNotePages(
   }
 
   const nums = [...byNum.keys()].sort((a, b) => a - b);
-  if (nums.length < NOTE_SPLIT_MIN_NOTES && noteTables.length < NOTE_SPLIT_MIN_TABLES) {
-    return null;
+  const minNotes = prefix ? 8 : NOTE_SPLIT_MIN_NOTES;
+  const minTables = prefix ? 20 : NOTE_SPLIT_MIN_TABLES;
+  const shouldSplit = nums.length >= minNotes || noteTables.length >= minTables;
+  if (!shouldSplit) return null;
+
+  // If numbers are still sparse but table volume is high, chunk unnumbered
+  // sequentially so MTN-style dumps never stay on one megapage.
+  if (nums.length < minNotes && unnumbered.length >= minTables) {
+    const chunk = 20;
+    const groups: NoteGroup[] = [];
+    for (let i = 0; i < unnumbered.length; i += chunk) {
+      const slice = unnumbered.slice(i, i + chunk);
+      const lo = Math.floor(i / chunk) + 1;
+      const hi = lo;
+      groups.push({
+        path: `${base}/notes-part-${lo}.html`,
+        title: `Notes (part ${lo})`,
+        nav: `Notes · part ${lo}`,
+        lo,
+        hi,
+        tableIds: slice,
+      });
+    }
+    return { indexTableIds: [], groups, indexPath: `${base}/notes.html` };
   }
 
   const groups: NoteGroup[] = [];
@@ -199,9 +252,7 @@ export function planNotePages(
     const hi = slice[slice.length - 1]!;
     const tableIds = slice.flatMap((n) => byNum.get(n) ?? []);
     const path =
-      lo === hi
-        ? `financials/notes-${lo}.html`
-        : `financials/notes-${lo}-${hi}.html`;
+      lo === hi ? `${base}/notes-${lo}.html` : `${base}/notes-${lo}-${hi}.html`;
     const label = lo === hi ? `Note ${lo}` : `Notes ${lo}–${hi}`;
     groups.push({
       path,
@@ -214,7 +265,7 @@ export function planNotePages(
   }
 
   // Unnumbered / orphan note tables stay on the index for discovery.
-  return { indexTableIds: unnumbered, groups };
+  return { indexTableIds: unnumbered, groups, indexPath: `${base}/notes.html` };
 }
 
 function buildLegacySinglePage(docModel: FinancialDocModel, blueprint: Blueprint): SitePlan {
@@ -264,18 +315,18 @@ export type DocShape =
   | "afs_generic";
 
 export function classifyDocShape(docModel: FinancialDocModel): DocShape {
-  const dual = docModelHasDualEntity(docModel);
+  const splitBooks = docModelHasSeparateEntityBooks(docModel);
+  const dual = !splitBooks && docModelHasDualEntity(docModel);
   const afsProse =
     sectionHasProse(docModel, "directorsReport") ||
     sectionHasProse(docModel, "auditorReport") ||
     sectionHasProse(docModel, "accountingPolicies");
   const audited = docModel.meta.doc_kind === "annual_audited";
-  if (!afsProse && !audited && !dual) return "interim_short";
+  if (!afsProse && !audited && !dual && !splitBooks) return "interim_short";
+  // Prefer separate Group/Company books (MTN) over dual-column bands (Spar).
+  if (splitBooks) return "afs_group_company_split";
   if (dual) return "afs_dual_entity";
-  if (afsProse || audited) {
-    // Separate Group vs Company statement books lack dual column bands.
-    return "afs_group_company_split";
-  }
+  if (afsProse || audited) return "afs_group_company_split";
   return "afs_generic";
 }
 
@@ -288,11 +339,21 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   const homeTpl = "bp:tpl_home";
   const proseTpl = hasTemplate(blueprint, "bp:tpl_prose") ? "bp:tpl_prose" : homeTpl;
   const region = firstRegionAccepting(blueprint, stmtTpl, tableComponent);
-  const dualEntity = docModelHasDualEntity(docModel);
+  const splitBooks = docModelHasSeparateEntityBooks(docModel);
+  const dualEntity = !splitBooks && docModelHasDualEntity(docModel);
 
   // Map tables → buckets by caption / section title
   const byStatement: Partial<Record<StatementType, string[]>> = {};
+  const byStatementEntity: Record<
+    "group" | "company",
+    Partial<Record<StatementType, string[]>>
+  > = { group: {}, company: {} };
   const noteTables: string[] = [];
+  const noteTablesEntity: Record<"group" | "company" | "shared", string[]> = {
+    group: [],
+    company: [],
+    shared: [],
+  };
   const commentaryTables: string[] = [];
   const otherFinancial: string[] = [];
 
@@ -301,8 +362,13 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
     for (const b of sec.blocks) {
       if (b.kind === "table" && b.table_ref) {
         titleByTableId.set(b.table_ref, sec.title?.text ?? sec.statement_type ?? b.table_ref);
+        const ent = entityFromTitle(sec.title?.text ?? "") ?? "shared";
         if (sec.statement_type) {
-          (byStatement[sec.statement_type] ??= []).push(b.table_ref);
+          if (splitBooks && (ent === "group" || ent === "company")) {
+            (byStatementEntity[ent][sec.statement_type] ??= []).push(b.table_ref);
+          } else {
+            (byStatement[sec.statement_type] ??= []).push(b.table_ref);
+          }
         } else if (sec.kind === "reviewOfOperations") {
           commentaryTables.push(b.table_ref);
         } else if (
@@ -311,6 +377,7 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
           isNoteTitle(sec.title?.text ?? "")
         ) {
           noteTables.push(b.table_ref);
+          noteTablesEntity[ent === "shared" ? "shared" : ent].push(b.table_ref);
         }
       }
     }
@@ -319,19 +386,27 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   for (const t of docModel.tables) {
     if (
       [...Object.values(byStatement)].some((ids) => ids?.includes(t.id)) ||
+      [...Object.values(byStatementEntity.group)].some((ids) => ids?.includes(t.id)) ||
+      [...Object.values(byStatementEntity.company)].some((ids) => ids?.includes(t.id)) ||
       noteTables.includes(t.id) ||
       commentaryTables.includes(t.id)
     ) {
       continue;
     }
     const title = titleByTableId.get(t.id) ?? "";
+    const ent = entityFromTitle(title) ?? "shared";
     const st = statementTypeForTitle(title);
     if (st) {
-      (byStatement[st] ??= []).push(t.id);
+      if (splitBooks && (ent === "group" || ent === "company")) {
+        (byStatementEntity[ent][st] ??= []).push(t.id);
+      } else {
+        (byStatement[st] ??= []).push(t.id);
+      }
     } else if (isOpsFactsTable(t, title)) {
       commentaryTables.push(t.id);
     } else if (isNoteTitle(title) || t.table_type === "note" || t.table_type === "wide") {
       noteTables.push(t.id);
+      noteTablesEntity[ent === "shared" ? "shared" : ent].push(t.id);
     } else if (t.table_type === "statement" || t.must_appear) {
       otherFinancial.push(t.id);
     }
@@ -339,7 +414,17 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
 
   // Unclassified must-appear tables: put on income statement page as fallback bucket
   if (otherFinancial.length) {
-    (byStatement.pnl_oci ??= []).push(...otherFinancial);
+    if (splitBooks) {
+      (byStatementEntity.group.pnl_oci ??= []).push(...otherFinancial);
+    } else {
+      (byStatement.pnl_oci ??= []).push(...otherFinancial);
+    }
+  }
+
+  // Shared notes on a split AFS default into the Group book.
+  if (splitBooks && noteTablesEntity.shared.length) {
+    noteTablesEntity.group.push(...noteTablesEntity.shared);
+    noteTablesEntity.shared = [];
   }
 
   const pages: SitePlan["pages"] = [];
@@ -389,55 +474,95 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
     nav.push({ label: "Auditor's report", href: "auditors-report.html" });
   }
 
-  for (const st of Object.keys(STATEMENT_PATHS) as StatementType[]) {
-    const meta = STATEMENT_PATHS[st];
-    const ids = byStatement[st] ?? [];
-    const title =
-      dualEntity && ids.length
+  const emitStatementPages = (
+    bucket: Partial<Record<StatementType, string[]>>,
+    opts: { entity?: "group" | "company"; dualLabel?: boolean },
+  ) => {
+    const entity = opts.entity;
+    const pathBase = entity ? `financials/${entity}` : "financials";
+    const labelPrefix =
+      entity === "group" ? "Group · " : entity === "company" ? "Company · " : "";
+    for (const st of Object.keys(STATEMENT_PATHS) as StatementType[]) {
+      const meta = STATEMENT_PATHS[st];
+      const ids = bucket[st] ?? [];
+      const file = meta.path.replace(/^financials\//, "");
+      const path = `${pathBase}/${file}`;
+      const title = opts.dualLabel && ids.length
         ? `${meta.title} (Group and Company)`
-        : meta.title;
-    // Always emit the four primary statement pages (empty region ok if min=0)
-    pages.push({
-      path: meta.path,
-      template: stmtTpl,
-      title,
-      regions: { [region]: tableInstances(ids, tableComponent, slotName) },
-      downloads: [],
-    });
-    nav.push({ label: meta.nav, href: meta.path });
-  }
-
-  const notePlan = planNotePages(docModel, noteTables, titleByTableId);
-  if (notePlan) {
-    pages.push({
-      path: "financials/notes.html",
-      template: stmtTpl,
-      title: "Notes index",
-      regions: {
-        [region]: tableInstances(notePlan.indexTableIds, tableComponent, slotName),
-      },
-      downloads: [],
-    });
-    nav.push({ label: "Notes", href: "financials/notes.html" });
-    for (const g of notePlan.groups) {
+        : entity
+          ? `${entity === "group" ? "Group" : "Company"} ${meta.title.toLowerCase()}`
+          : meta.title;
       pages.push({
-        path: g.path,
+        path,
         template: stmtTpl,
-        title: g.title,
-        regions: { [region]: tableInstances(g.tableIds, tableComponent, slotName) },
+        title,
+        regions: { [region]: tableInstances(ids, tableComponent, slotName) },
         downloads: [],
       });
-      nav.push({ label: g.nav, href: g.path });
+      nav.push({ label: `${labelPrefix}${meta.nav}`, href: path });
     }
+  };
+
+  if (splitBooks) {
+    emitStatementPages(byStatementEntity.group, { entity: "group" });
+    emitStatementPages(byStatementEntity.company, { entity: "company" });
   } else {
-    pages.push({
-      path: "financials/notes.html",
-      template: stmtTpl,
-      title: "Notes",
-      regions: { [region]: tableInstances(noteTables, tableComponent, slotName) },
-      downloads: [],
-    });
-    nav.push({ label: "Notes", href: "financials/notes.html" });
+    emitStatementPages(byStatement, { dualLabel: dualEntity });
+  }
+
+  const emitNotes = (tables: string[], pathPrefix: string, navPrefix: string) => {
+    if (!tables.length && pathPrefix) return;
+    const notePlan = planNotePages(docModel, tables, titleByTableId, pathPrefix);
+    if (notePlan) {
+      pages.push({
+        path: notePlan.indexPath,
+        template: stmtTpl,
+        title: pathPrefix ? `${navPrefix}Notes index` : "Notes index",
+        regions: {
+          [region]: tableInstances(notePlan.indexTableIds, tableComponent, slotName),
+        },
+        downloads: [],
+      });
+      nav.push({
+        label: pathPrefix ? `${navPrefix}Notes` : "Notes",
+        href: notePlan.indexPath,
+      });
+      for (const g of notePlan.groups) {
+        pages.push({
+          path: g.path,
+          template: stmtTpl,
+          title: pathPrefix ? `${navPrefix}${g.title}` : g.title,
+          regions: { [region]: tableInstances(g.tableIds, tableComponent, slotName) },
+          downloads: [],
+        });
+        nav.push({
+          label: pathPrefix ? `${navPrefix}${g.nav}` : g.nav,
+          href: g.path,
+        });
+      }
+    } else {
+      const path = pathPrefix
+        ? `financials/${pathPrefix.replace(/\/$/, "")}/notes.html`
+        : "financials/notes.html";
+      pages.push({
+        path,
+        template: stmtTpl,
+        title: pathPrefix ? `${navPrefix}Notes` : "Notes",
+        regions: { [region]: tableInstances(tables, tableComponent, slotName) },
+        downloads: [],
+      });
+      nav.push({
+        label: pathPrefix ? `${navPrefix}Notes` : "Notes",
+        href: path,
+      });
+    }
+  };
+
+  if (splitBooks) {
+    emitNotes(noteTablesEntity.group, "group/", "Group · ");
+    emitNotes(noteTablesEntity.company, "company/", "Company · ");
+  } else {
+    emitNotes(noteTables, "", "");
   }
 
   if (sectionHasProse(docModel, "accountingPolicies")) {

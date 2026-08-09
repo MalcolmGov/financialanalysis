@@ -3,6 +3,11 @@ import {
   type PublishChecklistItem,
   type PublishSignoff as PublishSignoffT,
 } from "@rs/contracts";
+import {
+  contrastRatio,
+  isHighLuminance,
+  resolveIrChromeTokens,
+} from "@rs/render";
 import { getPrivate, putPrivate } from "./blob";
 import { brandOrigins } from "./brand-kit";
 import { assessBrandDifferentiation } from "./brand-differentiation";
@@ -29,12 +34,69 @@ export type PublishReadinessInput = {
   brandHex?: string | null;
   accentHex?: string | null;
   mastheadHex?: string | null;
+  /** Optional DNA role map for bright-brand contrast gate. */
+  dnaRoles?: Record<string, { hex?: string } | undefined> | null;
   pages: Array<{ path: string }>;
   files?: string[];
   pdfBundled?: boolean;
   excelPresent?: boolean;
   deliveryPackOk?: boolean;
 };
+
+/**
+ * Publish gate for high-luminance brand chrome (MTN yellow, etc.).
+ * Accent may stay vivid; masthead / table header / shading must remapped to AA.
+ */
+export function assessBrightBrandContrast(input: {
+  brandHex?: string | null;
+  mastheadHex?: string | null;
+  dnaRoles?: Record<string, { hex?: string } | undefined> | null;
+}): PublishChecklistItem {
+  const roles =
+    input.dnaRoles ??
+    ({
+      brand: input.brandHex ? { hex: input.brandHex } : undefined,
+      "masthead-bg": input.mastheadHex ? { hex: input.mastheadHex } : undefined,
+    } as Record<string, { hex?: string } | undefined>);
+  const tokens = resolveIrChromeTokens(roles);
+  if (!tokens.brightBrand) {
+    return {
+      id: "brand_contrast",
+      label: "Brand contrast (chrome AA)",
+      status: "pass",
+      detail: "Brand luminance OK for classic/editorial chrome",
+      critical: false,
+    };
+  }
+  const mastheadOk =
+    !isHighLuminance(tokens.masthead) &&
+    contrastRatio("#FFFFFF", tokens.masthead) >= 2.8;
+  // Soft current-period wash may be high-luminance; require ink remains AA on it
+  // and it is not the raw brand paint.
+  const shadeOk =
+    tokens.shading.toUpperCase() !== tokens.brand.toUpperCase() &&
+    contrastRatio(tokens.ink, tokens.shading) >= 4.5;
+  const headerOk =
+    contrastRatio(tokens.tableHeaderText, tokens.tableHeaderBg) >= 3.5;
+  const brandTextOk = contrastRatio(tokens.brandText, tokens.paper) >= 4.5;
+  if (!mastheadOk || !shadeOk || !headerOk || !brandTextOk) {
+    return {
+      id: "brand_contrast",
+      label: "Brand contrast (chrome AA)",
+      status: "fail",
+      detail:
+        "High-luminance brand would paint unsafe chrome — remap masthead/shading/headers before publish",
+      critical: true,
+    };
+  }
+  return {
+    id: "brand_contrast",
+    label: "Brand contrast (chrome AA)",
+    status: "pass",
+    detail: `Bright brand remapped to AA chrome (accent ${tokens.brand} kept)`,
+    critical: false,
+  };
+}
 
 export function buildPublishChecklist(input: PublishReadinessInput): PublishChecklistItem[] {
   const reliabilityPass = input.corporateReliability === "pass";
@@ -62,6 +124,11 @@ export function buildPublishChecklist(input: PublishReadinessInput): PublishChec
     mastheadHex: input.mastheadHex,
     clientLogo: Boolean(input.clientLogo),
     brandLogo: input.brandLogo,
+  });
+  const brandContrast = assessBrightBrandContrast({
+    brandHex: input.brandHex,
+    mastheadHex: input.mastheadHex,
+    dnaRoles: input.dnaRoles,
   });
 
   const items: PublishChecklistItem[] = [
@@ -109,6 +176,7 @@ export function buildPublishChecklist(input: PublishReadinessInput): PublishChec
       detail: brandDiff.detail,
       critical: brandDiff.critical,
     },
+    brandContrast,
     {
       id: "hero_photo",
       label: "Hero photography (optional polish)",

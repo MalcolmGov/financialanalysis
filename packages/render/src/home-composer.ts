@@ -39,12 +39,22 @@ const EXPLORE_DESC: Record<string, string> = {
     "Movements in equity for the reporting period.",
   "financials/cash-flows.html":
     "Condensed consolidated statement of cash flows.",
-  "financials/notes.html":
-    "Notes to the condensed consolidated financial statements.",
-  "financials/accounting-policies.html":
-    "Material accounting policies from the notes to the financial statements.",
-  "administration.html": "Corporate, shareholder, and contact information.",
-  "downloads.html": "Source PDF and spreadsheet exports for offline analysis.",
+  "financials/notes.html": "Notes to the financial statements.",
+  "financials/accounting-policies.html": "Material accounting policies and framework.",
+  "financials/group/income-statement.html":
+    "Group statement of profit or loss and other comprehensive income.",
+  "financials/group/balance-sheet.html": "Group statement of financial position.",
+  "financials/group/changes-in-equity.html": "Group statement of changes in equity.",
+  "financials/group/cash-flows.html": "Group statement of cash flows.",
+  "financials/group/notes.html": "Notes to the Group financial statements.",
+  "financials/company/income-statement.html":
+    "Company statement of profit or loss and other comprehensive income.",
+  "financials/company/balance-sheet.html": "Company statement of financial position.",
+  "financials/company/changes-in-equity.html": "Company statement of changes in equity.",
+  "financials/company/cash-flows.html": "Company statement of cash flows.",
+  "financials/company/notes.html": "Notes to the Company financial statements.",
+  "administration.html": "Directors, contacts, and corporate information.",
+  "downloads.html": "Download the source PDF and Excel workbook.",
 };
 
 const EXPLORE_CTA: Record<string, string> = {
@@ -345,10 +355,21 @@ export function resultsHeadline(
   });
 }
 
+function firstFinancialsHref(plan: SitePlan): string {
+  const hit = plan.nav.find(
+    (n) =>
+      /income-statement\.html$/.test(n.href) ||
+      /balance-sheet\.html$/.test(n.href) ||
+      (n.href.startsWith("financials/") && !/notes|accounting-policies/.test(n.href)),
+  );
+  return hit?.href ?? "financials/income-statement.html";
+}
+
 function homeHero(
   docModel: FinancialDocModel,
   kpis: HomeKpiCard[],
   opts: HomeComposeOptions = {},
+  financialsHref = "financials/income-statement.html",
 ): string {
   const themeId = normalizeIrThemeId(opts.themeId);
   const editorial = themeId === "editorial";
@@ -383,9 +404,10 @@ function homeHero(
   const headlineAttr = /\d/.test(headline) ? " data-allow-number" : "";
   // Editorial: commentary-first hero; KPIs move to the body band (same figures).
   const stage = editorial ? "" : kpiStage(kpis);
+  const finHref = escapeHtml(financialsHref);
   const ctaPrimary = editorial
-    ? `<a class="home-cta__primary" href="commentary.html">Read the commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
-    : `<a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="financials/income-statement.html">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`;
+    ? `<a class="home-cta__primary" href="commentary.html">Read the commentary</a><a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`
+    : `<a class="home-cta__primary" href="commentary.html">Read commentary</a><a class="home-cta__secondary" href="${finHref}">View financials</a><a class="home-cta__secondary" href="downloads.html">Downloads</a>`;
   // Logo present → avoid double-branding the company wordmark beside the lockup.
   const brandClass = logo ? " home-hero__brand--has-logo" : "";
 
@@ -471,11 +493,17 @@ function exploreCards(plan: SitePlan): string {
   // Collapse paginated note groups into the Notes index card so explore
   // stays scannable while sticky nav still lists every group.
   const seen = new Set<string>();
+  const noteGroupRe =
+    /^financials\/(?:(?:group|company)\/)?notes-(?:\d+(?:-\d+)?|part-\d+)\.html$/;
+  const noteIndexFor = (href: string) => {
+    if (href.startsWith("financials/group/")) return "financials/group/notes.html";
+    if (href.startsWith("financials/company/")) return "financials/company/notes.html";
+    return "financials/notes.html";
+  };
   const items = plan.nav.filter((n) => {
     if (n.href === "index.html") return false;
-    if (/^financials\/notes-\d/.test(n.href)) {
-      if (seen.has("financials/notes.html")) return false;
-      seen.add("financials/notes.html");
+    if (noteGroupRe.test(n.href)) {
+      seen.add(noteIndexFor(n.href));
       return false; // Notes index already in nav when groups exist
     }
     if (seen.has(n.href)) return false;
@@ -483,14 +511,27 @@ function exploreCards(plan: SitePlan): string {
     return true;
   });
   // Ensure Notes index appears even if only group hrefs were present.
-  if (
-    plan.nav.some((n) => /^financials\/notes-\d/.test(n.href)) &&
-    !items.some((n) => n.href === "financials/notes.html")
-  ) {
-    const notesIdx = plan.nav.findIndex((n) => n.href.startsWith("financials/"));
-    const card = { label: "Notes", href: "financials/notes.html" };
-    if (notesIdx >= 0) items.splice(Math.min(notesIdx + 4, items.length), 0, card);
-    else items.push(card);
+  for (const book of ["", "group/", "company/"] as const) {
+    const idxPath = book
+      ? `financials/${book}notes.html`
+      : "financials/notes.html";
+    const groupRe = book
+      ? new RegExp(
+          `^financials/${book}notes-(?:\\d+(?:-\\d+)?|part-\\d+)\\.html$`,
+        )
+      : /^financials\/notes-(?:\d+(?:-\d+)?|part-\d+)\.html$/;
+    if (
+      plan.nav.some((n) => groupRe.test(n.href)) &&
+      !items.some((n) => n.href === idxPath)
+    ) {
+      const notesIdx = plan.nav.findIndex((n) => n.href.startsWith("financials/"));
+      const card = {
+        label: book === "group/" ? "Group · Notes" : book === "company/" ? "Company · Notes" : "Notes",
+        href: idxPath,
+      };
+      if (notesIdx >= 0) items.splice(Math.min(notesIdx + 4, items.length), 0, card);
+      else items.push(card);
+    }
   }
   const cards = items
     .map((n, i) => {
@@ -533,7 +574,7 @@ export function composeHome(
       ? `<div class="home-body__kpi-stage" data-dna-component="home-kpi-stage">${kpiStage(kpis)}</div>`
       : "";
   return {
-    heroHtml: homeHero(docModel, kpis, opts),
+    heroHtml: homeHero(docModel, kpis, opts, firstFinancialsHref(plan)),
     bodyHtml: `${bodyKpis}${highlightsBand(docModel, kpis)}${exploreCards(plan)}`,
     kpis,
   };

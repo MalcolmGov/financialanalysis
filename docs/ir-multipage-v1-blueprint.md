@@ -66,7 +66,7 @@ Production evidence from three live uploads. Canvas: `world-class-ir-converter.c
 |---|---|---|---|---|---|---|
 | **DRDGOLD** | `444cd443-97cc-4b9c-b0f6-eef4f65c2f98` | 10 pp | Interim unaudited | 10 | `classic` | **Strong** — letter, ops, dividend, statements, notes |
 | **SPAR** | `7947eb5f-d836-43b4-8779-8bfdcf164471` | 80 pp | AFS dual-entity | **15** (draft v30) | `editorial` | **Expanded** — directors + auditor + policies + note groups; commentary from DR (~70k); Gate A/B pass |
-| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | **13** (draft v7) | `classic` | **Expanded** — directors + auditor + ACCOUNTING FRAMEWORK policies; commentary from DR (~70k); Gate A/B pass; notes still single dump |
+| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | **Phase 2 rebuild** | `classic` | **Phase 2** — Group+Company books + note groups; bright-brand gate; commentary from DR (~70k) |
 
 Prefer MTN `8ed9620c…` over older `f3cc2ac8…` (24 pp truncated stub; legal name resolved as “Group financial statements”; corporate reliability fail).
 
@@ -114,20 +114,16 @@ Local mapper work already expands Spar/MTN SitePlans beyond production drafts �
 | Phase | Status | Notes |
 |---|---|---|
 | **1** Adaptive sitemap + commentary never-drop | **Done** — Spar v30 / MTN v7 verified post-deploy | `classifyDocShape`, directors/auditor/policies pages, directors→commentary fallback, ACCOUNTING FRAMEWORK lexicon (`1 ACCOUNTING…`), bright-brand tokens via `buildIrTokenBlock` |
-| **2** Note numbering + policies + Group/Company IA | **Partial** — Spar note groups shipped; MTN continued-stubs + Company book still open | |
-| **3** Bright-brand publish gate + statutory hub | **Partial** — contrast remap in token path; publish gate / hub theme still open | |
+| **2** Note numbering + Group/Company IA + brand contrast gate | **Done** — local MTN probe: Group/Company books + note groups; publish `brand_contrast` checklist | Continued-stub note inheritance; separate entity books preferred over dual-column false positives; letter-less AFS theme suggest → editorial |
+| **3** Dedicated statutory-hub theme_id | Open — editorial suggest covers hub personality for now | |
 | **4** Complete-IR checklist + operator SLA | Open | |
 
-### Phase 1 verification matrix (2026-08-09)
+### Phase 2 verification matrix (2026-08-09)
 
-| Check | Spar `7947eb5f…` v30 | MTN `8ed9620c…` v7 |
+| Check | Spar `7947eb5f…` | MTN `8ed9620c…` (local map) |
 |---|---|---|
-| Gate A / Gate B | pass / pass | pass / pass |
-| Corporate reliability | pass | pass |
-| Site pages | 15 | 13 |
-| Directors' report page | yes | yes |
-| Auditor's report page | yes | yes |
-| Accounting policies page | yes | yes (FRAMEWORK lexicon) |
+| Note groups / index | yes (pre-existing) | yes — Group notes 1–10 / 11; Company notes 2–14 |
+| Group statement book | dual-column (unchanged) | `financials/group/*` |
+| Company statement book | dual-column (unchanged) | `financials/company/*` |
+| Bright-brand publish gate | n/a (editorial green) | pass when chrome remapped |
 | Commentary blank placeholder | no | no |
-| Commentary source | Directors' report (~70k chars) | Directors' report (~70k chars) |
-| Note groups / index | yes (`notes-8-34`, `notes-36-42`) | no (unnumbered continued stubs) |

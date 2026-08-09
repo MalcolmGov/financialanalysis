@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Blueprint, FinancialDocModel } from "@rs/contracts";
-import { buildSitePlan, classifyDocShape, planNotePages } from "./siteplan.js";
+import { buildSitePlan, classifyDocShape, docModelHasSeparateEntityBooks, planNotePages } from "./siteplan.js";
+import { noteNumberOf } from "./classify.js";
 
 function cell(raw: string, r = 0, c = 0) {
   return {
@@ -263,5 +264,70 @@ describe("adaptive siteplan", () => {
       ],
     });
     expect(planNotePages(dm, ["doc:tbl_1"], titleBy)).toBeNull();
+  });
+
+  it("parses MTN-style note numbers without a period", () => {
+    expect(noteNumberOf("2 RESULTS OF OPERATIONS")).toBe(2);
+    expect(noteNumberOf("2 RESULTS OF OPERATIONS (continued)")).toBe(2);
+    expect(noteNumberOf("1 ACCOUNTING FRAMEWORK AND CRITICAL JUDGEMENTS")).toBe(1);
+    expect(noteNumberOf("2.1 Operating segments")).toBe(2);
+    expect(noteNumberOf("Notes to the Group financial statements (continued)")).toBeNull();
+  });
+
+  it("splits Group/Company statement books into separate nav entries", () => {
+    const tables = [
+      {
+        id: "doc:tbl_g_pnl",
+        src_table: "ext:gpnl",
+        must_appear: true,
+        table_type: "statement" as const,
+        header_matrix: [[{ raw: "2025", col_span: 1, row_span: 1, src_ref: "ext:gpnl:h" }]],
+        unit_context: { default: "Rm", per_row: {} },
+        row_groups: [],
+        rows: [{ cells: [cell("Revenue"), cell("10")] }],
+      },
+      {
+        id: "doc:tbl_c_pnl",
+        src_table: "ext:cpnl",
+        must_appear: true,
+        table_type: "statement" as const,
+        header_matrix: [[{ raw: "2025", col_span: 1, row_span: 1, src_ref: "ext:cpnl:h" }]],
+        unit_context: { default: "Rm", per_row: {} },
+        row_groups: [],
+        rows: [{ cells: [cell("Revenue"), cell("3")] }],
+      },
+    ];
+    const sections: FinancialDocModel["sections"] = [
+      {
+        id: "doc:sec_directorsReport",
+        kind: "directorsReport",
+        title: { text: "Directors' report", src_ref: "ext:dr" },
+        blocks: [{ kind: "paragraph", text: "The directors submit their report.", src_ref: "ext:dr1" }],
+        items: [],
+      },
+      {
+        id: "doc:sec_g_pnl",
+        kind: "statement",
+        statement_type: "pnl_oci",
+        title: { text: "Group income statement", src_ref: "ext:gpnl" },
+        blocks: [{ kind: "table", table_ref: "doc:tbl_g_pnl" }],
+        items: [],
+      },
+      {
+        id: "doc:sec_c_pnl",
+        kind: "statement",
+        statement_type: "pnl_oci",
+        title: { text: "Company statement of comprehensive income", src_ref: "ext:cpnl" },
+        blocks: [{ kind: "table", table_ref: "doc:tbl_c_pnl" }],
+        items: [],
+      },
+    ];
+    const dm = baseDoc({ tables, sections });
+    expect(docModelHasSeparateEntityBooks(dm)).toBe(true);
+    expect(classifyDocShape(dm)).toBe("afs_group_company_split");
+    const plan = buildSitePlan(dm, stubBlueprint());
+    expect(plan.nav.some((n) => n.href === "financials/group/income-statement.html")).toBe(true);
+    expect(plan.nav.some((n) => n.href === "financials/company/income-statement.html")).toBe(true);
+    expect(plan.nav.some((n) => n.href === "financials/income-statement.html")).toBe(false);
   });
 });
