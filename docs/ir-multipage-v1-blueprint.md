@@ -65,9 +65,9 @@ Production evidence from three live uploads. Canvas: `world-class-ir-converter.c
 
 | Issuer | Project ID | PDF | Doc shape | Prod site pages | Theme | Capture verdict |
 |---|---|---|---|---|---|---|
-| **DRDGOLD** | `444cd443-97cc-4b9c-b0f6-eef4f65c2f98` | 10 pp | Interim unaudited | **10** (draft v43) | `classic` | **Ready** — letter, ops, dividend, statements, notes; reliability pass |
-| **SPAR** | `7947eb5f-d836-43b4-8779-8bfdcf164471` | 80 pp | AFS dual-entity | **15** (draft v32) | `statutory` | **Ready** — directors + auditor + policies + note groups; Gate A/B pass |
-| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | **21** (draft v9) | `statutory` | **Ready** — Group+Company books + note groups; Gate A/B + reliability pass |
+| **DRDGOLD** | `444cd443-97cc-4b9c-b0f6-eef4f65c2f98` | 10 pp | Interim unaudited | **10** (draft v44) | `classic` | **Ready** — letter, ops, dividend, statements, notes; reliability pass |
+| **SPAR** | `7947eb5f-d836-43b4-8779-8bfdcf164471` | 80 pp | AFS dual-entity | **15** (draft v33) | `statutory` | **Ready** — directors + auditor + policies + note groups; Gate A/B pass |
+| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | **21** (draft v10) | `statutory` | **Ready** — Group+Company books + note groups; Gate A/B + reliability pass |
 
 Prefer MTN `8ed9620c…` over older `f3cc2ac8…` (24 pp truncated stub; legal name resolved as “Group financial statements”; corporate reliability fail).
 
