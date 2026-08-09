@@ -155,6 +155,71 @@ const DEFAULT_THEME_META: Record<IrThemeId, IrThemeMeta> = {
   },
 };
 
+type CustomizeTab = "theme" | "brand" | "type" | "publish" | "chat";
+
+type TypeDensity = "compact" | "balanced" | "airy";
+
+const TYPE_DENSITY_META: Record<
+  TypeDensity,
+  { label: string; blurb: string; chatPrompt: string }
+> = {
+  compact: {
+    label: "Compact",
+    blurb: "Tighter statement rows and denser commentary blocks.",
+    chatPrompt:
+      "Tighten typography and spacing across this page: slightly smaller body, denser statement rows, less vertical padding — keep figures and hierarchy intact.",
+  },
+  balanced: {
+    label: "Balanced",
+    blurb: "Default IR rhythm — readable without sparse whitespace.",
+    chatPrompt:
+      "Reset spacing and type scale toward a balanced IR look: comfortable reading, clear hierarchy, neither cramped nor sparse.",
+  },
+  airy: {
+    label: "Airy",
+    blurb: "More breathing room — editorial commentary emphasis.",
+    chatPrompt:
+      "Open up typography and spacing: more air between sections and statement rows, slightly larger body where it helps readability — keep figures locked.",
+  },
+};
+
+type PageGroup = { id: string; label: string; pages: SitePage[] };
+
+function groupSitePages(pages: SitePage[]): PageGroup[] {
+  const overview: SitePage[] = [];
+  const group: SitePage[] = [];
+  const company: SitePage[] = [];
+  const other: SitePage[] = [];
+  for (const p of pages) {
+    const t = p.title.toLowerCase();
+    const path = p.path.toLowerCase();
+    if (
+      path === "index.html" ||
+      t === "home" ||
+      t.includes("commentary") ||
+      t.includes("directors") ||
+      t.includes("auditor") ||
+      t.includes("administration")
+    ) {
+      overview.push(p);
+    } else if (t.startsWith("group") || /(^|\/|-)group/.test(path)) {
+      group.push(p);
+    } else if (t.startsWith("company") || /(^|\/|-)company/.test(path)) {
+      company.push(p);
+    } else {
+      other.push(p);
+    }
+  }
+  return (
+    [
+      { id: "overview", label: "Overview", pages: overview },
+      { id: "group", label: "Group", pages: group },
+      { id: "company", label: "Company", pages: company },
+      { id: "other", label: "More", pages: other },
+    ] as PageGroup[]
+  ).filter((g) => g.pages.length > 0);
+}
+
 function isBusyWaitStatus(status: string): status is BusyWaitKind {
   return (
     status === "extracting" ||
@@ -339,6 +404,15 @@ export function ProjectConsole(props: {
   const [brandKit, setBrandKit] = useState<BrandKitState | null>(null);
   const [brandKitNote, setBrandKitNote] = useState<string | null>(null);
   const [selectedPagePath, setSelectedPagePath] = useState<string>("index.html");
+  const [customizeTab, setCustomizeTab] = useState<CustomizeTab>("theme");
+  const [typeDensity, setTypeDensity] = useState<TypeDensity>("balanced");
+  const [chatDraftPrompt, setChatDraftPrompt] = useState<string | null>(null);
+  const [pageGroupsOpen, setPageGroupsOpen] = useState<Record<string, boolean>>({
+    overview: true,
+    group: true,
+    company: true,
+    other: true,
+  });
   const logoInputRef = useRef<HTMLInputElement>(null);
   const heroInputRef = useRef<HTMLInputElement>(null);
   const [prototype, setPrototype] = useState<{
@@ -370,10 +444,10 @@ export function ProjectConsole(props: {
     siteDraft?.pages.find((p) => p.path === selectedPagePath) ?? siteDraft?.pages[0] ?? null;
 
   useEffect(() => {
-    // Wider stage for page tree + preview + Studio chat.
+    // Wider stage for page tree + preview + Customize drawer.
     document.documentElement.style.setProperty(
       "--max",
-      showSiteReview ? "1680px" : "1240px",
+      showSiteReview ? "1760px" : "1240px",
     );
     return () => {
       document.documentElement.style.removeProperty("--max");
@@ -521,7 +595,7 @@ export function ProjectConsole(props: {
   }, [showSiteReview, props.projectId, events.length]);
 
   useEffect(() => {
-    if (status !== "dna_review") return;
+    if (status !== "dna_review" && !showSiteReview) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -529,24 +603,29 @@ export function ProjectConsole(props: {
         const data = (await res.json().catch(() => ({}))) as DnaSummary & { error?: string };
         if (cancelled) return;
         if (!res.ok) {
-          setDna(null);
-          setDnaError(data.error ?? res.statusText);
+          // Soft-fail on site review — DNA strip is optional there.
+          if (status === "dna_review") {
+            setDna(null);
+            setDnaError(data.error ?? res.statusText);
+          }
           return;
         }
         setDna(data);
         setDnaError(null);
         if (data.themes) setThemeMeta({ ...DEFAULT_THEME_META, ...data.themes });
-        const nextTheme =
-          data.themeId ?? data.suggestedThemeId ?? ("classic" as IrThemeId);
-        setIrTheme(nextTheme);
-        if (data.suggestedThemeId) {
-          setThemeSuggest({
-            themeId: data.suggestedThemeId,
-            reason: data.suggestReason ?? "",
-          });
+        if (status === "dna_review") {
+          const nextTheme =
+            data.themeId ?? data.suggestedThemeId ?? ("classic" as IrThemeId);
+          setIrTheme(nextTheme);
+          if (data.suggestedThemeId) {
+            setThemeSuggest({
+              themeId: data.suggestedThemeId,
+              reason: data.suggestReason ?? "",
+            });
+          }
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && status === "dna_review") {
           setDna(null);
           setDnaError((err as Error).message);
         }
@@ -555,7 +634,7 @@ export function ProjectConsole(props: {
     return () => {
       cancelled = true;
     };
-  }, [status, props.projectId]);
+  }, [status, props.projectId, showSiteReview]);
 
   useEffect(() => {
     if (!showSiteReview) return;
@@ -936,10 +1015,10 @@ export function ProjectConsole(props: {
     }
   }
 
-  function renderThemePicker(opts: { showApply?: boolean }) {
+  function renderThemePicker(opts: { showApply?: boolean; compact?: boolean }) {
     const meta = themeMeta;
     return (
-      <div className="rs-theme-picker">
+      <div className={opts.compact ? "rs-theme-picker rs-theme-picker--compact" : "rs-theme-picker"}>
         <div className="rs-theme-picker__head">
           <div>
             <div className="rs-stat-label">IR theme</div>
@@ -979,20 +1058,24 @@ export function ProjectConsole(props: {
                   ) : null}
                 </span>
                 <span className="rs-theme-card__blurb">{m.blurb}</span>
-                <span className="rs-theme-card__best">{m.bestFor}</span>
+                {!opts.compact ? (
+                  <span className="rs-theme-card__best">{m.bestFor}</span>
+                ) : null}
               </button>
             );
           })}
         </div>
-        <p className="rs-theme-picker__sla rs-muted">
-          Operator path: pick theme → Apply &amp; rebuild (≤2 clicks) · aim ≤15 min polish after
-          extract finishes.
-        </p>
+        {!opts.compact ? (
+          <p className="rs-theme-picker__sla rs-muted">
+            Operator path: pick theme → Apply &amp; rebuild (≤2 clicks) · aim ≤15 min polish after
+            extract finishes.
+          </p>
+        ) : null}
         {opts.showApply ? (
           <div className="rs-theme-picker__actions">
             <button
               type="button"
-              className="rs-btn rs-btn--ghost"
+              className="rs-btn rs-btn--primary"
               disabled={busy}
               onClick={() => void applyThemeAndRebuild()}
             >
@@ -1007,6 +1090,293 @@ export function ProjectConsole(props: {
         ) : themeNote ? (
           <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
             {themeNote}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderBrandKitPanel() {
+    return (
+      <div className="rs-brand-kit rs-brand-kit--panel">
+        <div className="rs-brand-kit__head">
+          <div>
+            <p className="rs-kicker">Brand kit</p>
+            <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.05rem" }}>
+              Logo &amp; hero
+            </h3>
+            <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+              Upload applies and rebuilds the multipage draft. DNA supplies colors/type;
+              Brand kit supplies logo and hero photo.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="rs-btn rs-btn--ghost"
+            disabled={busy}
+            onClick={() => void rebuildSiteFromBrandKit()}
+          >
+            Rebuild
+          </button>
+        </div>
+        {dna?.roles?.length ? (
+          <div className="rs-studio-swatches" aria-label="DNA palette">
+            <div className="rs-stat-label">DNA palette</div>
+            <div className="rs-studio-swatches__row">
+              {dna.roles.slice(0, 6).map((r) => (
+                <div key={r.role} className="rs-studio-swatch" title={`${r.role} · ${r.hex}`}>
+                  <span className="rs-studio-swatch__chip" style={{ background: r.hex }} />
+                  <span className="rs-studio-swatch__role">{r.role}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="rs-brand-kit__grid">
+          <div className="rs-brand-kit__slot">
+            <span className="rs-stat-label">Logo (SVG preferred)</span>
+            {brandKit?.logoPreviewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={brandKit.logoPreviewUrl}
+                alt="Uploaded logo"
+                className="rs-brand-kit__thumb rs-brand-kit__thumb--logo"
+              />
+            ) : (
+              <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0" }}>
+                {brandKit?.effective.logoOrigin
+                  ? `Using extraction · ${brandKit.effective.logoOrigin}`
+                  : "No logo yet — text wordmark fallback"}
+              </p>
+            )}
+            {brandKit?.kit.logo?.filename ? (
+              <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+                {brandKit.kit.logo.filename}
+                {brandKit.effective.logoIsSvg ? " · SVG" : ""}
+                {brandKit.effective.logoIsClient ? " · client" : ""}
+              </p>
+            ) : null}
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadBrandAsset("logo", f);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              className="rs-btn rs-btn--ghost"
+              disabled={busy}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              Upload logo
+            </button>
+          </div>
+          <div className="rs-brand-kit__slot">
+            <span className="rs-stat-label">Hero photo</span>
+            {brandKit?.heroPreviewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={brandKit.heroPreviewUrl}
+                alt="Uploaded hero"
+                className="rs-brand-kit__thumb rs-brand-kit__thumb--hero"
+              />
+            ) : (
+              <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0" }}>
+                {brandKit?.effective.bannerOrigin
+                  ? `Using extraction · ${brandKit.effective.bannerOrigin}`
+                  : "No hero — atmosphere fallback"}
+              </p>
+            )}
+            {brandKit?.kit.hero?.filename ? (
+              <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
+                {brandKit.kit.hero.filename}
+                {brandKit.effective.bannerIsClient ? " · client photo" : ""}
+              </p>
+            ) : null}
+            <input
+              ref={heroInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadBrandAsset("hero", f);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              className="rs-btn rs-btn--ghost"
+              disabled={busy}
+              onClick={() => heroInputRef.current?.click()}
+            >
+              Upload hero
+            </button>
+          </div>
+        </div>
+        {brandKitNote ? <p className="rs-note">{brandKitNote}</p> : null}
+      </div>
+    );
+  }
+
+  function renderTypePanel() {
+    return (
+      <div className="rs-type-panel">
+        <p className="rs-kicker">Typography</p>
+        <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.05rem" }}>
+          Scale &amp; density
+        </h3>
+        <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+          DNA faces stay locked from the PDF. Density adjusts spacing via Studio chat on the
+          current page — figures remain locked.
+        </p>
+        <div className="rs-type-panel__dna">
+          <div>
+            <span className="rs-stat-label">Heading</span>
+            <div className="rs-type-panel__face">{dna?.type.heading ?? "—"}</div>
+          </div>
+          <div>
+            <span className="rs-stat-label">Body</span>
+            <div className="rs-type-panel__face">{dna?.type.body ?? "—"}</div>
+          </div>
+          <div>
+            <span className="rs-stat-label">Base / ratio</span>
+            <div className="rs-type-panel__face">
+              {dna?.type.webBasePx != null ? `${dna.type.webBasePx}px` : "—"}
+              {dna?.type.ratio != null ? ` · ${dna.type.ratio}` : ""}
+            </div>
+          </div>
+        </div>
+        <div className="rs-type-density" role="radiogroup" aria-label="Type density">
+          {(["compact", "balanced", "airy"] as const).map((id) => {
+            const m = TYPE_DENSITY_META[id];
+            const selected = typeDensity === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={selected ? "rs-type-density__card is-selected" : "rs-type-density__card"}
+                onClick={() => setTypeDensity(id)}
+              >
+                <span className="rs-type-density__label">{m.label}</span>
+                <span className="rs-type-density__blurb">{m.blurb}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="rs-btn rs-btn--primary"
+          disabled={busy || (status !== "in_review" && status !== "blueprint_proposed")}
+          onClick={() => {
+            setChatDraftPrompt(TYPE_DENSITY_META[typeDensity].chatPrompt);
+            setCustomizeTab("chat");
+          }}
+        >
+          Apply density via chat
+        </button>
+      </div>
+    );
+  }
+
+  function renderPublishPanel() {
+    return (
+      <div className="rs-publish-ready rs-publish-ready--panel">
+        <div className="rs-publish-ready__head">
+          <div>
+            <p className="rs-kicker">IR / CFO</p>
+            <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.05rem" }}>
+              Publish readiness
+            </h3>
+            <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+              Sign-off unlocks Approve &amp; export when critical gates pass.
+            </p>
+          </div>
+          {publishReady?.signoff && !publishReady.signoffStale ? (
+            <span className="rs-pill rs-pill--pass">Signed off</span>
+          ) : (
+            <span className="rs-pill rs-pill--warn">Awaiting</span>
+          )}
+        </div>
+        {publishError ? (
+          <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>{publishError}</p>
+        ) : null}
+        {publishReady ? (
+          <ul className="rs-checklist">
+            {publishReady.checklist.map((item) => (
+              <li
+                key={item.id}
+                className={`rs-checklist__item rs-checklist__item--${item.status}`}
+              >
+                <span className="rs-checklist__mark" aria-hidden="true">
+                  {item.status === "pass"
+                    ? "✓"
+                    : item.status === "fail"
+                      ? "✗"
+                      : item.status === "warn"
+                        ? "!"
+                        : "·"}
+                </span>
+                <span>
+                  <strong>{item.label}</strong>
+                  {item.detail ? (
+                    <span className="rs-checklist__detail">{item.detail}</span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
+            Loading readiness…
+          </p>
+        )}
+        {publishReady?.blockers?.length ? (
+          <p className="rs-note rs-note--danger" style={{ margin: 0 }}>
+            Blockers: {publishReady.blockers.join("; ")}
+          </p>
+        ) : null}
+        {status === "in_review" ? (
+          <div className="rs-row">
+            <button
+              type="button"
+              className="rs-btn rs-btn--primary"
+              disabled={
+                busy ||
+                !publishReady?.canSignOff ||
+                Boolean(publishReady.signoff && !publishReady.signoffStale)
+              }
+              onClick={() => void signOffPublish()}
+            >
+              Sign off for publish
+            </button>
+            <button
+              type="button"
+              className="rs-btn rs-btn--ghost"
+              disabled={busy || exportBlocked}
+              onClick={() => void approveExport()}
+              title={
+                exportBlocked
+                  ? "Sign off required; critical gates must pass"
+                  : undefined
+              }
+            >
+              Approve &amp; export
+            </button>
+          </div>
+        ) : null}
+        {publishReady?.signoff ? (
+          <p className="rs-tiny rs-muted" style={{ margin: 0 }}>
+            Last sign-off {new Date(publishReady.signoff.signed_off_at).toLocaleString()}
+            {publishReady.signoffStale ? " · stale after new draft — re-sign" : ""}
+            {" · "}draft v{publishReady.signoff.draft_version}
           </p>
         ) : null}
       </div>
@@ -1702,12 +2072,19 @@ export function ProjectConsole(props: {
       ) : null}
 
       {showSiteReview ? (
-        <section className="rs-sheet rs-fade-up-delay">
-          <h2 className="rs-section-title">Multipage site draft</h2>
-          <p className="rs-muted" style={{ fontSize: 14, marginTop: 0 }}>
-            This page tree is the product you sign off. Preview pages here and use Studio chat to
-            tweak HTML quickly, then Approve &amp; export. Entrypoint is <code>index.html</code>.
-          </p>
+        <section className="rs-sheet rs-sheet--studio rs-fade-up-delay">
+          <div className="rs-studio-head">
+            <div>
+              <h2 className="rs-section-title" style={{ margin: 0 }}>
+                Results studio
+              </h2>
+              <p className="rs-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+                Preview is the product. Customize theme, brand, and type on the right — then sign
+                off.
+              </p>
+            </div>
+          </div>
+
           {siteError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
               Could not load site draft: {siteError}
@@ -1718,34 +2095,81 @@ export function ProjectConsole(props: {
               Loading multipage draft…
             </p>
           ) : null}
+
           {siteDraft ? (
-            <>
-              <div className="rs-preview-toolbar">
-                <span>
-                  Draft v{siteDraft.version} · {siteDraft.fileCount} files · entry{" "}
-                  <code>{siteDraft.entrypoint}</code>
-                  {siteDraft.gateA || siteDraft.gateB ? (
-                    <>
-                      {" "}
-                      · Gate A{" "}
-                      <span
-                        style={{
-                          color: siteDraft.gateA === "pass" ? "var(--signal)" : "var(--danger)",
-                        }}
-                      >
-                        {siteDraft.gateA ?? "—"}
-                      </span>
-                      {" · "}Gate B{" "}
-                      <span
-                        style={{
-                          color: siteDraft.gateB === "pass" ? "var(--signal)" : "var(--danger)",
-                        }}
-                      >
-                        {siteDraft.gateB ?? "—"}
-                      </span>
-                    </>
-                  ) : null}
-                </span>
+            <div className="rs-studio">
+              <div className="rs-studio-dna" aria-label="Design DNA summary">
+                <div className="rs-studio-dna__item">
+                  <span className="rs-studio-dna__label">Issuer</span>
+                  <span className="rs-studio-dna__value">
+                    {siteDraft.company ?? props.companyName}
+                  </span>
+                </div>
+                <div className="rs-studio-dna__item">
+                  <span className="rs-studio-dna__label">Period</span>
+                  <span className="rs-studio-dna__value">{props.periodLabel ?? "—"}</span>
+                </div>
+                <div className="rs-studio-dna__item">
+                  <span className="rs-studio-dna__label">Theme</span>
+                  <span className="rs-studio-dna__value">
+                    {themeMeta[irTheme]?.label ?? irTheme}
+                    {themeSuggest?.themeId === irTheme ? " · suggested" : ""}
+                  </span>
+                </div>
+                <div className="rs-studio-dna__item">
+                  <span className="rs-studio-dna__label">Brand</span>
+                  <span className="rs-studio-dna__value">
+                    {brandKit?.effective.logoIsClient || brandKit?.effective.bannerIsClient
+                      ? "Client kit"
+                      : siteDraft.brandLogo || siteDraft.brandBanner
+                        ? "Extraction assets"
+                        : "Fallback"}
+                    {brandKit?.effective.logoIsClient ? " · logo" : ""}
+                    {brandKit?.effective.bannerIsClient ? " · hero" : ""}
+                  </span>
+                </div>
+                {dna?.confidence != null ? (
+                  <div className="rs-studio-dna__item">
+                    <span className="rs-studio-dna__label">DNA</span>
+                    <span className="rs-studio-dna__value">
+                      {Math.round(dna.confidence * 100)}% · {dna.theme.mode ?? "—"}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rs-studio-bar">
+                <div className="rs-studio-bar__meta">
+                  <span>
+                    Draft v{siteDraft.version}
+                    <span className="rs-studio-bar__sep">·</span>
+                    {siteDraft.fileCount} files
+                  </span>
+                  <span className="rs-studio-gates">
+                    Gate A{" "}
+                    <span
+                      className={
+                        siteDraft.gateA === "pass"
+                          ? "rs-studio-gates__ok"
+                          : "rs-studio-gates__bad"
+                      }
+                    >
+                      {siteDraft.gateA ?? "—"}
+                    </span>
+                    <span className="rs-studio-bar__sep">·</span>
+                    Gate B{" "}
+                    <span
+                      className={
+                        siteDraft.gateB === "pass"
+                          ? "rs-studio-gates__ok"
+                          : "rs-studio-gates__bad"
+                      }
+                    >
+                      {siteDraft.gateB ?? "—"}
+                    </span>
+                  </span>
+                </div>
+
                 <div className="rs-viewport" role="group" aria-label="Preview width">
                   {(
                     [
@@ -1765,16 +2189,38 @@ export function ProjectConsole(props: {
                     </button>
                   ))}
                 </div>
-                <div className="rs-preview-links">
+
+                <div className="rs-studio-bar__actions">
+                  <button
+                    type="button"
+                    className="rs-btn rs-btn--ghost"
+                    disabled={busy}
+                    onClick={() => void rebuildSiteFromBrandKit()}
+                  >
+                    Rebuild
+                  </button>
+                  <button
+                    type="button"
+                    className="rs-btn rs-btn--ghost"
+                    onClick={() => setCustomizeTab("brand")}
+                  >
+                    Brand
+                  </button>
+                  <button
+                    type="button"
+                    className="rs-btn rs-btn--primary"
+                    onClick={() => setCustomizeTab("publish")}
+                  >
+                    Publish
+                  </button>
                   {sourcePdfUrl ? (
                     <a
                       href={sourcePdfUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="rs-tiny"
-                      style={{ color: "var(--signal)" }}
+                      className="rs-tiny rs-studio-bar__link"
                     >
-                      PDF in new tab
+                      PDF
                     </a>
                   ) : null}
                   {selectedPage ? (
@@ -1782,43 +2228,91 @@ export function ProjectConsole(props: {
                       href={selectedPage.previewUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="rs-tiny"
-                      style={{ color: "var(--signal)" }}
+                      className="rs-tiny rs-studio-bar__link"
                     >
-                      Page in new tab
+                      Open page
                     </a>
                   ) : null}
                 </div>
               </div>
 
-              <div className="rs-site-layout rs-site-layout--studio">
-                <nav className="rs-page-tree" aria-label="Site pages">
-                  <div className="rs-page-tree__label">Pages</div>
-                  <ul>
-                    {siteDraft.pages.map((p) => (
-                      <li key={p.path}>
+              <div className="rs-studio-stage">
+                <nav className="rs-studio-pages" aria-label="Site pages">
+                  <div className="rs-studio-pages__label">Pages</div>
+                  {groupSitePages(siteDraft.pages).map((g) => {
+                    const open = pageGroupsOpen[g.id] !== false;
+                    return (
+                      <div key={g.id} className="rs-studio-pages__group">
                         <button
                           type="button"
-                          className={
-                            selectedPage?.path === p.path
-                              ? "rs-page-tree__item is-active"
-                              : "rs-page-tree__item"
+                          className="rs-studio-pages__group-btn"
+                          aria-expanded={open}
+                          onClick={() =>
+                            setPageGroupsOpen((prev) => ({
+                              ...prev,
+                              [g.id]: !open,
+                            }))
                           }
-                          onClick={() => setSelectedPagePath(p.path)}
                         >
-                          <span className="rs-page-tree__title">{p.title}</span>
-                          <span className="rs-page-tree__path">{p.path}</span>
+                          <span>{g.label}</span>
+                          <span className="rs-studio-pages__count">{g.pages.length}</span>
                         </button>
-                      </li>
-                    ))}
-                  </ul>
+                        {open ? (
+                          <ul>
+                            {g.pages.map((p) => (
+                              <li key={p.path}>
+                                <button
+                                  type="button"
+                                  className={
+                                    selectedPage?.path === p.path
+                                      ? "rs-page-tree__item is-active"
+                                      : "rs-page-tree__item"
+                                  }
+                                  onClick={() => setSelectedPagePath(p.path)}
+                                >
+                                  <span className="rs-page-tree__title">{p.title}</span>
+                                  <span className="rs-page-tree__path">{p.path}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </nav>
 
-                <div className="rs-site-preview">
-                  <div className="rs-site-preview__label">
-                    {selectedPage ? selectedPage.title : "Site page"}
+                <div className="rs-studio-preview">
+                  <div className="rs-studio-preview__chrome">
+                    <div className="rs-studio-preview__title">
+                      {selectedPage ? selectedPage.title : "Site page"}
+                    </div>
+                    <div
+                      className="rs-theme-seg"
+                      role="radiogroup"
+                      aria-label="IR theme quick switch"
+                    >
+                      {(["classic", "editorial", "statutory"] as const).map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={irTheme === id}
+                          className={
+                            irTheme === id ? "rs-theme-seg__btn is-selected" : "rs-theme-seg__btn"
+                          }
+                          disabled={busy}
+                          onClick={() => {
+                            setIrTheme(id);
+                            setCustomizeTab("theme");
+                          }}
+                        >
+                          {themeMeta[id]?.label ?? id}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="rs-preview-frame rs-site-preview__frame">
+                  <div className="rs-preview-frame rs-studio-preview__frame">
                     {selectedPage ? (
                       <iframe
                         key={`${selectedPage.path}-${previewBust}`}
@@ -1838,232 +2332,69 @@ export function ProjectConsole(props: {
                   </div>
                 </div>
 
-                <SiteChatPanel
-                  projectId={props.projectId}
-                  pagePath={selectedPage?.path ?? siteDraft.entrypoint}
-                  pageTitle={selectedPage?.title ?? "Page"}
-                  issuerName={siteDraft.company}
-                  disabled={
-                    busy || (status !== "in_review" && status !== "blueprint_proposed")
-                  }
-                  onPagesUpdated={(pages, bust) => {
-                    setSiteDraft((prev) => (prev ? { ...prev, pages } : prev));
-                    setPreviewBust(bust);
-                    setNote("Studio chat applied edits — preview refreshed.");
-                  }}
-                />
+                <aside className="rs-studio-customize" aria-label="Customize">
+                  <div className="rs-studio-tabs" role="tablist">
+                    {(
+                      [
+                        ["theme", "Theme"],
+                        ["brand", "Brand"],
+                        ["type", "Type"],
+                        ["publish", "Publish"],
+                        ["chat", "Chat"],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={customizeTab === id}
+                        className={
+                          customizeTab === id
+                            ? "rs-studio-tabs__btn is-active"
+                            : "rs-studio-tabs__btn"
+                        }
+                        onClick={() => setCustomizeTab(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="rs-studio-customize__body" role="tabpanel">
+                    {customizeTab === "theme"
+                      ? renderThemePicker({ showApply: true, compact: true })
+                      : null}
+                    {customizeTab === "brand" ? renderBrandKitPanel() : null}
+                    {customizeTab === "type" ? renderTypePanel() : null}
+                    {customizeTab === "publish" ? renderPublishPanel() : null}
+                    <div
+                      className="rs-studio-chat-slot"
+                      hidden={customizeTab !== "chat"}
+                      aria-hidden={customizeTab !== "chat"}
+                    >
+                      <SiteChatPanel
+                        projectId={props.projectId}
+                        pagePath={selectedPage?.path ?? siteDraft.entrypoint}
+                        pageTitle={selectedPage?.title ?? "Page"}
+                        issuerName={siteDraft.company}
+                        embedded
+                        draftPrompt={chatDraftPrompt}
+                        onDraftPromptConsumed={() => setChatDraftPrompt(null)}
+                        disabled={
+                          busy ||
+                          (status !== "in_review" && status !== "blueprint_proposed")
+                        }
+                        onPagesUpdated={(pages, bust) => {
+                          setSiteDraft((prev) => (prev ? { ...prev, pages } : prev));
+                          setPreviewBust(bust);
+                          setNote("Studio chat applied edits — preview refreshed.");
+                        }}
+                      />
+                    </div>
+                  </div>
+                </aside>
               </div>
-            </>
+            </div>
           ) : null}
-
-          {renderThemePicker({ showApply: true })}
-
-          <div className="rs-brand-kit">
-            <div className="rs-brand-kit__head">
-              <div>
-                <p className="rs-kicker">Brand kit</p>
-                <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.15rem" }}>
-                  Official logo &amp; hero photo
-                </h3>
-                <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-                  Look-and-feel is per issuer: Design DNA supplies colors/type; Brand kit supplies
-                  logo and hero. Uploads auto-rebuild the multipage draft. Other issuers do not
-                  inherit DRDGOLD gold/olive — approve that project&apos;s DNA and upload its logo
-                  before publish.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="rs-btn rs-btn--ghost"
-                disabled={busy}
-                onClick={() => void rebuildSiteFromBrandKit()}
-              >
-                Rebuild draft
-              </button>
-            </div>
-            <div className="rs-brand-kit__grid">
-              <div className="rs-brand-kit__slot">
-                <span className="rs-stat-label">Logo (SVG preferred)</span>
-                {brandKit?.logoPreviewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={brandKit.logoPreviewUrl}
-                    alt="Uploaded logo"
-                    className="rs-brand-kit__thumb rs-brand-kit__thumb--logo"
-                  />
-                ) : (
-                  <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0" }}>
-                    {brandKit?.effective.logoOrigin
-                      ? `Using extraction · ${brandKit.effective.logoOrigin}`
-                      : "No logo yet — text wordmark fallback"}
-                  </p>
-                )}
-                {brandKit?.kit.logo?.filename ? (
-                  <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
-                    {brandKit.kit.logo.filename}
-                    {brandKit.effective.logoIsSvg ? " · SVG" : ""}
-                    {brandKit.effective.logoIsClient ? " · client" : ""}
-                  </p>
-                ) : null}
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void uploadBrandAsset("logo", f);
-                    e.target.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  className="rs-btn rs-btn--ghost"
-                  disabled={busy}
-                  onClick={() => logoInputRef.current?.click()}
-                >
-                  Upload logo
-                </button>
-              </div>
-              <div className="rs-brand-kit__slot">
-                <span className="rs-stat-label">Hero photo (full-bleed)</span>
-                {brandKit?.heroPreviewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={brandKit.heroPreviewUrl}
-                    alt="Uploaded hero"
-                    className="rs-brand-kit__thumb rs-brand-kit__thumb--hero"
-                  />
-                ) : (
-                  <p className="rs-muted" style={{ fontSize: 13, margin: "8px 0" }}>
-                    {brandKit?.effective.bannerOrigin
-                      ? `Using extraction · ${brandKit.effective.bannerOrigin}`
-                      : "No hero — atmosphere fallback"}
-                  </p>
-                )}
-                {brandKit?.kit.hero?.filename ? (
-                  <p className="rs-muted" style={{ fontSize: 12, margin: 0 }}>
-                    {brandKit.kit.hero.filename}
-                    {brandKit.effective.bannerIsClient ? " · client photo" : ""}
-                  </p>
-                ) : null}
-                <input
-                  ref={heroInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void uploadBrandAsset("hero", f);
-                    e.target.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  className="rs-btn rs-btn--ghost"
-                  disabled={busy}
-                  onClick={() => heroInputRef.current?.click()}
-                >
-                  Upload hero
-                </button>
-              </div>
-            </div>
-            {brandKitNote ? <p className="rs-note">{brandKitNote}</p> : null}
-          </div>
-
-          <div className="rs-publish-ready">
-            <div className="rs-publish-ready__head">
-              <div>
-                <p className="rs-kicker">IR / CFO</p>
-                <h3 className="rs-section-title" style={{ margin: 0, fontSize: "1.15rem" }}>
-                  Publish readiness checklist
-                </h3>
-                <p className="rs-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
-                  Formal accept of the multipage pack. Includes Gate A/B, corporate reliability,
-                  brand contrast, and complete-IR shape checks. Operator path: ≤2-click rebuild
-                  (theme/brand → Apply) · aim ≤15 min polish after extract. Sign-off unlocks
-                  Approve &amp; export when critical gates pass.
-                </p>
-              </div>
-              {publishReady?.signoff && !publishReady.signoffStale ? (
-                <span className="rs-pill rs-pill--pass">
-                  Signed off · {publishReady.signoff.signed_off_by_email ?? publishReady.signoff.signed_off_by}
-                </span>
-              ) : (
-                <span className="rs-pill rs-pill--warn">Awaiting sign-off</span>
-              )}
-            </div>
-            {publishError ? (
-              <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>{publishError}</p>
-            ) : null}
-            {publishReady ? (
-              <ul className="rs-checklist">
-                {publishReady.checklist.map((item) => (
-                  <li
-                    key={item.id}
-                    className={`rs-checklist__item rs-checklist__item--${item.status}`}
-                  >
-                    <span className="rs-checklist__mark" aria-hidden="true">
-                      {item.status === "pass"
-                        ? "✓"
-                        : item.status === "fail"
-                          ? "✗"
-                          : item.status === "warn"
-                            ? "!"
-                            : "·"}
-                    </span>
-                    <span>
-                      <strong>{item.label}</strong>
-                      {item.detail ? (
-                        <span className="rs-checklist__detail">{item.detail}</span>
-                      ) : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="rs-muted" style={{ fontSize: 13, margin: 0 }}>
-                Loading readiness…
-              </p>
-            )}
-            {publishReady?.blockers?.length ? (
-              <p className="rs-note rs-note--danger" style={{ margin: 0 }}>
-                Blockers: {publishReady.blockers.join("; ")}
-              </p>
-            ) : null}
-            {status === "in_review" ? (
-              <div className="rs-row">
-                <button
-                  type="button"
-                  className="rs-btn rs-btn--primary"
-                  disabled={busy || !publishReady?.canSignOff || Boolean(publishReady.signoff && !publishReady.signoffStale)}
-                  onClick={() => void signOffPublish()}
-                >
-                  Sign off for publish
-                </button>
-                <button
-                  type="button"
-                  className="rs-btn rs-btn--primary"
-                  disabled={busy || exportBlocked}
-                  onClick={() => void approveExport()}
-                  title={
-                    exportBlocked
-                      ? "Sign off required; critical gates must pass"
-                      : undefined
-                  }
-                >
-                  Approve &amp; export multipage site
-                </button>
-              </div>
-            ) : null}
-            {publishReady?.signoff ? (
-              <p className="rs-tiny rs-muted" style={{ margin: 0 }}>
-                Last sign-off {new Date(publishReady.signoff.signed_off_at).toLocaleString()}
-                {publishReady.signoffStale ? " · stale after new draft — re-sign" : ""}
-                {" · "}draft v{publishReady.signoff.draft_version}
-              </p>
-            ) : null}
-          </div>
         </section>
       ) : null}
 

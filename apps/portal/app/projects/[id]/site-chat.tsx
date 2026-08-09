@@ -53,6 +53,11 @@ export function SiteChatPanel(props: {
   /** Legal / trading issuer for greetings — never portal project slug. */
   issuerName?: string | null;
   disabled?: boolean;
+  /** Compact chrome when nested inside Customize drawer. */
+  embedded?: boolean;
+  /** Prefill composer (e.g. density / type prompts from Customize → Type). */
+  draftPrompt?: string | null;
+  onDraftPromptConsumed?: () => void;
   onPagesUpdated: (pages: SiteChatPage[], bust: number) => void;
 }) {
   const issuer = (props.issuerName ?? "").trim() || "this issuer";
@@ -76,6 +81,14 @@ export function SiteChatPanel(props: {
   useEffect(() => {
     setSpeechSupported(!!getSpeechRecognitionCtor());
   }, []);
+
+  useEffect(() => {
+    if (!props.draftPrompt) return;
+    setInput(props.draftPrompt);
+    props.onDraftPromptConsumed?.();
+    // Intentionally only react to draftPrompt string changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.draftPrompt]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -210,11 +223,19 @@ export function SiteChatPanel(props: {
   }
 
   return (
-    <aside className="rs-site-chat" aria-label="Studio chat">
+    <aside
+      className={props.embedded ? "rs-site-chat rs-site-chat--embedded" : "rs-site-chat"}
+      aria-label="Studio chat"
+    >
       <div className="rs-site-chat__header">
         <div>
-          <div className="rs-site-chat__eyebrow">Studio chat</div>
-          <div className="rs-site-chat__context">Editing · {props.pageTitle}</div>
+          {!props.embedded ? (
+            <div className="rs-site-chat__eyebrow">Studio chat</div>
+          ) : null}
+          <div className="rs-site-chat__context">
+            {props.embedded ? "Context · " : "Editing · "}
+            {props.pageTitle}
+          </div>
         </div>
         <label className="rs-site-chat__toggle" title="Read replies aloud (browser TTS)">
           <input
