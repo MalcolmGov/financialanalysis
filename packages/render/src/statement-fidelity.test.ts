@@ -338,6 +338,11 @@ describe("P2 statement IR render fidelity", () => {
     expect(html).toContain("r-total");
     expect(html).toContain("grp-top");
     expect(html).toContain("bd-tan");
+    expect(html).toContain("num-edge-start");
+    expect(html).toContain("num-edge-end");
+    expect(html).toMatch(/tr\.grp\s*>\s*td\.cell-num\.num-edge-start/);
+    expect(html).toMatch(/thead th\.h-fig\.cur/);
+    expect(html).toContain("--dna-on-brand");
     expect(html).toContain('class="note-ref"');
     expect(html).toContain("notes.html#note-2");
     expect(html).toContain("statement-unit");

@@ -128,6 +128,22 @@ export function checkStatementIrFidelity(
     ),
   );
 
+  const numberBlocks =
+    /tr\.grp\s*>\s*td\.cell-num\.num-edge-start/.test(html) &&
+    /tr\.grp-top\s*>\s*td\.cell-num/.test(html) &&
+    /\bnum-edge-start\b/.test(markup) &&
+    /\bnum-edge-end\b/.test(markup);
+  findings.push(
+    finding(
+      numberBlocks,
+      "statement-number-blocks",
+      path,
+      numberBlocks
+        ? `${path}: brand-outlined number blocks present`
+        : `${path}: number-block CSS/edge markers missing`,
+    ),
+  );
+
   const stacked =
     /\bh-fig\b/.test(markup) &&
     (markup.includes("h-fig__date") ||

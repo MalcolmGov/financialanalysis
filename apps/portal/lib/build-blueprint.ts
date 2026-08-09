@@ -46,8 +46,8 @@ main[data-dna-component="page-shell"]{max-width:none;width:100%;margin:0;padding
 .fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-family:var(--dna-font-heading,inherit);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 18%,transparent);vertical-align:bottom}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
 .fin-table td{padding:6px 10px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);vertical-align:top}
-.fin-table td.cur,.fin-table th.cur{background:var(--dna-shading,var(--dna-table-shading,#F2F2F2))!important}
-.fin-table thead th.cur{filter:brightness(.92)}
+.fin-table td.cur{font-weight:700}
+.fin-table thead th.cur{background:var(--dna-brand,#243B53)!important;color:var(--dna-on-brand,#fff)!important;filter:none}
 .fin-table .num{font-variant-numeric:tabular-nums}
 .fin-table .cell-nil{color:color-mix(in srgb,var(--dna-ink,#111) 45%,transparent);text-align:right}
 .fin-table .cell-noteRef{text-align:center;width:3.5em}

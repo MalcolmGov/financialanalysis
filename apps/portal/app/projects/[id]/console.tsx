@@ -77,10 +77,21 @@ type BrandKitState = {
 
 /** Soft typical durations for operator wait copy (not hard SLAs). */
 const BUSY_ETA_SECONDS: Record<BusyWaitKind, number> = {
+  /** Fallback only — prefer extractionEtaSeconds(pageCount) for extracting. */
   extracting: Math.round(2.5 * 60),
   dna_detecting: Math.round(1.5 * 60),
   /** Deterministic SitePlan render — typically under a minute. */
   prototype_generating: 45,
+};
+
+/**
+ * Docling ACCURATE on large AFS packs is far slower than the old 2–3 min hint.
+ * Empirically ~7–9s/page wall time on the production worker (148p ≈ 20 min).
+ * Progress stays at 0/N until convert finishes and page PNGs start uploading.
+ */
+function extractionEtaSeconds(pageCount: number | null | undefined): number {
+  const pages = pageCount != null && pageCount > 0 ? pageCount : 40;
+  return Math.max(150, Math.round(pages * 8));
 }
 
 type ExtractionProgress = {
@@ -229,7 +240,7 @@ function nextActionForStatus(status: string, hasDocument: boolean): {
     case "extracting":
       return {
         title: "Extracting document",
-        hint: "Docling is reading the PDF on the worker. Usually about 2–3 minutes — leave this tab open.",
+        hint: "Docling is reading the PDF on the worker. Large packs can take 15–25 minutes — leave this tab open.",
         waiting: true,
       };
     case "extraction_failed":
@@ -792,7 +803,11 @@ export function ProjectConsole(props: {
 
   const waitStats = useMemo(() => {
     if (!busyKind) return null;
-    const estimate = BUSY_ETA_SECONDS[busyKind];
+    const totalPages = extraction?.totalPages ?? pageCount;
+    const estimate =
+      busyKind === "extracting"
+        ? extractionEtaSeconds(totalPages)
+        : BUSY_ETA_SECONDS[busyKind];
     const started = resolveBusyStartedMs({
       kind: busyKind,
       now,
@@ -804,7 +819,6 @@ export function ProjectConsole(props: {
     const elapsedSec = Math.max(0, Math.floor((now - started) / 1000));
     const remainingSec = Math.max(0, estimate - elapsedSec);
     const overdue = elapsedSec > estimate;
-    const totalPages = extraction?.totalPages ?? pageCount;
     const pagesDone = extraction?.pagesDone ?? 0;
     const pagePct =
       busyKind === "extracting" && totalPages != null && totalPages > 0
@@ -820,6 +834,8 @@ export function ProjectConsole(props: {
       pagesDone,
       totalPages,
       overdue,
+      /** True while Docling convert runs — page counter has not started yet. */
+      convertPhase: busyKind === "extracting" && pagesDone === 0,
     };
   }, [
     busyKind,
@@ -1440,11 +1456,21 @@ export function ProjectConsole(props: {
         <BusyWaitSheet
           title="Extraction in progress"
           body={
-            <>
-              Docling is reading the PDF on the worker. First convert after deploy can take longer
-              while models load. Typically about 2–3 minutes for a {pageCount ?? "multi"}-page
-              results pack.
-            </>
+            waitStats.convertPhase ? (
+              <>
+                Docling is converting the PDF on the worker (layout, tables, OCR if needed). Page
+                counts stay at 0 / {waitStats.totalPages ?? pageCount ?? "…"} until that finishes,
+                then climb while page images upload. Soft ETA for a{" "}
+                {waitStats.totalPages ?? pageCount ?? "multi"}-page pack is about{" "}
+                {Math.ceil(waitStats.estimate / 60)} minutes — leave this tab open.
+              </>
+            ) : (
+              <>
+                Convert finished — uploading page images and sealing the extraction. Soft ETA for
+                a {waitStats.totalPages ?? pageCount ?? "multi"}-page pack is about{" "}
+                {Math.ceil(waitStats.estimate / 60)} minutes.
+              </>
+            )
           }
           elapsedSec={waitStats.elapsedSec}
           remainingLabel={formatSoftRemaining(waitStats.remainingSec, waitStats.overdue)}
@@ -1460,9 +1486,11 @@ export function ProjectConsole(props: {
                   : "—",
           }}
           footer={
-            waitStats.overdue
-              ? "Still working — large or OCR-heavy PDFs can overrun the usual window."
-              : "Nothing to click right now — waiting on extraction."
+            waitStats.convertPhase
+              ? "0 pages does not mean stuck — progress reporting starts after Docling convert."
+              : waitStats.overdue
+                ? "Still working — large or OCR-heavy PDFs can overrun the usual window."
+                : "Nothing to click right now — waiting on extraction."
           }
         />
       ) : null}

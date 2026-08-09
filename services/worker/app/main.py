@@ -158,6 +158,8 @@ def _process(job: Job) -> None:
         return
 
     job.status = "converting"
+    # Phase marker: pages_done stays 0 until Docling convert returns and PNGs upload.
+    job.progress = {"pages_done": 0, "total_pages": None, "phase": "docling"}
     q.update(job)
 
     from .extract import extract_document  # lazy: pulls docling/torch
@@ -173,24 +175,46 @@ def _process(job: Job) -> None:
     }
 
     def on_progress(done: int, total: int) -> None:
-        job.progress = {"pages_done": done, "total_pages": total}
+        job.progress = {"pages_done": done, "total_pages": total, "phase": "pages"}
         q.update(job)
 
-    result = extract_document(
-        pdf_bytes=pdf_bytes,
-        extraction_id=submit["job_id"],
-        org_id=submit["org_id"],
-        project_id=submit["project_id"],
-        output_prefix=prefix,
-        source_meta=source_meta,
-        put_asset=put_private,
-        force_ocr=submit.get("options", {}).get("ocr") == "force",
-        on_progress=on_progress,
-    )
+    # Docling convert can run 15–25+ min with no page callbacks. Keep heartbeat
+    # fresh so a redeploy/orphan sweeper does not false-requeue a live job.
+    stop_hb = threading.Event()
+
+    def _heartbeat_loop() -> None:
+        while not stop_hb.wait(30.0):
+            try:
+                q.update(job)
+            except Exception:  # noqa: BLE001 — best-effort; convert continues
+                pass
+
+    hb_thread = threading.Thread(target=_heartbeat_loop, name=f"hb-{job.job_id}", daemon=True)
+    hb_thread.start()
+    try:
+        result = extract_document(
+            pdf_bytes=pdf_bytes,
+            extraction_id=submit["job_id"],
+            org_id=submit["org_id"],
+            project_id=submit["project_id"],
+            output_prefix=prefix,
+            source_meta=source_meta,
+            put_asset=put_private,
+            force_ocr=submit.get("options", {}).get("ocr") == "force",
+            on_progress=on_progress,
+        )
+    finally:
+        stop_hb.set()
+
     result["source"]["page_count"] = len(result["pages"])
     job.ocr_applied = result["engine"]["ocr_applied"]
 
     job.status = "uploading_assets"
+    job.progress = {
+        "pages_done": len(result["pages"]),
+        "total_pages": len(result["pages"]),
+        "phase": "upload",
+    }
     q.update(job)
     extraction_body = json.dumps(result).encode()
     extraction_path = f"{prefix}extraction.json"

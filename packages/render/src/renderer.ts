@@ -291,6 +291,11 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
       const prev = rowIdx > 0 ? roles[rowIdx - 1]! : null;
       const next = rowIdx < roles.length - 1 ? roles[rowIdx + 1]! : null;
       const trClass = `${rowRoleClass(role)}${groupBorderClass(role, prev, next)}`;
+      const numCellIdxs = row.cells
+        .map((c, i) => (c.kind === "number" ? i : -1))
+        .filter((i) => i >= 0);
+      const firstNumIdx = numCellIdxs[0];
+      const lastNumIdx = numCellIdxs[numCellIdxs.length - 1];
       let col = 0;
       const cells = row.cells
         .map((cell, cellIdx) => {
@@ -301,7 +306,16 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           const curCls = isCur ? " cur" : "";
           const cmpCls = !isCur && cell.kind === "number" ? " cmp" : "";
           if (cell.kind === "number") {
-            return `<td class="cell-num${curCls}${cmpCls}">${formatNumberCellHtml(cell.raw, cell.src_ref)}</td>`;
+            // Edge markers for WW-style number blocks spanning period columns.
+            const edgeCls =
+              cellIdx === firstNumIdx && cellIdx === lastNumIdx
+                ? " num-edge-start num-edge-end"
+                : cellIdx === firstNumIdx
+                  ? " num-edge-start"
+                  : cellIdx === lastNumIdx
+                    ? " num-edge-end"
+                    : "";
+            return `<td class="cell-num${curCls}${cmpCls}${edgeCls}">${formatNumberCellHtml(cell.raw, cell.src_ref)}</td>`;
           }
           if (cell.kind === "noteRef" && cell.raw.trim() && notesBase) {
             const src = ` data-src="${escapeHtml(cell.src_ref)}"`;
@@ -542,8 +556,8 @@ main[data-dna-component="page-shell"]{max-width:none;width:100%;margin:0;padding
 .fin-table th{background:var(--dna-table-header-bg,var(--dna-ink,#111));color:var(--dna-table-header-text,#fff);font-weight:700;text-align:left;padding:10px 12px;vertical-align:bottom;font-size:11px;letter-spacing:.03em;line-height:1.35;border-bottom:2px solid var(--dna-brand,#243B53)}
 .fin-table th:not(:first-child),.fin-table td.cell-num{text-align:right}
 .fin-table td{padding:7px 12px;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 9%,transparent);vertical-align:top}
-.fin-table td.cur,.fin-table th.cur,.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
-.fin-table thead th.cur{filter:brightness(.94)}
+.fin-table td.cur,.fin-table th.cur{font-weight:700}
+.fin-table thead th.cur{background:var(--dna-brand,#243B53);color:var(--dna-on-brand,#fff)}
 .fin-table .cell-nil{text-align:right;opacity:.55}
 .fin-table .cell-noteRef{text-align:center;width:3.75em}
 .fin-table .num{font-variant-numeric:tabular-nums}
@@ -569,7 +583,7 @@ ${STATEMENT_BASE_CSS}
 ${STATEMENT_IR_CSS}`;
 }
 
-/** WW-recognizable statement IR skin (sofp-style widths; no decorative grp rules). */
+/** WW-recognizable statement IR skin (sofp widths + brand-outlined number blocks). */
 const STATEMENT_IR_CSS = `
 /* rs-statement-ir */
 .statement-table,.fin-wrapper{overflow-x:auto;overflow-y:visible;margin:var(--rs-space-2,.7rem) 0 var(--rs-space-5,1.35rem);border:0;border-top:2px solid var(--dna-brand,#243B53);border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);background:var(--dna-paper,#fff);padding:0;box-shadow:none;-webkit-overflow-scrolling:touch}
@@ -592,11 +606,12 @@ const STATEMENT_IR_CSS = `
 .fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.3;border:none;border-bottom:2px solid var(--dna-brand,#243B53);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
 .fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#64748B);position:sticky;left:0;z-index:3}
 .fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F);width:3.25rem;padding-left:4px;padding-right:4px}
-.fin-table thead th.h-entity{text-align:center;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:.72rem;color:#fff!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid #fff;padding:8px 10px;vertical-align:middle}
-.fin-table thead th.h-fig{text-align:right;font-weight:700;color:#fff!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid #fff;white-space:normal;padding:7px 9px;line-height:1.3;overflow-wrap:break-word;hyphens:manual;vertical-align:bottom}
+.fin-table thead th.h-entity{text-align:center;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:.72rem;color:var(--dna-table-header-text,#fff)!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid var(--dna-paper,#fff);padding:8px 10px;vertical-align:middle}
+/* Period headers: prior year soft gray; current year brand accent (MTN yellow / DRD gold). */
+.fin-table thead th.h-fig{text-align:right;font-weight:700;color:var(--dna-ink,#221F1F)!important;background:color-mix(in srgb,var(--dna-ink,#111) 10%,var(--dna-paper,#fff))!important;border-left:2px solid var(--dna-paper,#fff);border-radius:3px 3px 0 0;white-space:normal;padding:7px 9px;line-height:1.3;overflow-wrap:break-word;hyphens:manual;vertical-align:bottom}
 .fin-table thead th.h-fig:first-of-type,.fin-table thead th.h-notes + th.h-fig,.fin-table thead th.h-entity + th.h-fig{border-left:0}
 .fin-table[data-density="periods-3"] thead th.h-fig,.fin-table[data-density="dual-entity"] thead th.h-fig{padding:6px 8px;font-size:.66rem;line-height:1.28}
-.fin-table thead th.h-fig.cur{filter:brightness(.94)}
+.fin-table thead th.h-fig.cur,.fin-table[data-cur-col] thead th.h-fig.cur,.fin-table[data-cur-col] thead th.cur{filter:none;background:var(--dna-brand,#243B53)!important;color:var(--dna-on-brand,#fff)!important}
 .fin-table thead th.h-fig .h-fig__lead,.fin-table thead th.h-fig .h-fig__date,.fin-table thead th.h-fig .h-fig__unit,.fin-table thead th.h-fig .h-fig__audit{display:block;margin:0}
 .fin-table thead th.h-fig .h-fig__lead{font-weight:600;opacity:.92;font-size:.66rem;letter-spacing:.01em;line-height:1.25;margin-bottom:.12rem}
 .fin-table thead th.h-fig .h-fig__date{font-weight:800;letter-spacing:-.01em;line-height:1.25;margin-bottom:.1rem}
@@ -606,28 +621,40 @@ const STATEMENT_IR_CSS = `
 .fin-table td.cell-unit{text-align:left;white-space:nowrap;color:color-mix(in srgb,var(--dna-ink,#221F1F) 72%,var(--dna-paper,#fff));font-size:.78rem;padding-left:6px;padding-right:8px}
 .fin-table td.cell-num,.fin-table td.cmp,.fin-table td.cur{text-align:right;white-space:nowrap;padding-right:10px;font-variant-numeric:tabular-nums}
 .fin-table td.cell-num br{display:block;content:"";margin-top:.1rem}
-.fin-table td.cur{font-weight:700;background:var(--dna-shading,#F2F2F2)}
-.fin-table tbody tr.r-line:nth-child(even) td:not(.cur){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
-.fin-table tbody tr.r-line:nth-child(even) td.cell-label,.fin-table tbody tr.r-line:nth-child(even) td.lbl,.fin-table tbody tr.r-line:nth-child(even) td:first-child{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff))}
+/* Current-period emphasis inside number blocks (not a full-column wash). */
+.fin-table td.cur{font-weight:700;background:transparent}
+.fin-table tr.grp > td.cell-num.cur{background:var(--dna-shading,#F2F2F2)}
+.fin-table[data-cur-col] tbody td.cur{background:transparent!important}
+.fin-table[data-cur-col] tbody tr.grp > td.cell-num.cur{background:var(--dna-shading,#F2F2F2)!important}
+.fin-table tbody tr.r-line:nth-child(even) td:not(.cell-num){background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 22%,var(--dna-paper,#fff))}
+.fin-table tbody tr.r-line:nth-child(even) td.cell-label,.fin-table tbody tr.r-line:nth-child(even) td.lbl,.fin-table tbody tr.r-line:nth-child(even) td:first-child{background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 22%,var(--dna-paper,#fff))}
 .fin-table tr.r-section td{font-weight:700;border-bottom:none;padding-top:10px;padding-bottom:3px;color:var(--dna-ink,#221F1F);font-size:.8125rem;letter-spacing:.01em;background:var(--dna-paper,#fff)!important}
 .fin-table tr.r-section td.cell-num,.fin-table tr.r-section td.cur{background:transparent!important}
 .fin-table tr.r-subtotal td{font-weight:700;background:var(--dna-paper,#fff)!important}
-.fin-table tr.r-subtotal td.cur{background:var(--dna-shading,#F2F2F2)!important}
-.fin-table tr.r-total td{font-weight:700;border-top:1px solid #6C6C6C;border-bottom:1px solid #BAC4CA;background:var(--dna-paper,#fff)!important;padding-top:5px;padding-bottom:5px}
-.fin-table tr.r-total td.cur{background:var(--dna-shading,#F2F2F2)!important}
+.fin-table tr.r-subtotal td.cell-num.cur{background:var(--dna-shading,#F2F2F2)!important}
+.fin-table tr.r-total td{font-weight:800;border-top:1.5px solid #6C6C6C;border-bottom:1.5px solid #BAC4CA;background:var(--dna-paper,#fff)!important;padding-top:6px;padding-bottom:6px}
+.fin-table tr.r-total td.cell-num.cur{background:var(--dna-shading,#F2F2F2)!important}
 .fin-table tr.r-line td.cell-num.cur{font-weight:700}
-.fin-table[data-cur-col] thead th.cur{background:color-mix(in srgb,var(--dna-table-header-bg,#64748B) 88%,#000)!important;color:#fff!important}
-.fin-table[data-cur-col] tbody td.cur{background:var(--dna-shading,#F2F2F2)!important}
+/* Brand-outlined number blocks: one rectangle across period columns (grp + edge markers). */
+.fin-table tr.grp > td.cell-num{background:var(--dna-paper,#fff);padding-top:5px;padding-bottom:5px}
+.fin-table tr.grp > td.cell-num.num-edge-start{border-left:1.5px solid var(--dna-brand,#243B53)}
+.fin-table tr.grp > td.cell-num.num-edge-end{border-right:1.5px solid var(--dna-brand,#243B53)}
+.fin-table tr.grp-top > td.cell-num{border-top:1.5px solid var(--dna-brand,#243B53);padding-top:7px}
+.fin-table tr.grp-bot > td.cell-num{border-bottom:1.5px solid var(--dna-brand,#243B53);padding-bottom:7px}
+.fin-table tr.grp.r-subtotal > td.cell-num{font-weight:700}
+/* Totals sit outside yellow frames — hairlines only (grp class kept for fidelity). */
+.fin-table tr.r-total.grp > td.cell-num{border-left:0;border-right:0;border-top:0;border-bottom:0;padding-top:6px;padding-bottom:6px}
 .fin-table .note-ref{color:color-mix(in srgb,var(--dna-brand,#243B53) 35%,var(--dna-masthead,#1B2A3A));text-decoration:none;font-weight:700;border-bottom:1px dotted color-mix(in srgb,var(--dna-brand,#243B53) 70%,#94A3B8);padding:0 1px}
 .fin-table .note-ref:hover{border-bottom-style:solid;color:var(--dna-brand,#243B53)}
 .fin-table .cell-noteRef,.fin-table td.note{text-align:center;width:3.25rem;max-width:3.25rem;padding-left:4px;padding-right:4px;font-size:.76rem;color:var(--dna-ink,#221F1F);vertical-align:middle}
-/* Section/subtotal rules on the label column only — keep figure cells clear. */
+/* Section/subtotal rules on the label column only — figure cells use number blocks. */
 .fin-table tr.bd-tan>td,.fin-table tr.bd-blue>td{border-top:none}
 .fin-table tr.bd-tan>td:first-child{border-top:1.5px solid #CDAE86}
 .fin-table tr.bd-blue>td:first-child{border-top:1px solid #BAC4CA}
 .fin-table tbody tr{transition:background-color .12s ease}
-.fin-table tbody tr:hover td{background-color:#DCE3E7!important}
-.fin-table tbody tr:hover td.cur{background-color:#CBD4D9!important}
+.fin-table tbody tr:hover td:not(.cell-num){background-color:#DCE3E7!important}
+.fin-table tbody tr:hover td.cell-num{background-color:color-mix(in srgb,var(--dna-shading,#F2F2F2) 55%,#DCE3E7)!important}
+.fin-table tbody tr:hover td.cell-num.cur{background-color:color-mix(in srgb,var(--dna-shading,#F2F2F2) 70%,#CBD4D9)!important}
 @media (max-width:720px){
   .fin-table,.fin-table[data-density="periods-3"],.fin-table[data-density="dual-entity"]{table-layout:auto;font-size:.72rem;min-width:36rem}
   .fin-table col.c-cur,.fin-table col.c-cmp{width:auto}
@@ -640,9 +667,14 @@ const STATEMENT_IR_CSS = `
   .statement-table,.fin-wrapper{overflow:visible;border-top:2px solid #000;break-inside:avoid}
   .fin-table{font-size:9.5pt;table-layout:auto;min-width:0}
   .fin-table thead th{position:static;background:#fff!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .fin-table thead th.h-fig{background:#64748B!important;color:#fff!important}
-  .fin-table td.cur,.fin-table[data-cur-col] tbody td.cur{background:#F2F2F2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .fin-table tbody tr:hover td,.fin-table tbody tr:hover td.cur{background:inherit!important}
+  .fin-table thead th.h-fig{background:#E8E8E8!important;color:#000!important}
+  .fin-table thead th.h-fig.cur{background:#D4D4D4!important;color:#000!important}
+  .fin-table tr.grp > td.cell-num.num-edge-start{border-left:1.5px solid #000}
+  .fin-table tr.grp > td.cell-num.num-edge-end{border-right:1.5px solid #000}
+  .fin-table tr.grp-top > td.cell-num{border-top:1.5px solid #000}
+  .fin-table tr.grp-bot > td.cell-num{border-bottom:1.5px solid #000}
+  .fin-table tr.grp > td.cell-num.cur,.fin-table[data-cur-col] tbody tr.grp > td.cell-num.cur{background:#F2F2F2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .fin-table tbody tr:hover td,.fin-table tbody tr:hover td.cell-num,.fin-table tbody tr:hover td.cell-num.cur{background:inherit!important}
   .fin-table .note-ref{color:#000;border-bottom:none;font-weight:700}
   a.note-ref::after{content:""}
   .fin-table tr.bd-tan>td:first-child{border-top-color:#000}
