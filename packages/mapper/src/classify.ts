@@ -8,11 +8,22 @@ import type { ExtractionResult, ExtractionTable, SectionKind, StatementType } fr
  */
 
 const STATEMENT_TITLES: { re: RegExp; type: StatementType }[] = [
-  { re: /profit or loss|comprehensive income/i, type: "pnl_oci" },
-  { re: /financial position/i, type: "financial_position" },
-  { re: /changes in equity/i, type: "changes_in_equity" },
-  { re: /cash flows?/i, type: "cash_flows" },
+  { re: /profit or loss|comprehensive income|statement of (?:profit|income)/i, type: "pnl_oci" },
+  { re: /financial position|balance\s*sheet/i, type: "financial_position" },
+  { re: /changes in\s+equity/i, type: "changes_in_equity" },
+  { re: /cash\s*flows?/i, type: "cash_flows" },
 ];
+
+/** Row-label fingerprints when caption/row0 is GROUP/COMPANY/Rmillion (AFS dual-entity). */
+const STATEMENT_ROW_LABELS: { re: RegExp; type: StatementType }[] = [
+  { re: /^(assets|non[- ]current assets|current assets|equity and liabilities)$/i, type: "financial_position" },
+  { re: /^cash\s*flows?\s+(from|used)/i, type: "cash_flows" },
+  { re: /^(continuing operations|revenue\b|gross profit)/i, type: "pnl_oci" },
+  { re: /^(balance at\b|stated capital|treasury shares)/i, type: "changes_in_equity" },
+];
+
+/** Weak titles that are entity headers, not statement names. */
+const WEAK_TABLE_TITLE = /^(group|company|rmillion|r'?000|notes|rm\b)$/i;
 
 const SECTION_TITLE_LEXICON: { re: RegExp; kind: SectionKind }[] = [
   { re: /^highlights$/i, kind: "highlights" },
@@ -43,15 +54,42 @@ export interface TableClassification {
 
 /** Classify a section title string. */
 export function classifySectionTitle(title: string): { kind: SectionKind; statement_type?: StatementType } {
+  const normalized = title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   for (const s of STATEMENT_TITLES) {
-    if (s.re.test(title)) return { kind: "statement", statement_type: s.type };
+    if (s.re.test(normalized)) return { kind: "statement", statement_type: s.type };
+  }
+  // Notes band — stop assigning primary statements once notes begin.
+  if (/^notes?\s+to\s+the\b/i.test(normalized) || /^notes?\s+to\s+the\s+financial/i.test(normalized)) {
+    return { kind: "note" };
   }
   for (const e of SECTION_TITLE_LEXICON) {
-    if (e.re.test(title)) return { kind: e.kind };
+    if (e.re.test(normalized)) return { kind: e.kind };
   }
-  const note = NOTE_HEADING.exec(title.trim());
+  const note = NOTE_HEADING.exec(normalized);
   if (note) return { kind: "note" };
   return { kind: "other" };
+}
+
+export function isWeakTableTitle(title: string | null | undefined): boolean {
+  const t = (title ?? "").replace(/\u00a0/g, " ").trim();
+  if (!t) return true;
+  return WEAK_TABLE_TITLE.test(t);
+}
+
+/** Infer statement type from early row labels when the title is weak (e.g. "GROUP"). */
+export function statementTypeFromRowLabels(table: ExtractionTable): StatementType | null {
+  const labels = table.cells
+    .filter((c) => c.c === 0 && !c.is_col_header)
+    .sort((a, b) => a.r - b.r)
+    .slice(0, 12)
+    .map((c) => c.text.replace(/\u00a0/g, " ").trim())
+    .filter(Boolean);
+  for (const label of labels) {
+    for (const e of STATEMENT_ROW_LABELS) {
+      if (e.re.test(label)) return e.type;
+    }
+  }
+  return null;
 }
 
 export function noteNumberOf(title: string): number | null {
@@ -102,5 +140,9 @@ export function classifyTable(table: ExtractionTable): TableClassification {
   else if (sensitivity) table_type = "sensitivity";
   else if (facts) table_type = "facts";
 
-  return { is_financial: isFinancial, table_type };
+  const fromTitle = classifySectionTitle(title).statement_type;
+  const statement_type =
+    fromTitle ?? (table_type === "statement" ? statementTypeFromRowLabels(table) ?? undefined : undefined);
+
+  return { is_financial: isFinancial, table_type, statement_type };
 }

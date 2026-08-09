@@ -22,11 +22,23 @@ export interface LegalCompanyResolution {
   ignoredProjectSlug?: string;
 }
 
-const LEGAL_SUFFIX =
-  /\b(Limited|Ltd\.?|plc|Inc\.?|Incorporated|Corporation|Corp\.?|Group|Holdings|N\.?V\.?|S\.?A\.?|Pty\.?\s*Ltd\.?)\b/i;
+/** Strong corporate suffixes — "Group" alone is too weak (TOC: "Group audit scope"). */
+const STRONG_LEGAL_SUFFIX =
+  /\b(Limited|Ltd\.?|plc|Inc\.?|Incorporated|Corporation|Corp\.?|Holdings|N\.?V\.?|S\.?A\.?|Pty\.?\s*Ltd\.?)\b/i;
+
+/** "The SPAR Group" / "MTN Group Limited" — Group not as the leading word. */
+const GROUP_AS_ENTITY =
+  /^(?:The\s+)?(?!Group\b)[A-Z0-9][A-Za-z0-9 .&'-]{0,50}?\bGroup(?:\s+(?:Limited|Ltd\.?))?\b/i;
 
 const REPORT_TITLE =
   /\b(interim|results|annual|report|condensed|consolidated|unaudited|reviewed|financial|dividend|statement)\b/i;
+
+/**
+ * Auditor / AFS section headings that match LEGAL_SUFFIX via bare "Group"
+ * (MTN: "Group financial statements"; SPAR: "Group audit scope").
+ */
+const DOCUMENT_SECTION_TITLE =
+  /\b(audit\s+scope|key\s+audit|financial\s+statements|directors['’]?\s+(approval|report)|responsibility\s+statement|independent\s+auditor|basis\s+for\s+opinion|going\s+concern|accounting\s+policies|statement\s+of\s+compliance|contents|overview|materiality|what\s+we\s+have\s+audited|our\s+opinion|our\s+audit\s+approach|highlights|review\s+of\s+operations|cash\s+dividend|salient\s+dates|forward[- ]looking|shareholder\s+information)\b/i;
 
 /** Internal portal labels that must never appear in published chrome. */
 export function looksLikeProjectSlug(name: string | null | undefined): boolean {
@@ -56,13 +68,18 @@ function plausibleLegalName(raw: string | null | undefined): string | null {
   const t = cleanName(raw);
   if (t.length < 2 || t.length > 80) return null;
   if (looksLikeProjectSlug(t)) return null;
-  if (REPORT_TITLE.test(t) && !LEGAL_SUFFIX.test(t)) return null;
-  // Prefer entity-shaped strings; allow short tickers/brands (DRDGOLD, 3M).
-  if (LEGAL_SUFFIX.test(t)) return t;
+  if (DOCUMENT_SECTION_TITLE.test(t)) return null;
+  // Leading "Group …" without a brand name is a section heading, not an issuer.
+  if (/^Group\b/i.test(t) && !STRONG_LEGAL_SUFFIX.test(t)) return null;
+  if (REPORT_TITLE.test(t) && !STRONG_LEGAL_SUFFIX.test(t) && !GROUP_AS_ENTITY.test(t)) {
+    return null;
+  }
+  // Prefer entity-shaped strings; allow short tickers/brands (DRDGOLD, 3M, SPAR).
+  if (STRONG_LEGAL_SUFFIX.test(t) || GROUP_AS_ENTITY.test(t)) return t;
   if (/^[A-Z0-9][A-Z0-9 .&'-]{1,40}$/.test(t) && !/\s{2,}/.test(t)) return t;
   if (/^[A-Za-z0-9][A-Za-z0-9 .&'-]{1,48}$/.test(t) && t.split(" ").length <= 6) {
     // Short brand without suffix — OK when not a report title.
-    if (!REPORT_TITLE.test(t)) return t;
+    if (!REPORT_TITLE.test(t) && !DOCUMENT_SECTION_TITLE.test(t)) return t;
   }
   return null;
 }
@@ -86,28 +103,37 @@ export function extractIssuerFromExtraction(
 ): { company: string; source: LegalCompanySource } | null {
   if (!extraction) return null;
 
-  // 1) Enrichment section titles (e.g. "DRDGOLD Limited")
-  for (const sec of extraction.enrichment?.sections ?? []) {
-    const hit = plausibleLegalName(sec.title);
-    if (hit && LEGAL_SUFFIX.test(hit)) {
-      return { company: hit, source: "extraction-enrichment" };
-    }
-  }
-
-  // 2) Body / furniture headings & short paragraphs early in the doc
+  // 1) Body / furniture first — cover wordmarks beat TOC enrichment titles
+  //    ("Group audit scope", "Group financial statements").
   let headingHit: string | null = null;
+  let strongHit: string | null = null;
   let aliasHit: string | null = null;
+  let shareholderHit: string | null = null;
   let seen = 0;
   const visit = (text: string, type: string) => {
-    if (seen > 80) return;
+    if (seen > 120) return;
     seen += 1;
     const cleaned = cleanName(text);
+    // "To the shareholders of The SPAR Group Limited"
+    if (!shareholderHit) {
+      const sh = cleaned.match(
+        /\b(?:shareholders?|members)\s+of\s+((?:The\s+)?[A-Z][A-Za-z0-9 .&'-]{2,60}?(?:Limited|Ltd\.?))\b/i,
+      );
+      if (sh?.[1]) {
+        const a = plausibleLegalName(sh[1]);
+        if (a) shareholderHit = a;
+      }
+    }
     if (!headingHit && (type === "heading" || type === "paragraph")) {
       const hit = plausibleLegalName(cleaned);
-      if (hit && (LEGAL_SUFFIX.test(hit) || cleaned === hit)) {
-        // Prefer explicit legal suffix for heading path.
-        if (LEGAL_SUFFIX.test(hit) || type === "heading") {
-          if (!headingHit || LEGAL_SUFFIX.test(hit)) headingHit = hit;
+      if (hit && (STRONG_LEGAL_SUFFIX.test(hit) || GROUP_AS_ENTITY.test(hit) || cleaned === hit)) {
+        if (STRONG_LEGAL_SUFFIX.test(hit) || GROUP_AS_ENTITY.test(hit)) {
+          if (!strongHit) strongHit = hit;
+          if (!headingHit || STRONG_LEGAL_SUFFIX.test(hit) || GROUP_AS_ENTITY.test(hit)) {
+            headingHit = hit;
+          }
+        } else if (type === "heading" && !headingHit) {
+          headingHit = hit;
         }
       }
     }
@@ -125,8 +151,19 @@ export function extractIssuerFromExtraction(
   walkBlocks(extraction.furniture, visit);
   walkBlocks(extraction.body, visit);
 
+  // Prefer "The SPAR Group Limited" over all-caps cover "THE SPAR GROUP LTD".
+  if (shareholderHit) return { company: shareholderHit, source: "extraction-heading" };
+  if (strongHit) return { company: strongHit, source: "extraction-heading" };
   if (headingHit) return { company: headingHit, source: "extraction-heading" };
   if (aliasHit) return { company: aliasHit, source: "extraction-alias" };
+
+  // 2) Enrichment section titles only when they look like real issuers
+  for (const sec of extraction.enrichment?.sections ?? []) {
+    const hit = plausibleLegalName(sec.title);
+    if (hit && (STRONG_LEGAL_SUFFIX.test(hit) || GROUP_AS_ENTITY.test(hit))) {
+      return { company: hit, source: "extraction-enrichment" };
+    }
+  }
 
   // 3) Any enrichment title that is a short brand (no suffix)
   for (const sec of extraction.enrichment?.sections ?? []) {

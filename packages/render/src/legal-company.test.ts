@@ -104,6 +104,73 @@ describe("resolveLegalCompanyName", () => {
     expect(r.company).toBe("Acme Mining Limited");
     expect(r.source).toBe("project");
   });
+
+  it("rejects TOC/auditor section titles (SPAR/MTN failure mode)", () => {
+    const extraction = {
+      schema_version: "1.0",
+      extraction_id: "e",
+      org_id: "o",
+      project_id: "p",
+      source: {
+        blob_path: "x",
+        sha256: "a".repeat(64),
+        size_bytes: 1,
+        page_count: 1,
+        pdf_meta: { title: "", producer: "", created: "", modified: "" },
+      },
+      engine: {
+        docling_version: "1",
+        backend: "t",
+        table_mode: "fast",
+        ocr_applied: false,
+        ocr_engine: null,
+      },
+      pages: [],
+      body: [
+        {
+          id: "blk-cover",
+          type: "paragraph",
+          text: "THE SPAR GROUP LTD",
+          prov: [],
+          children: [],
+        },
+        {
+          id: "blk-sh",
+          type: "paragraph",
+          text: "To the shareholders of The SPAR Group Limited",
+          prov: [],
+          children: [],
+        },
+        {
+          id: "blk-bad",
+          type: "heading",
+          text: "Group audit scope",
+          prov: [],
+          children: [],
+        },
+      ],
+      furniture: [],
+      tables: {},
+      figures: {},
+      warnings: [],
+      enrichment: {
+        sections: [
+          { id: "s1", title: "Group audit scope", level: 1, page_span: [6, 6], block_ids: [] },
+          { id: "s2", title: "Group financial statements", level: 1, page_span: [1, 1], block_ids: [] },
+        ],
+        key_figures: [],
+        numeric_annotations: {},
+      },
+    } as ExtractionResult;
+
+    const r = resolveLegalCompanyName({
+      extraction,
+      projectCompanyName: "SPAR",
+    });
+    expect(r.company).toMatch(/SPAR/i);
+    expect(r.company).not.toMatch(/audit scope/i);
+    expect(r.company).not.toMatch(/financial statements/i);
+  });
 });
 
 describe("checkLegalCompanyChrome", () => {

@@ -4,8 +4,16 @@ import type {
   ExtractionTable,
   FinancialDocModel,
   FinTable,
+  StatementType,
 } from "@rs/contracts";
-import { classifySectionTitle, classifyTable, headerRows, noteNumberOf } from "./classify.js";
+import {
+  classifySectionTitle,
+  classifyTable,
+  headerRows,
+  isWeakTableTitle,
+  noteNumberOf,
+  statementTypeFromRowLabels,
+} from "./classify.js";
 
 /**
  * ExtractionResult → FinancialDocModel. Numbers are NEVER re-interpreted: each
@@ -338,15 +346,120 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
   return sections;
 }
 
-function extractionTableTitle(table: ExtractionTable, extId: string): string {
-  if (table.caption_block?.trim()) return table.caption_block.trim();
+type SectionMarker = {
+  page: number;
+  title: string;
+  kind: "statement" | "note" | "reviewOfOperations" | "other";
+  statement_type?: StatementType;
+};
+
+function walkBlocks(nodes: BlockNode[] | undefined, visit: (b: BlockNode) => void): void {
+  if (!nodes?.length) return;
+  const stack = [...nodes];
+  while (stack.length) {
+    const n = stack.shift()!;
+    visit(n);
+    if (n.children?.length) stack.push(...n.children);
+  }
+}
+
+/**
+ * Collect statement / notes / ops headings with page numbers so dual-entity AFS
+ * tables whose row-0 is "GROUP"/"COMPANY" still route to the right statement page.
+ */
+function collectSectionMarkers(extraction: ExtractionResult): SectionMarker[] {
+  const markers: SectionMarker[] = [];
+  const seen = new Set<string>();
+  const push = (title: string, page: number) => {
+    const cleaned = title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (!cleaned || page < 1) return;
+    const cls = classifySectionTitle(cleaned);
+    let kind: SectionMarker["kind"] = "other";
+    if (cls.statement_type) kind = "statement";
+    else if (cls.kind === "note" || /^notes?\s+to\s+the\b/i.test(cleaned)) kind = "note";
+    else if (cls.kind === "reviewOfOperations") kind = "reviewOfOperations";
+    else return;
+    const key = `${page}|${kind}|${cls.statement_type ?? ""}|${cleaned.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    markers.push({ page, title: cleaned, kind, statement_type: cls.statement_type });
+  };
+
+  walkBlocks(extraction.body, (b) => {
+    if (b.type !== "heading" || !b.text) return;
+    const page = b.prov?.[0]?.page_no ?? 0;
+    push(b.text, page);
+  });
+  for (const sec of extraction.enrichment?.sections ?? []) {
+    const page = sec.page_span?.[0] ?? 0;
+    push(sec.title, page);
+  }
+  markers.sort((a, b) => a.page - b.page || a.title.localeCompare(b.title));
+  return markers;
+}
+
+function activeMarkerForPage(markers: SectionMarker[], page: number): SectionMarker | null {
+  let active: SectionMarker | null = null;
+  for (const m of markers) {
+    if (m.page <= page) active = m;
+    else break;
+  }
+  return active;
+}
+
+function extractionTableTitle(
+  table: ExtractionTable,
+  extId: string,
+  markers: SectionMarker[],
+): { title: string; statement_type?: StatementType; forceNote?: boolean; forceOps?: boolean } {
+  const caption = table.caption_block?.trim() ?? "";
+  if (caption) {
+    const cls = classifySectionTitle(caption);
+    if (cls.statement_type || cls.kind === "note" || cls.kind === "reviewOfOperations") {
+      return {
+        title: caption,
+        statement_type: cls.statement_type,
+        forceNote: cls.kind === "note",
+        forceOps: cls.kind === "reviewOfOperations",
+      };
+    }
+  }
+
+  const page = table.prov?.[0]?.page_no ?? 0;
+  const marker = page > 0 ? activeMarkerForPage(markers, page) : null;
+  if (marker?.kind === "statement" && marker.statement_type) {
+    return { title: marker.title, statement_type: marker.statement_type };
+  }
+  if (marker?.kind === "note") {
+    return { title: marker.title, forceNote: true };
+  }
+  if (marker?.kind === "reviewOfOperations") {
+    return { title: marker.title, forceOps: true };
+  }
+
+  const fromRows = statementTypeFromRowLabels(table);
+  if (fromRows) {
+    const labelTitle =
+      fromRows === "financial_position"
+        ? "Statement of financial position"
+        : fromRows === "cash_flows"
+          ? "Statement of cash flows"
+          : fromRows === "changes_in_equity"
+            ? "Statement of changes in equity"
+            : "Statement of profit or loss and other comprehensive income";
+    return { title: labelTitle, statement_type: fromRows };
+  }
+
+  if (caption && !isWeakTableTitle(caption)) return { title: caption };
+
   const row0 = table.cells
     .filter((c) => c.r === 0)
     .sort((a, b) => a.c - b.c)
     .map((c) => c.text.trim())
     .filter(Boolean);
-  if (row0[0]) return row0[0];
-  return `Table ${extId}`;
+  if (row0[0] && !isWeakTableTitle(row0[0])) return { title: row0[0] };
+
+  return { title: caption || row0[0] || `Table ${extId}` };
 }
 
 export function mapToDocModel(
@@ -355,6 +468,7 @@ export function mapToDocModel(
 ): FinancialDocModel {
   const tables: FinTable[] = [];
   const sections: FinancialDocModel["sections"] = [...extractProseSections(extraction)];
+  const markers = collectSectionMarkers(extraction);
 
   let i = 0;
   for (const [extId, table] of Object.entries(extraction.tables)) {
@@ -364,23 +478,27 @@ export function mapToDocModel(
     const docId = `doc:tbl_${i}`;
     const mustAppear = true;
     tables.push(buildFinTable(table, docId, mustAppear));
-    const title = extractionTableTitle(table, extId);
+    const resolved = extractionTableTitle(table, extId, markers);
+    const title = resolved.title;
     const titleCls = classifySectionTitle(title);
     const noteNum = noteNumberOf(title);
+    const statement_type =
+      resolved.statement_type ?? titleCls.statement_type ?? cls.statement_type;
     const sectionKind =
-      noteNum != null || titleCls.kind === "note"
+      resolved.forceNote || noteNum != null || titleCls.kind === "note"
         ? ("note" as const)
-        : cls.table_type === "facts" || titleCls.kind === "reviewOfOperations"
+        : resolved.forceOps || cls.table_type === "facts" || titleCls.kind === "reviewOfOperations"
           ? ("reviewOfOperations" as const)
           : cls.table_type === "sensitivity" || /segment/i.test(title) || titleCls.kind === "segments"
             ? ("segments" as const)
-            : titleCls.statement_type || cls.is_financial
+            : statement_type || cls.is_financial
               ? ("statement" as const)
               : ("other" as const);
     sections.push({
       id: `doc:sec_tbl_${i}`,
       kind: sectionKind,
-      statement_type: titleCls.statement_type,
+      // Notes band must not keep a prior statement_type from nearest-heading bleed.
+      statement_type: sectionKind === "statement" ? statement_type : undefined,
       note_number: noteNum ?? undefined,
       title: { text: title, src_ref: `ext:${extId}:r0c0` },
       blocks: [{ kind: "table", table_ref: docId }],

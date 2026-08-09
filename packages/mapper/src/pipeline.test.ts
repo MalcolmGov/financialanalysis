@@ -409,6 +409,164 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(agg).toContain("../financials/income-statement.html");
   });
 
+  it("routes dual-entity AFS tables by nearest heading (not GROUP row-0)", () => {
+    const pnl: Cell[] = [
+      h(0, 2, "GROUP"),
+      h(0, 4, "COMPANY"),
+      h(1, 1, "Notes"),
+      h(1, 2, "26 September 2025"),
+      h(1, 3, "30 September 2024"),
+      h(1, 4, "26 September 2025"),
+      h(1, 5, "30 September 2024"),
+      rh(2, 0, "Continuing operations"),
+      rh(3, 0, "Revenue - sale of merchandise"),
+      d(3, 1, "1"),
+      d(3, 2, "100.0"),
+      d(3, 3, "90.0"),
+      d(3, 4, "80.0"),
+      d(3, 5, "70.0"),
+    ];
+    const bs: Cell[] = [
+      h(0, 2, "GROUP"),
+      h(0, 4, "COMPANY"),
+      h(1, 1, "Notes"),
+      h(1, 2, "26 September 2025"),
+      h(1, 3, "30 September 2024"),
+      h(1, 4, "26 September 2025"),
+      h(1, 5, "30 September 2024"),
+      rh(2, 0, "ASSETS"),
+      rh(3, 0, "Non-current assets"),
+      d(3, 1, "2"),
+      d(3, 2, "200.0"),
+      d(3, 3, "180.0"),
+      d(3, 4, "150.0"),
+      d(3, 5, "140.0"),
+    ];
+    const cf: Cell[] = [
+      h(0, 2, "GROUP"),
+      h(0, 4, "COMPANY"),
+      h(1, 1, "Notes"),
+      h(1, 2, "26 September 2025"),
+      h(1, 3, "30 September 2024"),
+      h(1, 4, "26 September 2025"),
+      h(1, 5, "30 September 2024"),
+      rh(2, 0, "CASH FLOWS FROM OPERATING ACTIVITIES"),
+      rh(3, 0, "Cash generated from operations"),
+      d(3, 1, "3"),
+      d(3, 2, "50.0"),
+      d(3, 3, "40.0"),
+      d(3, 4, "30.0"),
+      d(3, 5, "20.0"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      body: [
+        {
+          id: "h-pnl",
+          type: "heading",
+          text: "Statement of profit or loss and other comprehensive income",
+          prov: [{ page_no: 14, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          children: [],
+        },
+        {
+          id: "h-bs",
+          type: "heading",
+          text: "Statement of financial position",
+          prov: [{ page_no: 15, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          children: [],
+        },
+        {
+          id: "h-cf",
+          type: "heading",
+          text: "Statement of cash flows",
+          prov: [{ page_no: 18, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          children: [],
+        },
+      ],
+      tables: {
+        t_pnl: {
+          id: "t_pnl",
+          caption_block: null,
+          prov: [{ page_no: 14, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 4,
+          num_cols: 6,
+          cells: pnl,
+          column_roles: null,
+        },
+        t_bs: {
+          id: "t_bs",
+          caption_block: null,
+          prov: [{ page_no: 15, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 4,
+          num_cols: 6,
+          cells: bs,
+          column_roles: null,
+        },
+        t_cf: {
+          id: "t_cf",
+          caption_block: null,
+          prov: [{ page_no: 18, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 4,
+          num_cols: 6,
+          cells: cf,
+          column_roles: null,
+        },
+      },
+    };
+    const dm = mapToDocModel(ex, meta);
+    const bp = blueprint();
+    bp.page_templates.push(
+      {
+        id: "bp:tpl_home",
+        name: "Home",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_statement_page",
+        name: "Statement page",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_prose",
+        name: "Prose",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+    );
+    const plan = buildSitePlan(dm, bp);
+    const ids = (path: string) =>
+      Object.values(plan.pages.find((p) => p.path === path)!.regions)
+        .flat()
+        .map((i) => Object.values(i.slots).flat())
+        .flat();
+    const pnlId = dm.tables.find((_, i) =>
+      dm.sections.some(
+        (s) => s.statement_type === "pnl_oci" && s.blocks.some((b) => b.kind === "table" && b.table_ref === dm.tables[i]!.id),
+      ),
+    )!.id;
+    const bsId = dm.tables.find((_, i) =>
+      dm.sections.some(
+        (s) =>
+          s.statement_type === "financial_position" &&
+          s.blocks.some((b) => b.kind === "table" && b.table_ref === dm.tables[i]!.id),
+      ),
+    )!.id;
+    const cfId = dm.tables.find((_, i) =>
+      dm.sections.some(
+        (s) =>
+          s.statement_type === "cash_flows" &&
+          s.blocks.some((b) => b.kind === "table" && b.table_ref === dm.tables[i]!.id),
+      ),
+    )!.id;
+    expect(ids("financials/income-statement.html")).toContain(pnlId);
+    expect(ids("financials/balance-sheet.html")).toContain(bsId);
+    expect(ids("financials/cash-flows.html")).toContain(cfId);
+    expect(ids("financials/balance-sheet.html")).not.toContain(pnlId);
+    expect(ids("financials/income-statement.html")).not.toContain(bsId);
+  });
+
   it("Gate B catches a MAPPER bug (a mis-copied number) against the source extraction", () => {
     const ex = extraction();
     const dm = mapToDocModel(ex, meta);
