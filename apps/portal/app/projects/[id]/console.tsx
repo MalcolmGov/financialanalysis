@@ -155,7 +155,7 @@ const DEFAULT_THEME_META: Record<IrThemeId, IrThemeMeta> = {
   },
 };
 
-type CustomizeTab = "theme" | "brand" | "type" | "publish" | "chat";
+type CustomizeTab = "theme" | "brand" | "type" | "publish";
 
 type TypeDensity = "compact" | "balanced" | "airy";
 
@@ -405,6 +405,12 @@ export function ProjectConsole(props: {
   const [brandKitNote, setBrandKitNote] = useState<string | null>(null);
   const [selectedPagePath, setSelectedPagePath] = useState<string>("index.html");
   const [customizeTab, setCustomizeTab] = useState<CustomizeTab>("theme");
+  /** Customize slide-over — closed by default so preview owns the stage. */
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  /** Studio chat slide-over — entered from the top-bar avatar, not a side column. */
+  const [chatOpen, setChatOpen] = useState(false);
+  /** Pages rail — collapsed by default (icon rail); expand when navigating. */
+  const [pagesOpen, setPagesOpen] = useState(false);
   const [typeDensity, setTypeDensity] = useState<TypeDensity>("balanced");
   const [chatDraftPrompt, setChatDraftPrompt] = useState<string | null>(null);
   const [pageGroupsOpen, setPageGroupsOpen] = useState<Record<string, boolean>>({
@@ -444,15 +450,38 @@ export function ProjectConsole(props: {
     siteDraft?.pages.find((p) => p.path === selectedPagePath) ?? siteDraft?.pages[0] ?? null;
 
   useEffect(() => {
-    // Wider stage for page tree + preview + Customize drawer.
+    // Preview-first: reclaim width formerly spent on a permanent Customize column.
     document.documentElement.style.setProperty(
       "--max",
-      showSiteReview ? "1760px" : "1240px",
+      showSiteReview ? "1920px" : "1240px",
     );
     return () => {
       document.documentElement.style.removeProperty("--max");
     };
   }, [showSiteReview]);
+
+  const openCustomize = useCallback((tab: CustomizeTab) => {
+    setCustomizeTab(tab);
+    setCustomizeOpen(true);
+    setChatOpen(false);
+  }, []);
+
+  const openChat = useCallback(() => {
+    setChatOpen(true);
+    setCustomizeOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!customizeOpen && !chatOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setCustomizeOpen(false);
+        setChatOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [customizeOpen, chatOpen]);
 
   useEffect(() => {
     if (status === prevStatusRef.current) return;
@@ -1277,7 +1306,8 @@ export function ProjectConsole(props: {
           disabled={busy || (status !== "in_review" && status !== "blueprint_proposed")}
           onClick={() => {
             setChatDraftPrompt(TYPE_DENSITY_META[typeDensity].chatPrompt);
-            setCustomizeTab("chat");
+            setCustomizeOpen(false);
+            setChatOpen(true);
           }}
         >
           Apply density via chat
@@ -2073,18 +2103,6 @@ export function ProjectConsole(props: {
 
       {showSiteReview ? (
         <section className="rs-sheet rs-sheet--studio rs-fade-up-delay">
-          <div className="rs-studio-head">
-            <div>
-              <h2 className="rs-section-title" style={{ margin: 0 }}>
-                Results studio
-              </h2>
-              <p className="rs-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
-                Preview is the product. Customize theme, brand, and type on the right — then sign
-                off.
-              </p>
-            </div>
-          </div>
-
           {siteError ? (
             <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
               Could not load site draft: {siteError}
@@ -2098,46 +2116,6 @@ export function ProjectConsole(props: {
 
           {siteDraft ? (
             <div className="rs-studio">
-              <div className="rs-studio-dna" aria-label="Design DNA summary">
-                <div className="rs-studio-dna__item">
-                  <span className="rs-studio-dna__label">Issuer</span>
-                  <span className="rs-studio-dna__value">
-                    {siteDraft.company ?? props.companyName}
-                  </span>
-                </div>
-                <div className="rs-studio-dna__item">
-                  <span className="rs-studio-dna__label">Period</span>
-                  <span className="rs-studio-dna__value">{props.periodLabel ?? "—"}</span>
-                </div>
-                <div className="rs-studio-dna__item">
-                  <span className="rs-studio-dna__label">Theme</span>
-                  <span className="rs-studio-dna__value">
-                    {themeMeta[irTheme]?.label ?? irTheme}
-                    {themeSuggest?.themeId === irTheme ? " · suggested" : ""}
-                  </span>
-                </div>
-                <div className="rs-studio-dna__item">
-                  <span className="rs-studio-dna__label">Brand</span>
-                  <span className="rs-studio-dna__value">
-                    {brandKit?.effective.logoIsClient || brandKit?.effective.bannerIsClient
-                      ? "Client kit"
-                      : siteDraft.brandLogo || siteDraft.brandBanner
-                        ? "Extraction assets"
-                        : "Fallback"}
-                    {brandKit?.effective.logoIsClient ? " · logo" : ""}
-                    {brandKit?.effective.bannerIsClient ? " · hero" : ""}
-                  </span>
-                </div>
-                {dna?.confidence != null ? (
-                  <div className="rs-studio-dna__item">
-                    <span className="rs-studio-dna__label">DNA</span>
-                    <span className="rs-studio-dna__value">
-                      {Math.round(dna.confidence * 100)}% · {dna.theme.mode ?? "—"}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-
               <div className="rs-studio-bar">
                 <div className="rs-studio-bar__meta">
                   <span>
@@ -2167,6 +2145,16 @@ export function ProjectConsole(props: {
                     >
                       {siteDraft.gateB ?? "—"}
                     </span>
+                  </span>
+                  <span className="rs-studio-bar__dna" title="Design DNA">
+                    {siteDraft.company ?? props.companyName}
+                    {props.periodLabel ? ` · ${props.periodLabel}` : ""}
+                    <span className="rs-studio-bar__sep">·</span>
+                    {themeMeta[irTheme]?.label ?? irTheme}
+                    {themeSuggest?.themeId === irTheme ? " · suggested" : ""}
+                    {dna?.confidence != null
+                      ? ` · DNA ${Math.round(dna.confidence * 100)}%`
+                      : ""}
                   </span>
                 </div>
 
@@ -2201,17 +2189,54 @@ export function ProjectConsole(props: {
                   </button>
                   <button
                     type="button"
+                    className={
+                      customizeOpen
+                        ? "rs-btn rs-btn--ghost is-pressed"
+                        : "rs-btn rs-btn--ghost"
+                    }
+                    aria-pressed={customizeOpen}
+                    onClick={() =>
+                      customizeOpen ? setCustomizeOpen(false) : openCustomize(customizeTab)
+                    }
+                  >
+                    Customize
+                  </button>
+                  <button
+                    type="button"
                     className="rs-btn rs-btn--ghost"
-                    onClick={() => setCustomizeTab("brand")}
+                    onClick={() => openCustomize("brand")}
                   >
                     Brand
                   </button>
                   <button
                     type="button"
                     className="rs-btn rs-btn--primary"
-                    onClick={() => setCustomizeTab("publish")}
+                    onClick={() => openCustomize("publish")}
                   >
                     Publish
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      chatOpen
+                        ? "rs-studio-chat-launch is-active"
+                        : "rs-studio-chat-launch"
+                    }
+                    aria-label="Studio chat"
+                    aria-pressed={chatOpen}
+                    title="Studio chat"
+                    onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
+                  >
+                    <span className="rs-studio-chat-launch__avatar" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path
+                          d="M2.5 3.5h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H6.2L3.5 14v-2.5H2.5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1Z"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
                   </button>
                   {sourcePdfUrl ? (
                     <a
@@ -2230,87 +2255,121 @@ export function ProjectConsole(props: {
                       rel="noreferrer"
                       className="rs-tiny rs-studio-bar__link"
                     >
-                      Open page
+                      Open
                     </a>
                   ) : null}
                 </div>
               </div>
 
-              <div className="rs-studio-stage">
-                <nav className="rs-studio-pages" aria-label="Site pages">
-                  <div className="rs-studio-pages__label">Pages</div>
-                  {groupSitePages(siteDraft.pages).map((g) => {
-                    const open = pageGroupsOpen[g.id] !== false;
-                    return (
-                      <div key={g.id} className="rs-studio-pages__group">
+              <div
+                className={
+                  pagesOpen
+                    ? "rs-studio-stage is-pages-open"
+                    : "rs-studio-stage is-pages-collapsed"
+                }
+              >
+                <nav
+                  className={
+                    pagesOpen ? "rs-studio-pages" : "rs-studio-pages is-collapsed"
+                  }
+                  aria-label="Site pages"
+                >
+                  {pagesOpen ? (
+                    <>
+                      <div className="rs-studio-pages__head">
+                        <span className="rs-studio-pages__label">Pages</span>
                         <button
                           type="button"
-                          className="rs-studio-pages__group-btn"
-                          aria-expanded={open}
-                          onClick={() =>
-                            setPageGroupsOpen((prev) => ({
-                              ...prev,
-                              [g.id]: !open,
-                            }))
-                          }
+                          className="rs-studio-pages__collapse"
+                          aria-label="Collapse pages"
+                          title="Collapse pages"
+                          onClick={() => setPagesOpen(false)}
                         >
-                          <span>{g.label}</span>
-                          <span className="rs-studio-pages__count">{g.pages.length}</span>
+                          «
                         </button>
-                        {open ? (
-                          <ul>
-                            {g.pages.map((p) => (
-                              <li key={p.path}>
-                                <button
-                                  type="button"
-                                  className={
-                                    selectedPage?.path === p.path
-                                      ? "rs-page-tree__item is-active"
-                                      : "rs-page-tree__item"
-                                  }
-                                  onClick={() => setSelectedPagePath(p.path)}
-                                >
-                                  <span className="rs-page-tree__title">{p.title}</span>
-                                  <span className="rs-page-tree__path">{p.path}</span>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
                       </div>
-                    );
-                  })}
+                      {groupSitePages(siteDraft.pages).map((g) => {
+                        const open = pageGroupsOpen[g.id] !== false;
+                        return (
+                          <div key={g.id} className="rs-studio-pages__group">
+                            <button
+                              type="button"
+                              className="rs-studio-pages__group-btn"
+                              aria-expanded={open}
+                              onClick={() =>
+                                setPageGroupsOpen((prev) => ({
+                                  ...prev,
+                                  [g.id]: !open,
+                                }))
+                              }
+                            >
+                              <span>{g.label}</span>
+                              <span className="rs-studio-pages__count">{g.pages.length}</span>
+                            </button>
+                            {open ? (
+                              <ul>
+                                {g.pages.map((p) => (
+                                  <li key={p.path}>
+                                    <button
+                                      type="button"
+                                      className={
+                                        selectedPage?.path === p.path
+                                          ? "rs-page-tree__item is-active"
+                                          : "rs-page-tree__item"
+                                      }
+                                      onClick={() => setSelectedPagePath(p.path)}
+                                    >
+                                      <span className="rs-page-tree__title">{p.title}</span>
+                                      <span className="rs-page-tree__path">{p.path}</span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="rs-studio-pages__rail"
+                      aria-label="Expand pages"
+                      title="Pages"
+                      aria-expanded={false}
+                      onClick={() => setPagesOpen(true)}
+                    >
+                      <span className="rs-studio-pages__rail-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                          <path
+                            d="M2.5 4h11M2.5 8h11M2.5 12h11"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                      <span className="rs-studio-pages__rail-label">Pages</span>
+                    </button>
+                  )}
                 </nav>
 
                 <div className="rs-studio-preview">
                   <div className="rs-studio-preview__chrome">
                     <div className="rs-studio-preview__title">
                       {selectedPage ? selectedPage.title : "Site page"}
+                      {selectedPage ? (
+                        <span className="rs-studio-preview__path">{selectedPage.path}</span>
+                      ) : null}
                     </div>
-                    <div
-                      className="rs-theme-seg"
-                      role="radiogroup"
-                      aria-label="IR theme quick switch"
+                    <button
+                      type="button"
+                      className="rs-tiny rs-studio-preview__theme-link"
+                      disabled={busy}
+                      onClick={() => openCustomize("theme")}
                     >
-                      {(["classic", "editorial", "statutory"] as const).map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          role="radio"
-                          aria-checked={irTheme === id}
-                          className={
-                            irTheme === id ? "rs-theme-seg__btn is-selected" : "rs-theme-seg__btn"
-                          }
-                          disabled={busy}
-                          onClick={() => {
-                            setIrTheme(id);
-                            setCustomizeTab("theme");
-                          }}
-                        >
-                          {themeMeta[id]?.label ?? id}
-                        </button>
-                      ))}
-                    </div>
+                      Theme · {themeMeta[irTheme]?.label ?? irTheme}
+                    </button>
                   </div>
                   <div className="rs-preview-frame rs-studio-preview__frame">
                     {selectedPage ? (
@@ -2332,7 +2391,38 @@ export function ProjectConsole(props: {
                   </div>
                 </div>
 
-                <aside className="rs-studio-customize" aria-label="Customize">
+                {customizeOpen || chatOpen ? (
+                  <button
+                    type="button"
+                    className="rs-studio-backdrop"
+                    aria-label="Close panel"
+                    onClick={() => {
+                      setCustomizeOpen(false);
+                      setChatOpen(false);
+                    }}
+                  />
+                ) : null}
+
+                <aside
+                  className={
+                    customizeOpen
+                      ? "rs-studio-drawer is-open"
+                      : "rs-studio-drawer"
+                  }
+                  aria-label="Customize"
+                  aria-hidden={!customizeOpen}
+                >
+                  <div className="rs-studio-drawer__head">
+                    <span className="rs-studio-drawer__title">Customize</span>
+                    <button
+                      type="button"
+                      className="rs-studio-drawer__close"
+                      aria-label="Close customize"
+                      onClick={() => setCustomizeOpen(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
                   <div className="rs-studio-tabs" role="tablist">
                     {(
                       [
@@ -2340,7 +2430,6 @@ export function ProjectConsole(props: {
                         ["brand", "Brand"],
                         ["type", "Type"],
                         ["publish", "Publish"],
-                        ["chat", "Chat"],
                       ] as const
                     ).map(([id, label]) => (
                       <button
@@ -2359,37 +2448,55 @@ export function ProjectConsole(props: {
                       </button>
                     ))}
                   </div>
-                  <div className="rs-studio-customize__body" role="tabpanel">
+                  <div className="rs-studio-drawer__body" role="tabpanel">
                     {customizeTab === "theme"
                       ? renderThemePicker({ showApply: true, compact: true })
                       : null}
                     {customizeTab === "brand" ? renderBrandKitPanel() : null}
                     {customizeTab === "type" ? renderTypePanel() : null}
                     {customizeTab === "publish" ? renderPublishPanel() : null}
-                    <div
-                      className="rs-studio-chat-slot"
-                      hidden={customizeTab !== "chat"}
-                      aria-hidden={customizeTab !== "chat"}
+                  </div>
+                </aside>
+
+                <aside
+                  className={
+                    chatOpen
+                      ? "rs-studio-drawer rs-studio-drawer--chat is-open"
+                      : "rs-studio-drawer rs-studio-drawer--chat"
+                  }
+                  aria-label="Studio chat"
+                  aria-hidden={!chatOpen}
+                >
+                  <div className="rs-studio-drawer__head">
+                    <span className="rs-studio-drawer__title">Studio chat</span>
+                    <button
+                      type="button"
+                      className="rs-studio-drawer__close"
+                      aria-label="Close chat"
+                      onClick={() => setChatOpen(false)}
                     >
-                      <SiteChatPanel
-                        projectId={props.projectId}
-                        pagePath={selectedPage?.path ?? siteDraft.entrypoint}
-                        pageTitle={selectedPage?.title ?? "Page"}
-                        issuerName={siteDraft.company}
-                        embedded
-                        draftPrompt={chatDraftPrompt}
-                        onDraftPromptConsumed={() => setChatDraftPrompt(null)}
-                        disabled={
-                          busy ||
-                          (status !== "in_review" && status !== "blueprint_proposed")
-                        }
-                        onPagesUpdated={(pages, bust) => {
-                          setSiteDraft((prev) => (prev ? { ...prev, pages } : prev));
-                          setPreviewBust(bust);
-                          setNote("Studio chat applied edits — preview refreshed.");
-                        }}
-                      />
-                    </div>
+                      Close
+                    </button>
+                  </div>
+                  <div className="rs-studio-chat-slot">
+                    <SiteChatPanel
+                      projectId={props.projectId}
+                      pagePath={selectedPage?.path ?? siteDraft.entrypoint}
+                      pageTitle={selectedPage?.title ?? "Page"}
+                      issuerName={siteDraft.company}
+                      embedded
+                      draftPrompt={chatDraftPrompt}
+                      onDraftPromptConsumed={() => setChatDraftPrompt(null)}
+                      disabled={
+                        busy ||
+                        (status !== "in_review" && status !== "blueprint_proposed")
+                      }
+                      onPagesUpdated={(pages, bust) => {
+                        setSiteDraft((prev) => (prev ? { ...prev, pages } : prev));
+                        setPreviewBust(bust);
+                        setNote("Studio chat applied edits — preview refreshed.");
+                      }}
+                    />
                   </div>
                 </aside>
               </div>
