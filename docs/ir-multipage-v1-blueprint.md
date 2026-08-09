@@ -66,7 +66,7 @@ Production evidence from three live uploads. Canvas: `world-class-ir-converter.c
 |---|---|---|---|---|---|---|
 | **DRDGOLD** | `444cd443-97cc-4b9c-b0f6-eef4f65c2f98` | 10 pp | Interim unaudited | 10 | `classic` | **Strong** — letter, ops, dividend, statements, notes |
 | **SPAR** | `7947eb5f-d836-43b4-8779-8bfdcf164471` | 80 pp | AFS dual-entity | **15** (draft v30) | `editorial` | **Expanded** — directors + auditor + policies + note groups; commentary from DR (~70k); Gate A/B pass |
-| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | **Phase 2 rebuild** | `classic` | **Phase 2** — Group+Company books + note groups; bright-brand gate; commentary from DR (~70k) |
+| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | **21** (draft v8) | `classic` | **Phase 2** — Group+Company books + note groups; Gate A/B + reliability pass; bright-brand gate |
 
 Prefer MTN `8ed9620c…` over older `f3cc2ac8…` (24 pp truncated stub; legal name resolved as “Group financial statements”; corporate reliability fail).
 
