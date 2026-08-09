@@ -4,6 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
+import type { DesignDNA, ExtractionResult } from "@rs/contracts";
 import { formatReliabilityFailures, resolveLegalCompanyName } from "@rs/render";
 import { getPrivate, putPrivate } from "./blob";
 import {
@@ -119,14 +120,13 @@ export async function rebuildProjectSiteDraft(
     throw new RebuildSiteDraftError(`missing dna/extraction on run ${run.id}`, 409);
   }
 
-  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8")) as Record<
-    string,
-    unknown
-  >;
+  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8")) as DesignDNA;
   if (opts.themeId) {
     dna.theme_id = opts.themeId;
   }
-  const extraction = JSON.parse((await getPrivate(extRow.blobPath)).toString("utf8"));
+  const extraction = JSON.parse(
+    (await getPrivate(extRow.blobPath)).toString("utf8"),
+  ) as ExtractionResult;
 
   let sourcePdfBytes: Buffer | null = null;
   if (project.currentDocumentId) {
@@ -183,7 +183,7 @@ export async function rebuildProjectSiteDraft(
   }
 
   const built = buildMultipageExport({
-    dna: dna as Parameters<typeof buildMultipageExport>[0]["dna"],
+    dna,
     extraction,
     projectId,
     company: project.companyName ?? extraction.source?.pdf_meta?.title ?? "Company",

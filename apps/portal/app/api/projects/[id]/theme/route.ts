@@ -12,11 +12,23 @@ import {
   rebuildProjectSiteDraft,
 } from "../../../../../lib/rebuild-site-draft";
 
+export const dynamic = "force-dynamic";
+
 const PutBody = z.object({
   themeId: z.enum(["classic", "editorial"]),
   /** When true (default), rebuild multipage site draft after persist. */
   rebuild: z.boolean().optional().default(true),
 });
+
+function noStore(data: unknown, init: { status?: number } = {}): Response {
+  return Response.json(data, {
+    status: init.status ?? 200,
+    headers: {
+      "cache-control": "no-store, no-cache, must-revalidate",
+      pragma: "no-cache",
+    },
+  });
+}
 
 /** Current IR theme + soft suggestion for the console picker. */
 export async function GET(
@@ -31,12 +43,12 @@ export async function GET(
 
   const { id: projectId } = await params;
   if (env.MOCK_BLOB) {
-    return Response.json({ error: "theme unavailable in MOCK_BLOB mode" }, { status: 404 });
+    return noStore({ error: "theme unavailable in MOCK_BLOB mode" }, { status: 404 });
   }
 
   try {
     const snap = await loadProjectTheme(projectId);
-    return Response.json({
+    return noStore({
       themeId: snap.themeId,
       suggestedThemeId: snap.suggestedThemeId,
       suggestReason: snap.suggestReason,
@@ -47,9 +59,9 @@ export async function GET(
     });
   } catch (err) {
     if (err instanceof IrThemeError) {
-      return Response.json({ error: err.message }, { status: err.status });
+      return noStore({ error: err.message }, { status: err.status });
     }
-    return Response.json({ error: (err as Error).message }, { status: 500 });
+    return noStore({ error: (err as Error).message }, { status: 500 });
   }
 }
 
@@ -70,14 +82,14 @@ export async function PUT(
 
   const { id: projectId } = await params;
   if (env.MOCK_BLOB) {
-    return Response.json({ error: "theme unavailable in MOCK_BLOB mode" }, { status: 404 });
+    return noStore({ error: "theme unavailable in MOCK_BLOB mode" }, { status: 404 });
   }
 
   let body: z.infer<typeof PutBody>;
   try {
     body = PutBody.parse(await request.json());
   } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 400 });
+    return noStore({ error: (err as Error).message }, { status: 400 });
   }
 
   try {
@@ -90,7 +102,7 @@ export async function PUT(
     const themeId = body.themeId;
 
     if (!body.rebuild) {
-      return Response.json({
+      return noStore({
         ok: true,
         themeId,
         revision: snap.revision,
@@ -108,39 +120,36 @@ export async function PUT(
         // Pass through so render does not depend on blob read-after-write.
         themeId,
       });
-      return Response.json({
+      return noStore({
         ok: true,
         themeId,
         revision: snap.revision,
         rebuilt: true,
-        draft,
+        draft: { ...draft, themeId },
         rebuildHint: `Site draft rebuilt to v${draft.draftVersion} with theme “${themeId}”.`,
         themes: IR_THEME_META,
       });
     } catch (err) {
       if (err instanceof RebuildSiteDraftError) {
-        return Response.json(
-          {
-            ok: true,
-            themeId,
-            revision: snap.revision,
-            rebuilt: false,
-            rebuildError: err.message,
-            rebuildDetails: err.details ?? null,
-            rebuildHint:
-              "Theme saved on DNA, but site draft rebuild failed. Retry rebuild from Site or Brand kit.",
-            themes: IR_THEME_META,
-          },
-          { status: 200 },
-        );
+        return noStore({
+          ok: true,
+          themeId,
+          revision: snap.revision,
+          rebuilt: false,
+          rebuildError: err.message,
+          rebuildDetails: err.details ?? null,
+          rebuildHint:
+            "Theme saved on DNA, but site draft rebuild failed. Retry rebuild from Site or Brand kit.",
+          themes: IR_THEME_META,
+        });
       }
       throw err;
     }
   } catch (err) {
     if (err instanceof IrThemeError) {
-      return Response.json({ error: err.message }, { status: err.status });
+      return noStore({ error: err.message }, { status: err.status });
     }
     console.error("theme put failed:", err);
-    return Response.json({ error: (err as Error).message }, { status: 500 });
+    return noStore({ error: (err as Error).message }, { status: 500 });
   }
 }
