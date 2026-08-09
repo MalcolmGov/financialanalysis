@@ -27,8 +27,13 @@ import {
 
 const NIL = /^[—–-]$/;
 const DIGIT = /[0-9]/;
-/** Notes column: "5" or "5, 7" — cross-refs, not financial figures. */
-const NOTE_REF = /^\d{1,2}(?:\s*,\s*\d{1,2})*$/;
+/**
+ * Notes column cross-refs — not financial figures.
+ * Matches "5", "5, 7", "5 / 8", MTN-style "2.1", "2.1; 2.2".
+ * Does not match period figures like "116.6" or "5 053.2".
+ */
+const NOTE_REF =
+  /^\d{1,2}(?:\.\d{1,2})?(?:\s*[,;/]\s*\d{1,2}(?:\.\d{1,2})?)*$/;
 
 function cellKind(text: string, isRowHeader: boolean, colIndex: number): DocCell["kind"] {
   const t = text.trim();
@@ -37,6 +42,15 @@ function cellKind(text: string, isRowHeader: boolean, colIndex: number): DocCell
   if (isRowHeader || colIndex === 0) return "text";
   if (!DIGIT.test(t)) return "text";
   return "number";
+}
+
+/** Major note number from a noteRef cell (integer; "2.1; 2.2" → 2). */
+function noteNumberFromRef(raw: string): number | null {
+  const first = raw.trim().split(/\s*[,;/]\s*/)[0] ?? "";
+  const m = /^(\d{1,2})(?:\.\d{1,2})?$/.exec(first);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 1 && n <= 99 ? n : null;
 }
 
 type ExtCell = ExtractionTable["cells"][number];
@@ -105,9 +119,7 @@ function buildFinTable(table: ExtractionTable, docTableId: string, mustAppear: b
         raw,
         kind,
         footnote_refs: [],
-        ...(kind === "noteRef"
-          ? { note_number: Number(raw.trim().split(/\s*,\s*/)[0]!) || null }
-          : {}),
+        ...(kind === "noteRef" ? { note_number: noteNumberFromRef(raw) } : {}),
       });
     }
     rows.push({ cells });

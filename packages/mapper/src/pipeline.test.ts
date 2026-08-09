@@ -321,6 +321,56 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(note.kind).toBe("noteRef");
   });
 
+  it("treats MTN-style subsection note refs as noteRef, not numbers", () => {
+    const cells: Cell[] = [
+      h(0, 0, ""),
+      h(0, 1, "Notes"),
+      h(0, 2, "Year ended 31 December 2024"),
+      h(0, 3, "Year ended 31 December 2023"),
+      rh(1, 0, "Revenue"),
+      d(1, 1, "2.1"),
+      d(1, 2, "5 053.2"),
+      d(1, 3, "3 802.3"),
+      rh(2, 0, "Other income"),
+      d(2, 1, "2.1; 2.2"),
+      d(2, 2, "116.6"),
+      d(2, 3, "132.8"),
+      rh(3, 0, "Finance costs"),
+      d(3, 1, "–"),
+      d(3, 2, "(490.5)"),
+      d(3, 3, "(200.1)"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      tables: {
+        t_pnl: {
+          id: "t_pnl",
+          caption_block: "PnL",
+          prov: [],
+          num_rows: 4,
+          num_cols: 4,
+          cells,
+          column_roles: null,
+        },
+      },
+    };
+    const dm = mapToDocModel(ex, meta);
+    const row0 = dm.tables[0]!.rows[0]!.cells;
+    const row1 = dm.tables[0]!.rows[1]!.cells;
+    const row2 = dm.tables[0]!.rows[2]!.cells;
+    expect(row0[1]!.raw).toBe("2.1");
+    expect(row0[1]!.kind).toBe("noteRef");
+    expect(row0[1]!.note_number).toBe(2);
+    expect(row0[2]!.kind).toBe("number");
+    expect(row1[1]!.raw).toBe("2.1; 2.2");
+    expect(row1[1]!.kind).toBe("noteRef");
+    expect(row1[1]!.note_number).toBe(2);
+    expect(row2[1]!.kind).toBe("nil");
+    // Period figures must stay numbers (not swallowed by note-ref heuristic).
+    expect(row0[2]!.raw).toBe("5 053.2");
+    expect(row0[2]!.kind).toBe("number");
+  });
+
   it("produces a blueprint-conformant, ref-only SitePlan (validateSitePlan clean)", () => {
     const dm = mapToDocModel(extraction(), meta);
     const bp = blueprint();

@@ -2,7 +2,8 @@
  * NotesLinker — noteRef cells → anchors; helpers for notes page #note-N.
  */
 
-const NOTE_NUMS = /\d{1,2}/g;
+/** Single note token: "2", "2.1" — subsection stays one link to the major note. */
+const NOTE_NUMS = /\d{1,2}(?:\.\d{1,2})?/g;
 const NOTE_HEADING = /^(\d{1,2})(?:\.\d+)*(?:\.|\s)\s*\S/;
 
 export function noteNumberFromTitle(title: string): number | null {
@@ -32,7 +33,7 @@ export function noteHref(notesBase: string, n: number): string {
 
 /**
  * Turn a noteRef cell raw string into linked HTML (preserves digits for Gate B).
- * Supports "2", "5, 8", "5 / 8".
+ * Supports "2", "5, 8", "5 / 8", "2.1", "2.1; 2.2".
  */
 export function linkNoteRefHtml(
   raw: string,
@@ -48,9 +49,9 @@ export function linkNoteRefHtml(
     matched = true;
     const idx = m.index ?? 0;
     if (idx > last) parts.push(escapeHtml(text.slice(last, idx)));
-    const n = Number(m[0]);
+    const major = Number(m[0].split(".")[0]!);
     parts.push(
-      `<a class="note-ref" href="${escapeHtml(noteHref(notesBase, n))}">${escapeHtml(m[0])}</a>`,
+      `<a class="note-ref" href="${escapeHtml(noteHref(notesBase, major))}">${escapeHtml(m[0])}</a>`,
     );
     last = idx + m[0].length;
   }

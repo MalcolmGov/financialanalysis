@@ -53,6 +53,12 @@ describe("notes linker", () => {
     expect(linkNoteRefHtml("5, 8", "notes.html", esc)).toBe(
       '<a class="note-ref" href="notes.html#note-5">5</a>, <a class="note-ref" href="notes.html#note-8">8</a>',
     );
+    expect(linkNoteRefHtml("2.1", "notes.html", esc)).toBe(
+      '<a class="note-ref" href="notes.html#note-2">2.1</a>',
+    );
+    expect(linkNoteRefHtml("2.1; 2.2", "notes.html", esc)).toBe(
+      '<a class="note-ref" href="notes.html#note-2">2.1</a>; <a class="note-ref" href="notes.html#note-2">2.2</a>',
+    );
   });
 });
 
