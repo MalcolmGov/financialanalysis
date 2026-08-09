@@ -1,13 +1,40 @@
 import { and, desc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { requireOperator } from "../../../../../lib/authz";
 import { getPrivate } from "../../../../../lib/blob";
 import { db, schema } from "../../../../../lib/db";
+import {
+  DnaBrandError,
+  persistProjectBrandColor,
+} from "../../../../../lib/dna-brand";
 import { env } from "../../../../../lib/env";
 import {
   IR_THEME_META,
   suggestIrThemeId,
   themeIdFromDna,
 } from "../../../../../lib/ir-theme";
+import {
+  RebuildSiteDraftError,
+  rebuildProjectSiteDraft,
+} from "../../../../../lib/rebuild-site-draft";
+
+export const dynamic = "force-dynamic";
+
+const PatchBody = z.object({
+  brandHex: z.string().min(4).max(9),
+  /** Default false — live iframe preview updates instantly; Rebuild applies HTML. */
+  rebuild: z.boolean().optional().default(false),
+});
+
+function noStore(data: unknown, init: { status?: number } = {}): Response {
+  return Response.json(data, {
+    status: init.status ?? 200,
+    headers: {
+      "cache-control": "no-store, no-cache, must-revalidate",
+      pragma: "no-cache",
+    },
+  });
+}
 
 /** Operator-facing Design DNA summary for the DNA approval gate. */
 export async function GET(
@@ -136,4 +163,87 @@ export async function GET(
     componentIds: components.map((c) => c.id).slice(0, 24),
     blobPath: art.blobPath,
   });
+}
+
+/**
+ * Persist operator brand accent on DesignDNA (chrome only — no number changes).
+ * Default rebuild=false so the console can debounce-save while live-updating the iframe.
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  let operator;
+  try {
+    operator = await requireOperator();
+  } catch (res) {
+    return res as Response;
+  }
+
+  const { id: projectId } = await params;
+  if (env.MOCK_BLOB) {
+    return noStore({ error: "DNA unavailable in MOCK_BLOB mode" }, { status: 404 });
+  }
+
+  let body: z.infer<typeof PatchBody>;
+  try {
+    body = PatchBody.parse(await request.json());
+  } catch (err) {
+    return noStore({ error: (err as Error).message }, { status: 400 });
+  }
+
+  try {
+    const snap = await persistProjectBrandColor({
+      projectId,
+      brandHex: body.brandHex,
+      by: operator.email,
+    });
+
+    if (!body.rebuild) {
+      return noStore({
+        ok: true,
+        brandHex: snap.brandHex,
+        revision: snap.revision,
+        rebuilt: false,
+        rebuildHint:
+          "Brand color saved on DNA. Live preview updates instantly; Rebuild applies it to exported HTML.",
+      });
+    }
+
+    try {
+      const draft = await rebuildProjectSiteDraft({
+        projectId,
+        note: `rebuilt after brand color → ${snap.brandHex} by ${operator.email}`,
+        hardFailGates: true,
+      });
+      return noStore({
+        ok: true,
+        brandHex: snap.brandHex,
+        revision: snap.revision,
+        rebuilt: true,
+        draft,
+        rebuildHint: `Site draft rebuilt to v${draft.draftVersion} with brand ${snap.brandHex}.`,
+      });
+    } catch (err) {
+      if (err instanceof RebuildSiteDraftError) {
+        return noStore({
+          ok: true,
+          brandHex: snap.brandHex,
+          revision: snap.revision,
+          rebuilt: false,
+          rebuildError: err.message,
+          rebuildDetails: err.details ?? null,
+          rebuildHint:
+            "Brand color saved on DNA, but site draft rebuild failed. Retry Rebuild from the console.",
+        });
+      }
+      throw err;
+    }
+  } catch (err) {
+    if (err instanceof DnaBrandError) {
+      return noStore({ error: err.message }, { status: err.status });
+    }
+    console.error("dna brand patch failed:", err);
+    return noStore({ error: (err as Error).message }, { status: 500 });
+  }
 }

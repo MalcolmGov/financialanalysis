@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { upload } from "@vercel/blob/client";
+import {
+  applyLiveBrandToIframe,
+  normalizeBrandHex,
+} from "../../../lib/live-brand-preview";
 import { statusToneClass } from "../../../lib/status-tone";
 import { SiteChatPanel } from "./site-chat";
 
@@ -433,12 +437,19 @@ export function ProjectConsole(props: {
   const [previewWidth, setPreviewWidth] = useState<number | "full">("full");
   /** Cache-bust iframe after Studio chat applies edits. */
   const [previewBust, setPreviewBust] = useState(0);
+  /** Live brand accent for IR header/footer chrome (persisted to DNA on debounce). */
+  const [brandAccentHex, setBrandAccentHex] = useState("#243B53");
+  const [brandAccentNote, setBrandAccentNote] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   /** Client timestamp when we observed entering a busy wait status. */
   const [clientBusyStartedAt, setClientBusyStartedAt] = useState<number | null>(null);
   /** Server project.updatedAt — fallback when reloading mid-wait. */
   const [statusUpdatedAt, setStatusUpdatedAt] = useState<string | null>(null);
   const prevStatusRef = useRef(props.initialStatus);
+  const sitePreviewIframeRef = useRef<HTMLIFrameElement>(null);
+  const brandSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brandAccentHexRef = useRef(brandAccentHex);
+  brandAccentHexRef.current = brandAccentHex;
 
   const showSiteReview =
     status === "in_review" ||
@@ -470,6 +481,96 @@ export function ProjectConsole(props: {
     setChatOpen(true);
     setCustomizeOpen(false);
   }, []);
+
+  const dnaInkHex = useMemo(() => {
+    const hex = dna?.roles?.find((r) => r.role === "ink")?.hex;
+    return normalizeBrandHex(hex ?? "") ?? "#231F20";
+  }, [dna]);
+
+  const dnaPaperHex = useMemo(() => {
+    const hex = dna?.roles?.find((r) => r.role === "paper")?.hex;
+    return normalizeBrandHex(hex ?? "") ?? "#FFFFFF";
+  }, [dna]);
+
+  const paintPreviewBrand = useCallback(
+    (hex: string = brandAccentHexRef.current) => {
+      applyLiveBrandToIframe(sitePreviewIframeRef.current, hex, {
+        ink: dnaInkHex,
+        paper: dnaPaperHex,
+      });
+    },
+    [dnaInkHex, dnaPaperHex],
+  );
+
+  const persistBrandAccent = useCallback(
+    async (hex: string) => {
+      const normalized = normalizeBrandHex(hex);
+      if (!normalized) return;
+      try {
+        const res = await fetch(`/api/projects/${props.projectId}/dna`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ brandHex: normalized, rebuild: false }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          brandHex?: string;
+          revision?: number;
+        };
+        if (!res.ok) {
+          setBrandAccentNote(data.error ?? res.statusText);
+          return;
+        }
+        if (data.brandHex) {
+          setBrandAccentHex(data.brandHex);
+          setDna((prev) => {
+            if (!prev) return prev;
+            const roles = prev.roles.map((r) =>
+              r.role === "brand" || r.role === "accent" || r.role === "footer-accent"
+                ? { ...r, hex: data.brandHex! }
+                : r,
+            );
+            const hasBrand = roles.some((r) => r.role === "brand");
+            return {
+              ...prev,
+              revision: data.revision ?? prev.revision,
+              roles: hasBrand
+                ? roles
+                : [...roles, { role: "brand", hex: data.brandHex!, name: "brand" }],
+            };
+          });
+        }
+        setBrandAccentNote(null);
+      } catch (err) {
+        setBrandAccentNote((err as Error).message);
+      }
+    },
+    [props.projectId],
+  );
+
+  const onBrandAccentChange = useCallback(
+    (raw: string) => {
+      const normalized = normalizeBrandHex(raw);
+      if (!normalized) return;
+      setBrandAccentHex(normalized);
+      paintPreviewBrand(normalized);
+      if (brandSaveTimerRef.current) clearTimeout(brandSaveTimerRef.current);
+      brandSaveTimerRef.current = setTimeout(() => {
+        void persistBrandAccent(normalized);
+      }, 650);
+    },
+    [paintPreviewBrand, persistBrandAccent],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (brandSaveTimerRef.current) clearTimeout(brandSaveTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    paintPreviewBrand(brandAccentHex);
+  }, [brandAccentHex, paintPreviewBrand, selectedPagePath, previewBust]);
 
   useEffect(() => {
     if (!customizeOpen && !chatOpen) return;
@@ -641,6 +742,13 @@ export function ProjectConsole(props: {
         }
         setDna(data);
         setDnaError(null);
+        const brandFromDna =
+          normalizeBrandHex(
+            data.roles?.find((r) => r.role === "brand")?.hex ??
+              data.roles?.find((r) => r.role === "accent")?.hex ??
+              "",
+          ) ?? null;
+        if (brandFromDna) setBrandAccentHex(brandFromDna);
         if (data.themes) setThemeMeta({ ...DEFAULT_THEME_META, ...data.themes });
         if (status === "dna_review") {
           const nextTheme =
@@ -2187,6 +2295,30 @@ export function ProjectConsole(props: {
                   >
                     Rebuild
                   </button>
+                  <label
+                    className="rs-brand-swatch"
+                    title={`Brand accent ${brandAccentHex}`}
+                  >
+                    <span className="sr-only">Brand accent color</span>
+                    <input
+                      type="color"
+                      className="rs-brand-swatch__input"
+                      value={brandAccentHex}
+                      disabled={busy}
+                      aria-label={`Brand accent color ${brandAccentHex}`}
+                      onChange={(e) => onBrandAccentChange(e.target.value)}
+                    />
+                    <span
+                      className="rs-brand-swatch__chip"
+                      style={{ background: brandAccentHex }}
+                      aria-hidden="true"
+                    />
+                  </label>
+                  {brandAccentNote ? (
+                    <span className="rs-studio-bar__brand-note" title={brandAccentNote}>
+                      !
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     className={
@@ -2375,8 +2507,10 @@ export function ProjectConsole(props: {
                     {selectedPage ? (
                       <iframe
                         key={`${selectedPage.path}-${previewBust}`}
+                        ref={sitePreviewIframeRef}
                         title={selectedPage.title}
                         src={selectedPage.previewUrl}
+                        onLoad={() => paintPreviewBrand()}
                         /* allow-same-origin: blob CSP uses 'self' for site.js/fonts/logos;
                            without it the opaque sandbox origin blocks assets and reveal JS,
                            leaving .reveal/.kpi-card at opacity:0 (blank home). */
