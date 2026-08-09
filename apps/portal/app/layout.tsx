@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="rs-header">
             <a href="/" className="rs-brand">
               <span className="rs-brand-mark">Results Studio</span>
-              <span className="rs-brand-sub">Operator</span>
+              <span className="rs-brand-sub">Operator console</span>
             </a>
             <ShellNav />
           </header>

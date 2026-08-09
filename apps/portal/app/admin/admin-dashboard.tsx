@@ -1,4 +1,5 @@
 import type { AdminOverview } from "../../lib/admin-data";
+import { statusToneClass } from "../../lib/status-tone";
 
 function fmtUsd(n: number): string {
   if (n >= 100) return `$${n.toFixed(0)}`;
@@ -60,8 +61,8 @@ function CostSparkline({
       <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Spend over the last 30 days">
         <defs>
           <linearGradient id="rsAdminSpendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(42, 95, 90, 0.28)" />
-            <stop offset="100%" stopColor="rgba(42, 95, 90, 0)" />
+            <stop offset="0%" stopColor="rgba(8, 145, 178, 0.32)" />
+            <stop offset="100%" stopColor="rgba(8, 145, 178, 0)" />
           </linearGradient>
         </defs>
         <polygon points={area} fill="url(#rsAdminSpendFill)" />
@@ -136,11 +137,11 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
   return (
     <div className="rs-admin rs-fade-up">
       <section className="rs-admin-hero">
-        <p className="rs-kicker">Operator</p>
+        <p className="rs-kicker">Operator · Live</p>
         <h1>Admin</h1>
         <p className="rs-lede">
-          Costs, pipeline activity, and run health across Results Studio — visibility for operators,
-          not a second console.
+          Costs, pipeline activity, and run health across Results Studio — programme visibility for
+          operators, not a second console.
         </p>
         <p className="rs-tiny" style={{ marginTop: 14 }}>
           {data.authNote}
@@ -338,7 +339,9 @@ export function AdminDashboard({ data }: { data: AdminOverview }) {
                       {r.durationMs != null ? ` · ${fmtDuration(r.durationMs)}` : ""}
                     </span>
                   </span>
-                  <span className="rs-status">{prettyStatus(r.status)}</span>
+                  <span className={`rs-status ${statusToneClass(r.status)}`}>
+                    {prettyStatus(r.status)}
+                  </span>
                 </a>
               </li>
             ))}

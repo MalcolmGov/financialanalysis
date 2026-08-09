@@ -18,10 +18,10 @@ export default async function SignIn({
     <div className="rs-signin">
       <div className="rs-signin-card">
         <div>
-          <p className="rs-kicker">Operator access</p>
+          <p className="rs-kicker">Operator access · Live</p>
           <h1>Results Studio</h1>
           <p className="rs-lede">
-            Sign in to run PDF → DNA → prototype → export. Accounts are provisioned by an
+            Sign in to run PDF → DNA → site draft → export. Accounts are provisioned by an
             administrator.
           </p>
         </div>
@@ -70,7 +70,7 @@ export default async function SignIn({
             className="rs-field"
           />
           <button type="submit" className="rs-btn rs-btn--primary" style={{ marginTop: 18 }}>
-            Sign in
+            Enter console
           </button>
         </form>
       </div>

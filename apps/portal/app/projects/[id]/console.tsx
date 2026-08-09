@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { upload } from "@vercel/blob/client";
+import { statusToneClass } from "../../../lib/status-tone";
 import { SiteChatPanel } from "./site-chat";
 
 /** Multipage-as-product rail — Opus shell is optional preview only. */
@@ -1237,7 +1238,7 @@ export function ProjectConsole(props: {
             <p className="rs-console-sub">
               <span>{props.periodLabel ?? "—"}</span>
               <span aria-hidden="true">·</span>
-              <span className="rs-status">
+              <span className={`rs-status ${statusToneClass(status)}`}>
                 {(extracting ||
                   status === "prototype_generating" ||
                   status === "dna_detecting" ||
