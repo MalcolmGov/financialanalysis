@@ -61,11 +61,24 @@ async function latestDnaArtifact(runId: string) {
   return art ?? null;
 }
 
+async function latestSitePlanMeta(runId: string): Promise<Record<string, unknown> | null> {
+  const [art] = await db()
+    .select({ meta: schema.artifacts.meta })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, runId), eq(schema.artifacts.kind, "site_plan")))
+    .orderBy(desc(schema.artifacts.version), desc(schema.artifacts.createdAt))
+    .limit(1);
+  return (art?.meta as Record<string, unknown> | null) ?? null;
+}
+
 function suggestFromContext(opts: {
   companyName?: string | null;
   periodLabel?: string | null;
   dna: Record<string, unknown>;
   extraction?: Record<string, unknown> | null;
+  /** Legal issuer from draft meta — preferred over portal project slug. */
+  draftCompany?: string | null;
+  docShape?: string | null;
 }): ReturnType<typeof suggestIrThemeId> {
   const toneWords = Array.isArray(opts.dna.tone_words)
     ? (opts.dna.tone_words as string[])
@@ -97,8 +110,13 @@ function suggestFromContext(opts: {
   const title =
     (opts.extraction?.source as { pdf_meta?: { title?: string } } | undefined)?.pdf_meta
       ?.title ?? "";
-  const coverHints = [title, ...sectionTitles.slice(0, 12), opts.periodLabel ?? ""];
+  const issuer = (opts.draftCompany || opts.companyName || "").trim();
+  const coverHints = [title, ...sectionTitles.slice(0, 12), opts.periodLabel ?? "", issuer];
   let docKind: string | null = inferDocKind(coverHints, opts.periodLabel ?? "");
+  const shape = (opts.docShape ?? "").toLowerCase();
+  if (shape.includes("afs") || shape.includes("annual") || shape.includes("statutory")) {
+    if (docKind === "interim_unaudited" || !docKind) docKind = "annual_audited";
+  }
   if (!docKind) {
     const hay = coverHints.join(" ").toLowerCase();
     if (
@@ -109,25 +127,8 @@ function suggestFromContext(opts: {
     }
   }
 
-  // Portal project titles for AFS demos (MTN / Spar) often omit "annual" —
-  // treat known AFS issuer packs as annual when PDF title is empty too.
-  const companyHay = `${opts.companyName ?? ""} ${opts.periodLabel ?? ""}`.toLowerCase();
-  if (
-    !docKind ||
-    docKind === "interim_unaudited"
-  ) {
-    if (
-      /\b(mtn|spar)\b/.test(companyHay) &&
-      /year\s+ended|fy\s*20|annual|afs|31\s+december|26\s+september/.test(
-        `${companyHay} ${title}`.toLowerCase(),
-      )
-    ) {
-      docKind = "annual_audited";
-    }
-  }
-
   return suggestIrThemeId({
-    company: opts.companyName,
+    company: issuer || opts.companyName,
     periodLabel: opts.periodLabel,
     docKind,
     toneWords,
@@ -136,9 +137,11 @@ function suggestFromContext(opts: {
       title,
       ...toneWords,
       ...sectionTitles.slice(0, 8),
+      issuer,
       opts.companyName ?? "",
       opts.periodLabel ?? "",
       docKind ?? "",
+      opts.docShape ?? "",
     ],
   });
 }
@@ -184,11 +187,15 @@ export async function loadProjectTheme(projectId: string): Promise<DnaThemeSnaps
     }
   }
 
+  const draftMeta = await latestSitePlanMeta(run.id);
+
   const suggested = suggestFromContext({
     companyName: project.companyName,
     periodLabel: project.periodLabel,
     dna,
     extraction,
+    draftCompany: typeof draftMeta?.company === "string" ? draftMeta.company : null,
+    docShape: typeof draftMeta?.docShape === "string" ? draftMeta.docShape : null,
   });
   const themeId = themeIdFromDna(dna as { theme_id?: unknown });
   const humanEdits = Array.isArray(dna.human_edits) ? dna.human_edits : [];

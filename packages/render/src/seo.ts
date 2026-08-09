@@ -70,6 +70,14 @@ export function inferDocKind(
     .join("\n");
   const period = (periodLabel ?? "").replace(/\u00a0/g, " ").trim();
 
+  // Period label is operator-owned — HY / interim beats stray "annual" cover hits.
+  if (/^HY\d/i.test(period) || /\binterim\b/i.test(period) || /\bhalf[\s-]?year\b/i.test(period)) {
+    if (/\b(reviewed\s+interim|interim\s+reviewed)\b/i.test(blob)) {
+      return "interim_reviewed";
+    }
+    return "interim_unaudited";
+  }
+
   if (
     /\b(annual\s+financial\s+statements|audited\s+annual(?:\s+financial)?|group\s+annual\s+financial)\b/i.test(
       blob,
@@ -81,8 +89,7 @@ export function inferDocKind(
     return "interim_reviewed";
   }
   if (
-    /\b(interim|six\s+months\s+ended|half[\s-]?year)\b/i.test(blob) ||
-    /^HY\d/i.test(period)
+    /\b(interim|six\s+months\s+ended|half[\s-]?year)\b/i.test(blob)
   ) {
     return "interim_unaudited";
   }
