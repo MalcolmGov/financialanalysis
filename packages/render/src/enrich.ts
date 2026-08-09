@@ -81,6 +81,41 @@ function wrapLooseListItems(html: string): string {
   });
 }
 
+function pdfDownloadNote(docKind: FinancialDocModel["meta"]["doc_kind"]): string {
+  if (docKind === "annual_audited") {
+    return "Annual financial statements PDF bundled under assets/ for offline use.";
+  }
+  if (docKind === "interim_unaudited" || docKind === "interim_reviewed") {
+    return "Interim results booklet bundled under assets/ for offline use.";
+  }
+  return "Source results booklet bundled under assets/ for offline use.";
+}
+
+function downloadItem(opts: {
+  kind: "PDF" | "XLSX";
+  href: string;
+  label: string;
+  note: string;
+  meta?: string;
+  downloadAttr?: boolean;
+}): string {
+  const download = opts.downloadAttr === false ? "" : " download";
+  const meta = opts.meta
+    ? `<span class="downloads__meta">${opts.meta}</span>`
+    : "";
+  return `<li class="downloads__item">
+<a class="downloads__row dl-link" href="${escapeHtml(opts.href)}"${download}>
+<span class="downloads__kind">${opts.kind}</span>
+<span class="downloads__copy">
+<span class="downloads__label dl-label">${escapeHtml(opts.label)}</span>
+<span class="downloads__note dl-note">${opts.note}</span>
+${meta}
+</span>
+<span class="downloads__cta"><span class="downloads__cta-label">Download</span></span>
+</a>
+</li>`;
+}
+
 function downloadsHtml(
   docModel: FinancialDocModel,
   opts: DownloadEnrichOptions = {},
@@ -93,25 +128,50 @@ function downloadsHtml(
   const workbookHref = opts.excel?.workbookHref ?? WORKBOOK_HREF;
   const sheetCount = opts.excel?.workbookSheetNames?.length;
   const sheetNote = sheetCount
-    ? `<span class="dl-note" data-allow-number>${sheetCount} sheets — income, financial position, equity, cash flows, and notes when present. Values match the HTML tables.</span>`
-    : `<span class="dl-note">Multi-sheet workbook built from the statement tables. Values match the HTML tables.</span>`;
+    ? `<span data-allow-number>${sheetCount} sheets — income, financial position, equity, cash flows, and notes when present. Values match the HTML tables.</span>`
+    : `Multi-sheet workbook built from the statement tables. Values match the HTML tables.`;
 
   const pdfItem = opts.pdfBundled
-    ? `<li class="downloads__item"><span class="downloads__kind">PDF</span><a class="dl-link" href="${escapeHtml(pdfHref)}"><span class="dl-label">Source results PDF</span><span class="dl-note">Full announcement booklet bundled under assets/ for offline review and print.</span><p class="downloads__meta">Primary source · provenance-bound</p></a></li>`
-    : `<li class="downloads__item downloads__item--muted"><span class="downloads__kind">PDF</span><span class="dl-label">Source results PDF</span><span class="dl-note">Source PDF was not available at export time (offline JSON fixtures omit binary uploads). Re-export from the portal after upload to bundle assets/source.pdf.</span></li>`;
+    ? downloadItem({
+        kind: "PDF",
+        href: pdfHref,
+        label: "Full results PDF",
+        note: pdfDownloadNote(docModel.meta.doc_kind),
+        meta: "Primary source · provenance-bound",
+      })
+    : `<li class="downloads__item downloads__item--muted">
+<div class="downloads__row downloads__row--static">
+<span class="downloads__kind">PDF</span>
+<span class="downloads__copy">
+<span class="downloads__label dl-label">Full results PDF</span>
+<span class="downloads__note dl-note">Source PDF was not available at export time (offline JSON fixtures omit binary uploads). Re-export from the portal after upload to bundle assets/source.pdf.</span>
+</span>
+<span class="downloads__cta downloads__cta--disabled" aria-disabled="true">Unavailable</span>
+</div>
+</li>`;
 
   const statementItems = (opts.excel?.statementFiles ?? [])
-    .map(
-      (f) =>
-        `<li class="downloads__item"><span class="downloads__kind">XLS</span><a class="dl-link" href="${escapeHtml(f.href)}"><span class="dl-label">${escapeHtml(f.label)}</span><span class="dl-note">Single-sheet Excel for this statement — figures match the IR tables.</span></a></li>`,
+    .map((f) =>
+      downloadItem({
+        kind: "XLSX",
+        href: f.href,
+        label: `${f.label} (Excel)`,
+        note: "Single-sheet workbook for this statement. Values match the HTML tables.",
+      }),
     )
     .join("\n");
 
   return `<section class="downloads" data-dna-component="downloads">
 <p class="downloads__lede">Investor pack for <span data-allow-number>${company}</span>${period}. Excel and PDF artifacts below are export outputs — not retyped figures.</p>
-<ul class="downloads__grid download-list">
+<ul class="downloads__grid">
 ${pdfItem}
-<li class="downloads__item"><span class="downloads__kind">XLSX</span><a class="dl-link" href="${escapeHtml(workbookHref)}"><span class="dl-label">Financial statements workbook</span>${sheetNote}<p class="downloads__meta">Full pack · multi-sheet</p></a></li>
+${downloadItem({
+  kind: "XLSX",
+  href: workbookHref,
+  label: "Financial statements (Excel)",
+  note: sheetNote,
+  meta: "Full pack · multi-sheet",
+})}
 ${statementItems}
 </ul>
 </section>`;

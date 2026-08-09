@@ -737,7 +737,8 @@ const STATEMENT_IR_CSS = `
   .fin-table tr.bd-tan>td:first-child{border-top-color:#000}
   .fin-table tr.bd-blue>td:first-child{border-top-color:#666}
   .page-hero__rail{print-color-adjust:exact;-webkit-print-color-adjust:exact}
-  .downloads__item{break-inside:avoid;border-left-color:var(--dna-brand,#243B53)}
+  .downloads__item{break-inside:avoid}
+  .downloads__cta{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 /* end-rs-statement-ir */
 `.trim();

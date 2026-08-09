@@ -947,22 +947,33 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .prose-ul{margin:.65rem 0 1.25rem;padding-left:1.3rem}
 .prose-li{margin:.5rem 0;line-height:1.68}
 .prose-signoff{margin:2rem 0 .45rem;font-weight:700}
-.download-list{list-style:none;margin:0;padding:0;display:grid;gap:.85rem}
-.download-list li{padding:1.05rem 0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent)}
-.dl-link{display:block;color:inherit;text-decoration:none}
-.dl-link:hover .dl-label{color:var(--dna-masthead,#1B2A3A)}
+.download-list{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.download-list li{padding:0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent)}
+.dl-link{color:inherit;text-decoration:none}
 .dl-label{display:block;font-weight:700;font-size:1.02rem}
 .dl-note{display:block;margin-top:.3rem;font-size:.9rem;color:color-mix(in srgb,var(--dna-ink,#111) 60%,var(--dna-paper,#fff))}
-/* IR delivery pack — downloads as agency handoff surface */
+/* IR delivery pack — investor download list with explicit CTAs */
 .downloads{max-width:var(--rs-rail);margin:0 auto;padding:0 var(--rs-gutter) var(--rs-space-6);box-sizing:border-box}
-.downloads__lede{margin:0 0 1.35rem;max-width:42rem;font-size:1.02rem;line-height:1.65;color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff))}
-.downloads__grid{list-style:none;margin:0;padding:0;display:grid;gap:1rem}
-.downloads__item{display:grid;grid-template-columns:auto 1fr;gap:.85rem 1.1rem;align-items:start;padding:1.15rem 1.25rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);border-left:3px solid var(--dna-brand,#243B53);background:linear-gradient(180deg,var(--dna-paper,#fff),color-mix(in srgb,var(--dna-shading,#F2F2F2) 32%,var(--dna-paper,#fff)))}
-.downloads__item--muted{border-left-color:color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);opacity:.92}
-.downloads__kind{display:inline-flex;align-items:center;justify-content:center;min-width:3.4rem;padding:.35rem .45rem;font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dna-on-brand,#fff);background:var(--dna-masthead,#1B2A3A)}
-.downloads__item a.dl-link{grid-column:2}
-.downloads__item > .dl-label,.downloads__item > .dl-note{grid-column:2}
-.downloads__meta{margin:.35rem 0 0;font-size:.78rem;letter-spacing:.04em;color:color-mix(in srgb,var(--dna-ink,#111) 48%,var(--dna-paper,#fff))}
+.downloads__lede{margin:0 0 1.15rem;max-width:42rem;font-size:1.02rem;line-height:1.65;color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff))}
+.downloads__grid{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent)}
+.downloads__item{margin:0;padding:0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);background:transparent}
+.downloads__item--muted{opacity:.92}
+.downloads__row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.85rem 1.15rem;align-items:center;padding:1.15rem 0;color:inherit;text-decoration:none;box-sizing:border-box}
+.downloads__row--static{cursor:default}
+.downloads__row:hover .downloads__label{color:var(--dna-masthead,#1B2A3A)}
+.downloads__row:hover .downloads__cta{filter:brightness(1.04)}
+.downloads__row:focus-visible{outline:2px solid var(--dna-brand,#243B53);outline-offset:3px}
+.downloads__kind{display:inline-flex;align-items:center;justify-content:center;align-self:start;margin-top:.15rem;min-width:3.35rem;padding:.38rem .45rem;font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dna-on-brand,#fff);background:var(--dna-masthead,#1B2A3A)}
+.downloads__copy{min-width:0;display:flex;flex-direction:column;gap:.2rem}
+.downloads__label{display:block;font-weight:700;font-size:1.02rem;line-height:1.35;color:var(--dna-ink,#231F20)}
+.downloads__note{display:block;font-size:.9rem;line-height:1.5;color:color-mix(in srgb,var(--dna-ink,#111) 60%,var(--dna-paper,#fff))}
+.downloads__meta{display:block;margin-top:.15rem;font-size:.78rem;letter-spacing:.04em;color:color-mix(in srgb,var(--dna-ink,#111) 48%,var(--dna-paper,#fff))}
+.downloads__cta{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:.62rem 1.15rem;font-size:.82rem;font-weight:800;letter-spacing:.04em;line-height:1;color:var(--dna-on-brand,#fff);background:var(--dna-brand,#243B53);border:1px solid transparent;white-space:nowrap}
+.downloads__cta--disabled{color:color-mix(in srgb,var(--dna-ink,#111) 45%,var(--dna-paper,#fff));background:color-mix(in srgb,var(--dna-ink,#111) 8%,var(--dna-paper,#fff));font-weight:700}
+@media (max-width:640px){
+  .downloads__row{grid-template-columns:auto minmax(0,1fr);gap:.7rem .85rem;padding:1rem 0}
+  .downloads__cta{grid-column:2;justify-self:start;margin-top:.15rem}
+}
 /* Notes index — IR notes product chrome */
 .notes-index{margin:0 auto 1.5rem;padding:1.15rem 1.25rem 1.25rem;max-width:var(--rs-rail);border:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);border-top:3px solid var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff));box-sizing:border-box}
 .notes-index__lede{margin:0 0 .85rem;font-size:.95rem;line-height:1.55;color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff))}
@@ -1220,7 +1231,10 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 [data-theme="statutory"] .downloads__kind{
   color:var(--dna-on-brand,#fff);background:var(--dna-brand,#243B53);
 }
-[data-theme="statutory"] .downloads__item{border-left-color:var(--dna-brand,#243B53)}
+[data-theme="statutory"] .downloads__cta{
+  color:var(--dna-on-brand,#fff);background:var(--dna-brand,#243B53);
+}
+[data-theme="statutory"] .downloads__row:focus-visible{outline-color:var(--dna-brand,#243B53)}
 
 /* Bright DNA yellow (MTN) — premium yellow language without painting the masthead yellow */
 html[data-theme="statutory"][data-bright-brand="1"] .home-cta__primary{
@@ -1235,6 +1249,9 @@ html[data-theme="statutory"][data-bright-brand="1"] .site-footer__accent{
   height:5px;background:var(--dna-brand,#FFCB04);
 }
 html[data-theme="statutory"][data-bright-brand="1"] .downloads__kind{
+  color:var(--dna-on-brand,#262626);background:var(--dna-brand,#FFCB04);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .downloads__cta{
   color:var(--dna-on-brand,#262626);background:var(--dna-brand,#FFCB04);
 }
 html[data-theme="statutory"][data-bright-brand="1"] .kpi-card{
