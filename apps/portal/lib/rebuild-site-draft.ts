@@ -40,6 +40,11 @@ export type RebuildSiteDraftOptions = {
   note?: string;
   /** When true (default), refuse to persist if Gate A/B or reliability fail. */
   hardFailGates?: boolean;
+  /**
+   * Optional IR theme override applied for this rebuild (avoids blob read-after-write
+   * races right after persistProjectTheme). Written through to DesignDNA for render.
+   */
+  themeId?: "classic" | "editorial";
 };
 
 async function resolveBrand(
@@ -114,7 +119,13 @@ export async function rebuildProjectSiteDraft(
     throw new RebuildSiteDraftError(`missing dna/extraction on run ${run.id}`, 409);
   }
 
-  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8"));
+  const dna = JSON.parse((await getPrivate(dnaRow.blobPath)).toString("utf8")) as Record<
+    string,
+    unknown
+  >;
+  if (opts.themeId) {
+    dna.theme_id = opts.themeId;
+  }
   const extraction = JSON.parse((await getPrivate(extRow.blobPath)).toString("utf8"));
 
   let sourcePdfBytes: Buffer | null = null;
@@ -172,7 +183,7 @@ export async function rebuildProjectSiteDraft(
   }
 
   const built = buildMultipageExport({
-    dna,
+    dna: dna as Parameters<typeof buildMultipageExport>[0]["dna"],
     extraction,
     projectId,
     company: project.companyName ?? extraction.source?.pdf_meta?.title ?? "Company",

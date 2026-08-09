@@ -212,5 +212,15 @@ export async function persistProjectTheme(opts: {
     })
     .where(eq(schema.artifacts.id, art.id));
 
-  return loadProjectTheme(opts.projectId);
+  // Prefer in-memory values after write — blob get can briefly return a stale object.
+  const suggested = await loadProjectTheme(opts.projectId).catch(() => null);
+  return {
+    themeId,
+    suggestedThemeId: suggested?.suggestedThemeId ?? themeId,
+    suggestReason: suggested?.suggestReason ?? "",
+    dnaId: typeof dna.dna_id === "string" ? dna.dna_id : null,
+    revision: typeof dna.revision === "number" ? dna.revision : 1,
+    blobPath: art.blobPath,
+    operatorOverride: true,
+  };
 }

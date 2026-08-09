@@ -103,6 +103,8 @@ export async function PUT(
         projectId,
         note: `rebuilt after IR theme → ${snap.themeId} by ${operator.email}`,
         hardFailGates: true,
+        // Pass through so render does not depend on blob read-after-write.
+        themeId: snap.themeId,
       });
       return Response.json({
         ok: true,
