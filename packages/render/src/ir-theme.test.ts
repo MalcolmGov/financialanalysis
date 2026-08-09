@@ -56,7 +56,7 @@ describe("ir-theme", () => {
       '[data-theme="editorial"] .home-hero h1{color:var(--dna-ink,#231F20)',
     );
     expect(CHROME_CSS).toContain(
-      '[data-theme="editorial"] .home-kicker{color:var(--dna-brand,#243B53)}',
+      '[data-theme="editorial"] .home-kicker{color:var(--dna-brand-text,var(--dna-ink,#231F20))}',
     );
     expect(CHROME_CSS).toContain(
       "[data-theme=\"editorial\"] .home-hero__logo--raster{mix-blend-mode:multiply}",

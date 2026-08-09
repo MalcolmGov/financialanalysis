@@ -1,4 +1,5 @@
 import type { Blueprint, DesignDNA } from "@rs/contracts";
+import { resolveIrChromeTokens } from "@rs/render";
 import { buildTokenBlock } from "./studio";
 
 /**
@@ -87,21 +88,30 @@ export function buildBlueprintV1(opts: {
 }): Omit<Blueprint, "checksum"> {
   const { dna } = opts;
   const roles = dna.palette.roles;
-  const paper = roles.paper?.hex ?? "#FFFFFF";
-  const ink = roles.ink?.hex ?? "#111111";
-  const headerBg = resolveTableColor(
-    dna.table_style.header_bg,
-    roles,
-    roles["table-header-bg"]?.hex ?? roles.brand?.hex ?? ink,
-  );
-  const headerFg = resolveTableColor(
-    dna.table_style.header_text,
-    roles,
-    roles["table-header-text"]?.hex ?? "#FFFFFF",
-  );
+  const chrome = resolveIrChromeTokens(roles);
+  const paper = chrome.paper;
+  const ink = chrome.ink;
+  // Prefer contrast-safe chrome tokens over raw DNA table roles (MTN white/white).
+  const headerBg = chrome.tableHeaderBg;
+  const headerFg = chrome.tableHeaderText;
 
-  const values: Record<string, string> = {};
-  for (const [role, entry] of Object.entries(roles)) values[`--dna-${role}`] = entry.hex;
+  const values: Record<string, string> = {
+    "--dna-paper": chrome.paper,
+    "--dna-ink": chrome.ink,
+    "--dna-brand": chrome.brand,
+    "--dna-accent": chrome.accent,
+    "--dna-masthead": chrome.masthead,
+    "--dna-on-brand": chrome.onBrand,
+    "--dna-brand-text": chrome.brandText,
+    "--dna-table-header-bg": chrome.tableHeaderBg,
+    "--dna-table-header-text": chrome.tableHeaderText,
+    "--dna-shading": chrome.shading,
+    "--dna-footer-accent": chrome.footerAccent,
+  };
+  for (const [role, entry] of Object.entries(roles)) {
+    const key = `--dna-${role}`;
+    if (!(key in values) && entry?.hex) values[key] = entry.hex;
+  }
 
   // tokens.css must include usable rules — :root alone leaves statement tables
   // as browser-default unstyled markup (broken-looking export).
@@ -230,6 +240,7 @@ ${STATEMENT_BASE_CSS}`;
     usage_rules: [
       "Numeric slots accept only ext:/doc: references — never a literal value.",
       "Colors must be applied via var(--dna-*) tokens; a literal hex outside the token set fails the conformance linter.",
+      "Sitemap adapts to DocModel shape: short interim PDFs keep Home · Commentary · Financials · Admin · Downloads; large AFS packs expand with Directors' report, auditor's report, accounting policies, and paginated note groups when those sections/tables exist — sticky nav, footer, explore, pager, and _meta/export.json all follow the same SitePlan.",
     ],
   };
 }

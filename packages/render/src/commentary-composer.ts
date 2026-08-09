@@ -100,7 +100,11 @@ function sectionInnerHtml(
         parts.push(`<p class="commentary-dek"${src}>${escapeHtml(text)}</p>`);
       } else if (/^directors['']?\s*report$/i.test(text)) {
         // Band title already covers this.
-      } else if (/^(?:\d{1,2}\.\s*)?accounting policies\b/i.test(text)) {
+      } else if (
+        /^(?:\d{1,2}\.\s*)?(?:accounting policies|accounting framework|material accounting policies)\b/i.test(
+          text,
+        )
+      ) {
         // Band title already covers this.
       } else {
         parts.push(`<h3 class="prose-subh"${src}>${escapeHtml(text)}</h3>`);
@@ -157,7 +161,8 @@ function bandHtml(
         // Ops KPI table captions restated as band title — skip duplicate.
         !(band.kind === "reviewOfOperations" && /review\s+of\s+operations/i.test(titleText)) &&
         !(band.kind === "directorsReport" && /directors['']?\s*report/i.test(titleText)) &&
-        !(band.kind === "accountingPolicies" && /accounting policies/i.test(titleText));
+        !(band.kind === "accountingPolicies" &&
+          /accounting policies|accounting framework/i.test(titleText));
       const titleSrc = sec.title?.src_ref
         ? ` data-src="${escapeHtml(sec.title.src_ref)}"`
         : "";
@@ -274,7 +279,41 @@ export function composeCommentaryBody(
       ),
     });
   }
+  // Never-drop: if no primary bands matched, surface any other narrative prose
+  // present in the DocModel (audit committee, CEO/CFO statement, etc.).
   if (!rendered.length) {
+    const FALLBACK_KINDS = new Set([
+      "highlights",
+      "other",
+      "forwardLooking",
+      "shareholderInfo",
+    ]);
+    const narrative = sections.filter(
+      (s) =>
+        FALLBACK_KINDS.has(s.kind) &&
+        s.blocks.some((b) => b.kind !== "table" && Boolean((b.text ?? "").trim())),
+    );
+    if (narrative.length) {
+      const bodies = narrative
+        .slice(0, 3)
+        .map((sec) => {
+          const inner = sectionInnerHtml(sec, { maxBlocks: 12 });
+          if (!inner) return "";
+          const title = (sec.title?.text ?? "Narrative").trim();
+          return `<section class="commentary-section" data-kind="${escapeHtml(sec.kind)}" data-dna-component="commentary-section">
+<header class="commentary-section__hdr">
+<p class="commentary-section__eyebrow">From the report</p>
+<h2 class="commentary-section__title">${escapeHtml(title)}</h2>
+</header>
+<div class="commentary-section__body prose-rail">${inner}</div>
+</section>`;
+        })
+        .filter(Boolean)
+        .join("\n");
+      if (bodies) {
+        return `<p class="commentary-note" data-dna-component="commentary-ops-absent">No shareholder letter was present; narrative below is taken from available extraction prose.</p>${bodies}`;
+      }
+    }
     return `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter, directors' report, or other narrative prose.</p>`;
   }
   const toc = tocHtml(rendered.map((r) => r.band));

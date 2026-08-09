@@ -22,3 +22,4 @@ export * from "./statement-fidelity.js";
 export * from "./legal-company.js";
 export * from "./ir-fallbacks.js";
 export * from "./ir-theme.js";
+export * from "./brand-contrast.js";

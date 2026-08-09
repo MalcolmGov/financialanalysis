@@ -119,12 +119,17 @@ function xlsToolbarHtml(pagePath: string, excel?: DownloadEnrichOptions["excel"]
   const slug = statementExcelSlugForPage(pagePath);
   if (!slug || !excel) return "";
   const file = excel.statementFiles.find((f) => f.slug === slug);
-  const href = file
-    ? assetHrefFromPage(pagePath, file.href)
-    : assetHrefFromPage(pagePath, `assets/excel/${slug}.xlsx`);
   const workbook = assetHrefFromPage(pagePath, excel.workbookHref);
+  // Never invent a per-statement href that isn't in the export manifest
+  // (empty cash-flows / notes would otherwise 404 and fail reliability).
+  if (!file) {
+    return `<div class="xls-toolbar" data-dna-component="xls-toolbar"><span class="xls-toolbar__label">Excel</span><a class="xls-download" href="${escapeHtml(workbook)}">Full workbook</a></div>`;
+  }
+  const href = assetHrefFromPage(pagePath, file.href);
   return `<div class="xls-toolbar" data-dna-component="xls-toolbar"><span class="xls-toolbar__label">Excel</span><a class="xls-download" href="${escapeHtml(href)}">Download this statement</a><a class="xls-download xls-download--secondary" href="${escapeHtml(workbook)}">Full workbook</a></div>`;
 }
+
+const STATEMENT_EMPTY_HTML = `<section data-dna-component="statement-empty" class="statement-empty"><p class="prose-p">This statement was not identified as a structured table in the source extraction. Open the source PDF under Downloads for the full figures.</p></section>`;
 
 /**
  * Replace the inner HTML of the first element whose class list includes
@@ -195,7 +200,7 @@ function pageHero(opts: {
   const sub = opts.periodLabel?.trim()
     ? `<p class="page-hero__sub" data-allow-number>${escapeHtml(opts.periodLabel.trim())}</p>`
     : "";
-  return `<header class="page-hero" data-dna-component="page-hero"><div class="page-hero__rail" aria-hidden="true"></div><div class="page-hero__inner">${crumb}<p class="page-hero__eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(opts.title)}</h1>${sub}</div></header>`;
+  return `<header class="page-hero" data-dna-component="page-hero"><div class="page-hero__rail" aria-hidden="true"></div><div class="page-hero__inner">${crumb}<p class="page-hero__eyebrow" data-allow-number>${escapeHtml(eyebrow)}</p><h1 data-allow-number>${escapeHtml(opts.title)}</h1>${sub}</div></header>`;
 }
 
 /** Map table src → note number from section metadata + table title cells. */
@@ -248,7 +253,10 @@ function anchorNotes(
  * Tables already on the page keep their anchors; prose fills gaps so statement
  * note links always resolve.
  */
-function notesProseBlocks(docModel: FinancialDocModel): string {
+function notesProseBlocks(
+  docModel: FinancialDocModel,
+  range?: { lo: number; hi: number },
+): string {
   const notesSec = docModel.sections.find(
     (s) => s.kind === "note" && s.id === "doc:sec_notes",
   );
@@ -286,6 +294,7 @@ function notesProseBlocks(docModel: FinancialDocModel): string {
   }
 
   return [...byN.values()]
+    .filter((b) => (range ? b.n >= range.lo && b.n <= range.hi : true))
     .sort((a, b) => a.n - b.n)
     .map((b) => {
       const id = noteAnchorId(b.n);
@@ -300,6 +309,15 @@ function notesProseBlocks(docModel: FinancialDocModel): string {
       return `<section class="note-block" id="${id}" data-dna-component="note-prose"><h2 class="note-title"${titleSrc} data-allow-number>${escapeHtml(b.title)}</h2>${paras}</section>`;
     })
     .join("\n");
+}
+
+/** Parse notes-1-10.html / notes-3.html into an inclusive note-number range. */
+function noteRangeFromPath(path: string): { lo: number; hi: number } | null {
+  const m = /^financials\/notes-(\d+)(?:-(\d+))?\.html$/.exec(path);
+  if (!m) return null;
+  const lo = Number(m[1]);
+  const hi = m[2] != null ? Number(m[2]) : lo;
+  return { lo, hi };
 }
 
 /**
@@ -354,7 +372,9 @@ export function enrichMultiPageFiles(
       ),
     ].map((m) => m[0]);
     const compactAfsBands = Boolean(
-      out["directors-report.html"] || out["financials/accounting-policies.html"],
+      out["directors-report.html"] ||
+        out["auditors-report.html"] ||
+        out["financials/accounting-policies.html"],
     );
     const prose = composeCommentaryBody(docModel, { opsTablesHtml, compactAfsBands });
     const hasLetter = docModel.sections.some((s) => s.kind === "letter");
@@ -400,6 +420,28 @@ export function enrichMultiPageFiles(
     );
     html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
     out["directors-report.html"] = injectInto(html, "prose-body", body);
+  }
+
+  if (out["auditors-report.html"]) {
+    const prose = wrapLooseListItems(
+      sectionBlocksHtml(docModel.sections, ["auditorReport"]),
+    );
+    const hero = pageHero({
+      path: "auditors-report.html",
+      title: "Independent auditor's report",
+      company,
+      periodLabel,
+      eyebrow: "Assurance",
+    });
+    const body =
+      prose ||
+      `<p class="prose-p">Independent auditor's report prose was not present in the source extraction.</p>`;
+    let html = out["auditors-report.html"].replace(
+      /<header class="page-hero"[\s\S]*?<\/header>/i,
+      "",
+    );
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    out["auditors-report.html"] = injectInto(html, "prose-body", body);
   }
 
   if (out["financials/accounting-policies.html"]) {
@@ -468,22 +510,53 @@ export function enrichMultiPageFiles(
     out["downloads.html"] = injectInto(html, "prose-body", downloadsHtml(docModel, downloadOpts));
   }
 
-  if (out["financials/notes.html"]) {
-    let html = out["financials/notes.html"];
-    // Strip any prior title banner before injecting hero.
+  // Notes index + optional paginated note-group pages from adaptive SitePlan.
+  const notePages = plan.pages.filter(
+    (p) =>
+      p.path === "financials/notes.html" ||
+      /^financials\/notes-\d/.test(p.path),
+  );
+  const hasNoteGroups = notePages.some((p) => p.path !== "financials/notes.html");
+  for (const page of notePages) {
+    let html = out[page.path];
+    if (!html) continue;
     html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
     html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
+    const isIndex = page.path === "financials/notes.html";
     const hero = pageHero({
-      path: "financials/notes.html",
-      title: "Notes to the financial statements",
+      path: page.path,
+      title: isIndex ? "Notes to the financial statements" : page.title,
       company,
       periodLabel,
-      eyebrow: "Condensed Consolidated — Unaudited",
+      eyebrow: isIndex
+        ? hasNoteGroups
+          ? "Notes index"
+          : "Condensed Consolidated — Unaudited"
+        : "Notes to the financial statements",
     });
-    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}`);
+    let toc = "";
+    if (isIndex && hasNoteGroups) {
+      const links = notePages
+        .filter((p) => p.path !== "financials/notes.html")
+        .map((p) => {
+          const href = p.path.replace(/^financials\//, "");
+          return `<li><a href="${escapeHtml(href)}">${escapeHtml(p.title)}</a></li>`;
+        })
+        .join("");
+      toc = `<nav class="notes-index" data-dna-component="notes-index" aria-label="Note groups" data-allow-number><p class="prose-p">This annual report has a large notes set — open a group below, or use the Financials menu.</p><ul class="prose-ul">${links}</ul></nav>`;
+    }
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${toc}`);
     html = anchorNotes(html, docModel);
-    html = mergeNotesPage(html, notesProseBlocks(docModel));
-    out["financials/notes.html"] = html;
+    // Index with groups: TOC only (avoid dumping every note). Group pages:
+    // prose for that range. Single-page notes: full prose merge as before.
+    const range = noteRangeFromPath(page.path);
+    if (!(isIndex && hasNoteGroups)) {
+      html = mergeNotesPage(
+        html,
+        notesProseBlocks(docModel, range ?? undefined),
+      );
+    }
+    out[page.path] = html;
   }
 
   // Legacy aggregate → secondary "All tables" surface (kept for tools/compat).
@@ -519,10 +592,10 @@ export function enrichMultiPageFiles(
     const jumpLinks = finPages
       .map((p) => {
         const href = `../${p.path}`;
-        return `<a href="${escapeHtml(href)}">${escapeHtml(p.title)}</a>`;
+        return `<a href="${escapeHtml(href)}" data-allow-number>${escapeHtml(p.title)}</a>`;
       })
       .join("");
-    const jump = `<nav class="statements-aggregate__jump" data-dna-component="statements-aggregate" aria-label="Primary statement pages"><p class="statements-aggregate__label">Prefer individual statements</p>${jumpLinks}<p class="statements-aggregate__note">This page concatenates every table for tooling and offline checks. Use the Financials menu for the designed IR pages.</p></nav>`;
+    const jump = `<nav class="statements-aggregate__jump" data-dna-component="statements-aggregate" aria-label="Primary statement pages" data-allow-number><p class="statements-aggregate__label">Prefer individual statements</p>${jumpLinks}<p class="statements-aggregate__note">This page concatenates every table for tooling and offline checks. Use the Financials menu for the designed IR pages.</p></nav>`;
     html = html.replace(
       /(<main[^>]*>)/i,
       (_m, open: string) => `${open}${hero}${jump}`,
@@ -543,7 +616,7 @@ export function enrichMultiPageFiles(
     if (!html) continue;
     // Prose-only AFS pages under financials/ already have heroes above.
     if (page.path.endsWith("accounting-policies.html")) continue;
-    if (page.path.endsWith("notes.html")) {
+    if (page.path === "financials/notes.html" || /^financials\/notes-\d/.test(page.path)) {
       // Notes hero already injected above; add toolbar after hero when excel present.
       if (
         downloadOpts.excel &&
@@ -558,14 +631,36 @@ export function enrichMultiPageFiles(
     }
     html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
     html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
+    const dualEntity =
+      /Group and Company/i.test(page.title) ||
+      (/\bGROUP\b/i.test(html) && /\bCOMPANY\b/i.test(html));
     const hero = pageHero({
       path: page.path,
-      title: page.title,
+      title: page.title.replace(/\s*\(Group and Company\)\s*$/i, ""),
       company,
       periodLabel,
+      eyebrow: dualEntity ? "Group and Company" : undefined,
     });
     const bar = xlsToolbarHtml(page.path, downloadOpts.excel);
-    out[page.path] = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${bar}`);
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${bar}`);
+    // Empty statement pages: honest empty-state (no invented figures) so
+    // reliability does not hard-fail on missing .fin-table.
+    if (
+      /^financials\/(income-statement|balance-sheet|cash-flows|changes-in-equity)\.html$/i.test(
+        page.path,
+      ) &&
+      !/class="[^"]*fin-table/.test(html) &&
+      !/data-dna-component="statement-empty"/.test(html)
+    ) {
+      html = html.replace(
+        /(<\/header>(?:\s*<div class="xls-toolbar"[\s\S]*?<\/div>)?)/i,
+        (m) => `${m}${STATEMENT_EMPTY_HTML}`,
+      );
+      if (!/data-dna-component="statement-empty"/.test(html)) {
+        html = html.replace(/(<main[^>]*>)/i, (m) => `${m}${STATEMENT_EMPTY_HTML}`);
+      }
+    }
+    out[page.path] = html;
   }
 
   return out;

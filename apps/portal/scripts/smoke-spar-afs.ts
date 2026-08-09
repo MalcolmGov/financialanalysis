@@ -36,7 +36,7 @@ const bp = {
 const dm = mapToDocModel(extraction, {
   company: "The SPAR Group Limited",
   period_label: "for the year ended 26 September 2025",
-  doc_kind: "afs",
+  doc_kind: "annual_audited",
   currency: "ZAR",
 });
 
@@ -55,9 +55,14 @@ const enriched = enrichMultiPageFiles(files, plan, dm, {}, { extraction });
 
 const commentary = enriched["commentary.html"] ?? "";
 const dr = enriched["directors-report.html"] ?? "";
+const ar = enriched["auditors-report.html"] ?? "";
 const ap = enriched["financials/accounting-policies.html"] ?? "";
+const notesIdx = enriched["financials/notes.html"] ?? "";
 const income = enriched["financials/income-statement.html"] ?? "";
 const bs = enriched["financials/balance-sheet.html"] ?? "";
+const home = enriched["index.html"] ?? "";
+const noteGroupPages = plan.pages.filter((p) => /^financials\/notes-\d/.test(p.path));
+const navHrefs = plan.nav.map((n) => n.href);
 
 const checks = {
   noOldPlaceholder: !commentary.includes(
@@ -66,12 +71,18 @@ const checks = {
   commentaryDirectors: /Directors['']?\s*report/i.test(commentary),
   commentaryWarehousing: /warehousing/i.test(commentary),
   directorsPage: dr.length > 0 && /warehousing/i.test(dr),
+  auditorPage: ar.length > 0 && /audit/i.test(ar),
   apPage: ap.length > 0 && /IFRS|accounting policies/i.test(ap),
+  noteGroups: noteGroupPages.length >= 2,
+  notesIndexToc: /data-dna-component="notes-index"/.test(notesIdx),
+  expandedNav: navHrefs.length >= 14,
+  exploreHasDirectors: /explore-card[\s\S]*directors-report\.html/i.test(home),
   incomeDualEntity: income.includes('data-density="dual-entity"') && income.includes("h-entity"),
   incomeSoftLabel: /Gross profit<br\s*\/?>/i.test(income),
   incomeDualAmt: /14 144\.8[\s\S]*?<br/.test(income),
   bsDualEntity: bs.includes('data-density="dual-entity"'),
   bsNoAutoHyphen: /hyphens:none/.test(bs),
+  dualEntityEyebrow: /Group and Company/i.test(income),
 };
 
 for (const [k, v] of Object.entries(checks)) {

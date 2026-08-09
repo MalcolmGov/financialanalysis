@@ -40,9 +40,17 @@ export function checkStatementIrFidelity(
   const markup = markupOnly(html);
   const hasTable =
     /class="[^"]*fin-table/.test(markup) || /<table class="fin-table"/.test(markup);
+  const hasEmptyState = /data-dna-component="statement-empty"/.test(markup);
   if (!hasTable) {
     findings.push(
-      finding(false, "statement-fin-table", path, `${path}: missing .fin-table`),
+      finding(
+        hasEmptyState,
+        "statement-fin-table",
+        path,
+        hasEmptyState
+          ? `${path}: no .fin-table — documented empty-state (extraction gap)`
+          : `${path}: missing .fin-table`,
+      ),
     );
     return findings;
   }

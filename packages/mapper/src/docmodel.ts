@@ -209,9 +209,14 @@ const NOTES_START = /notes to the condensed|notes to the consolidated|notes to t
 const DIRECTORS_REPORT_START = /directors['']?\s*report/i;
 const DIRECTORS_REPORT_STOP =
   /^(audit committee report|remuneration committee|nominations committee|independent auditor|statement of (profit or loss|financial position|changes in equity|cash flows)|notes to the)/i;
-/** Accounting policies (often note 1) — stop at the next numbered note. */
-const ACCOUNTING_POLICIES_START = /^(?:\d{1,2}\.\s*)?accounting policies\b/i;
+/** Accounting policies / framework (often note 1) — stop at the next numbered note. */
+const ACCOUNTING_POLICIES_START =
+  /^(?:\d{1,2}\.\s*)?(?:accounting policies|accounting framework|material accounting policies)\b/i;
 const ACCOUNTING_POLICIES_STOP = /^(?:[2-9]|\d{2})\.\s+\S/;
+/** Independent auditor's report — stop before directors' report / statements / notes. */
+const AUDITOR_REPORT_START = /independent\s+auditor'?s?\s+report|auditor'?s?\s+report/i;
+const AUDITOR_REPORT_STOP =
+  /^(directors['']?\s*report|statement of (profit or loss|financial position|changes in equity|cash flows)|notes to the|audit committee report)/i;
 /** Prose ends where the primary statements begin. */
 const STATEMENTS_START =
   /statement of (profit or loss|financial position|changes in equity|cash flows)|condensed consolidated financial statements|notes to the/i;
@@ -400,6 +405,29 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
       });
   }
 
+  // Independent auditor's report — AFS assurance narrative when present.
+  const arStart = flat.findIndex(
+    (b) => b.type === "heading" && AUDITOR_REPORT_START.test((b.text ?? "").trim()),
+  );
+  if (arStart >= 0) {
+    const blocks = proseBlocks(arStart, (b, i) => {
+      if (b.type === "heading" && AUDITOR_REPORT_STOP.test((b.text ?? "").trim())) return true;
+      // Soft cap — full audit opinions can be long; keep microsite readable.
+      return i - arStart > 40;
+    });
+    if (blocks.length)
+      sections.push({
+        id: "doc:sec_auditorReport",
+        kind: "auditorReport",
+        title: {
+          text: flat[arStart].text ?? "Independent auditor's report",
+          src_ref: `ext:${flat[arStart].id}`,
+        },
+        blocks,
+        items: [],
+      });
+  }
+
   // Lexicon-driven short sections on the cover (shareholder info, directors, …).
   const seenKinds = new Set(sections.map((s) => s.kind));
   for (let i = 0; i < flat.length; i++) {
@@ -415,6 +443,7 @@ export function extractProseSections(extraction: ExtractionResult): FinancialDoc
       kind === "note" ||
       kind === "directorsReport" ||
       kind === "accountingPolicies" ||
+      kind === "auditorReport" ||
       seenKinds.has(kind)
     ) {
       continue;

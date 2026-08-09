@@ -383,4 +383,27 @@ describe("CommentaryComposer", () => {
     expect(html).toContain("no separate shareholder letter");
     expect(html).not.toContain("Commentary will appear when the extraction includes a shareholder letter.");
   });
+
+  it("never-drops other narrative when letter and directors' report are absent", () => {
+    const dm = docModel();
+    dm.sections = [
+      {
+        id: "doc:sec_other",
+        kind: "other",
+        title: { text: "CEO and CFO responsibility statement", src_ref: "ext:ceo" },
+        blocks: [
+          {
+            kind: "paragraph",
+            text: "Each of the directors, whose names are stated below, hereby confirm that the annual financial statements fairly present.",
+            src_ref: "ext:ceo1",
+          },
+        ],
+        items: [],
+      },
+    ];
+    const html = composeCommentaryBody(dm);
+    expect(html).toContain("fairly present");
+    expect(html).toContain("No shareholder letter was present");
+    expect(html).not.toContain("Commentary will appear when the extraction includes a shareholder letter");
+  });
 });

@@ -633,6 +633,8 @@ export function statementExcelSlugForPage(pagePath: string): string | null {
   if (pagePath === "financials/balance-sheet.html") return "balance-sheet";
   if (pagePath === "financials/changes-in-equity.html") return "changes-in-equity";
   if (pagePath === "financials/cash-flows.html") return "cash-flows";
-  if (pagePath === "financials/notes.html") return "notes";
+  if (pagePath === "financials/notes.html" || /^financials\/notes-\d/.test(pagePath)) {
+    return "notes";
+  }
   return null;
 }

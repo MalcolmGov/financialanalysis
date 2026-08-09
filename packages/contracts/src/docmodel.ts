@@ -84,6 +84,8 @@ export const SectionKind = z.enum([
   "directorsReport",
   /** Accounting policies intro / note 1 narrative (AFS). */
   "accountingPolicies",
+  /** Independent auditor's report narrative (AFS). */
+  "auditorReport",
   "forwardLooking",
   "contacts",
   "disclaimers",

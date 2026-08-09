@@ -60,9 +60,26 @@ describe("extractProseSections", () => {
     expect(dm.sections.some((s) => s.kind === "highlights")).toBe(true);
   });
 
-  it("captures Directors' report and Accounting policies for AFS extractions", () => {
+  it("captures ACCOUNTING FRAMEWORK as accounting policies (MTN-style)", () => {
     const ex = extraction();
     ex.body = [
+      heading("h-fw", 40, "ACCOUNTING FRAMEWORK AND MATERIAL ACCOUNTING POLICIES"),
+      para("p-fw1", 40, "These Group financial statements have been prepared in accordance with IFRS."),
+      heading("h-n2", 42, "2. Revenue"),
+      para("p-n2", 42, "Revenue is recognised when control transfers."),
+    ];
+    const secs = extractProseSections(ex);
+    const ap = secs.find((s) => s.kind === "accountingPolicies");
+    expect(ap).toBeTruthy();
+    expect(ap!.blocks.map((b) => b.text).join(" ")).toContain("prepared in accordance with IFRS");
+    expect(ap!.blocks.map((b) => b.text).join(" ")).not.toContain("control transfers");
+  });
+
+  it("captures Directors' report, auditor's report, and Accounting policies for AFS extracts", () => {
+    const ex = extraction();
+    ex.body = [
+      heading("h-ar", 8, "Independent Auditor's report"),
+      para("p-ar1", 8, "We have audited the consolidated financial statements of the Company."),
       heading("h-dr", 10, "Directors' report"),
       para("p-dr1", 10, "The directors of the Company have the pleasure in submitting their report."),
       heading("h-nature", 10, "Nature of business"),
@@ -77,8 +94,11 @@ describe("extractProseSections", () => {
       para("p-n2", 30, "Revenue is recognised when control transfers."),
     ];
     const secs = extractProseSections(ex);
+    const ar = secs.find((s) => s.kind === "auditorReport");
     const dr = secs.find((s) => s.kind === "directorsReport");
     const ap = secs.find((s) => s.kind === "accountingPolicies");
+    expect(ar).toBeTruthy();
+    expect(ar!.blocks.map((b) => b.text).join(" ")).toContain("We have audited the consolidated");
     expect(dr).toBeTruthy();
     expect(dr!.blocks.map((b) => b.text).join(" ")).toContain("warehousing and distribution");
     expect(dr!.blocks.map((b) => b.text).join(" ")).not.toContain("committee met four times");

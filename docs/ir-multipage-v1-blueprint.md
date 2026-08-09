@@ -55,3 +55,65 @@ Brand DNA colors + Brand kit logo still apply on top of the preset.
 3. `theme_id` selects classic vs editorial chrome (`data-theme` + composer layout).
 4. Brand kit logo/hero are project-scoped.
 5. Missing DNA → neutral slate chrome, plus checklist warnings — not silent DRDGOLD styling.
+
+---
+
+## Multi-issuer study (2026-08-09)
+
+Production evidence from three live uploads. Canvas: `world-class-ir-converter.canvas.tsx` (Cursor canvases).
+
+| Issuer | Project ID | PDF | Doc shape | Prod site pages | Theme | Capture verdict |
+|---|---|---|---|---|---|---|
+| **DRDGOLD** | `444cd443-97cc-4b9c-b0f6-eef4f65c2f98` | 10 pp | Interim unaudited | 10 | `classic` | **Strong** — letter, ops, dividend, statements, notes |
+| **SPAR** | `7947eb5f-d836-43b4-8779-8bfdcf164471` | 80 pp | AFS dual-entity | 12 | `editorial` | **Partial** — directors + policies; auditor page missing; notes dump (95 tables) |
+| **MTN** | `8ed9620c-804d-4370-882d-8df8c1243f0c` | 148 pp | AFS Group/Company split | 10 | `classic` | **Thin** — blank commentary placeholder; fixed interim IA; notes dump (162 tables); yellow chrome risk |
+
+Prefer MTN `8ed9620c…` over older `f3cc2ac8…` (24 pp truncated stub; legal name resolved as “Group financial statements”; corporate reliability fail).
+
+### What each PDF contains (summary)
+
+- **DRDGOLD** — Condensed HY1: cover highlights, CEO shareholder letter, ops (Ergo/FWGR), cash dividend, four condensed consolidated statements, short notes, administration. Client SVG logo + hero in Brand kit.
+- **SPAR** — Full audited AFS: approval/secretary/auditor (KAMs), directors’ report, audit committee, GROUP+COMPANY primary statements, accounting policies, large notes set. No shareholder letter. Dual-entity column bands render on statement pages.
+- **MTN** — Large Group AFS: statutory reports, directors’ report (incl. litigation), auditor’s report, Group statements, Company statements, accounting framework / material policies, massive notes index. Brand yellow/black; no commissioned hero on latest draft.
+
+### Failure modes observed
+
+| Mode | Where | Implication |
+|---|---|---|
+| Blank commentary | MTN | Composer still waits for shareholder letter; AFS narrative is directors’ report |
+| Fixed ~10-page IA | MTN prod | AFS sections extracted but site stays interim shell |
+| Notes megapage | Spar + MTN | Split needs numbered note titles; MTN mostly “Notes … (continued)” |
+| Auditor page absent | Spar prod | In PDF + local mapper; not on production draft |
+| Bright-brand contrast | MTN `#FFCB04` | Accent OK; masthead/shading must not stay raw yellow |
+| Legal-name / TOC garbage | MTN 24 pp stub | Cover title from TOC band — reject incomplete uploads |
+| Thin AFS narrative | Spar commentary | Teaser + link only; operators still open the PDF for story |
+| Entity model mismatch | Spar vs MTN | Spar = side-by-side GROUP\|COMPANY; MTN = separate Group vs Company books |
+
+### Architecture north star
+
+1. **Doc-shape classifier** → `interim_short` | `afs_dual_entity` | `afs_group_company_split` (drive SitePlan, not a fixed template).
+2. **Never-drop capture** → legal name/period, KPIs, letter **or** directors’ report, dividend, auditor (+ KAMs), policies/framework, primary statements per entity book, every note table, admin, PDF+XLSX.
+3. **Commentary rule** → if no letter, compose from directors’ report / statutory hub — **never** the empty placeholder on AFS.
+4. **Brand stack** → DNA roles + Brand kit (SVG/hero) + `theme_id` + bright-brand contrast remap (`brand-contrast.ts`) before publish.
+5. **Templates** → `classic` (interim/industrial), `editorial` (retail/prose), plus a **statutory hub** layout for letter-less AFS; dual-entity skin ≠ Group/Company split books.
+6. **Complete-IR gates** → shape-complete checklist on top of Gate A/B + corporate reliability (narrative non-empty, auditor/policies when present, notes UX, entity coverage, brand AA, legal name).
+
+### Recommended next build phases
+
+| Week | Ship | Proof on issuers |
+|---|---|---|
+| **1** | Deploy adaptive sitemap + AFS commentary fallback; rebuild MTN/Spar | MTN: directors/auditor pages; no blank commentary |
+| **2** | Note numbering from notes index; policies lexicon (`ACCOUNTING FRAMEWORK`); Group/Company IA branch | Spar notes paginated; MTN policies + Company statements reachable |
+| **3** | Enforce bright-brand contrast in publish gate; statutory-hub theme suggest for letter-less AFS | MTN yellow AA; Spar hub feels intentional |
+| **4** | Complete-IR checklist + operator SLA (rebuild ≤2 clicks; ≤15 min polish after extract) | All three export-ready without PDF babysitting |
+
+Local mapper work already expands Spar/MTN SitePlans beyond production drafts — **deploy + rebuild** is the immediate unlock before deeper note/Company-book work.
+
+### Phase status (2026-08-09)
+
+| Phase | Status | Notes |
+|---|---|---|
+| **1** Adaptive sitemap + commentary never-drop | **Shipped in code** — verify via deploy + Spar/MTN rebuild | `classifyDocShape`, directors/auditor/policies pages, directors→commentary fallback, ACCOUNTING FRAMEWORK lexicon, bright-brand tokens via `buildIrTokenBlock` |
+| **2** Note numbering + policies + Group/Company IA | **Partial** — note groups when numbered ≥12; MTN continued-stubs + Company book still open | |
+| **3** Bright-brand publish gate + statutory hub | **Partial** — contrast remap in token path; publish gate / hub theme still open | |
+| **4** Complete-IR checklist + operator SLA | Open | |

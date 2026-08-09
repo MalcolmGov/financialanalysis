@@ -29,6 +29,8 @@ function escapeHtml(s: string): string {
 const EXPLORE_DESC: Record<string, string> = {
   "commentary.html":
     "Shareholder letter, review of operations, and dividend declaration from the results announcement.",
+  "directors-report.html": "Directors' report narrative from the annual financial statements.",
+  "auditors-report.html": "Independent auditor's report from the annual financial statements.",
   "financials/income-statement.html":
     "Condensed consolidated statement of profit or loss and other comprehensive income.",
   "financials/balance-sheet.html":
@@ -39,6 +41,8 @@ const EXPLORE_DESC: Record<string, string> = {
     "Condensed consolidated statement of cash flows.",
   "financials/notes.html":
     "Notes to the condensed consolidated financial statements.",
+  "financials/accounting-policies.html":
+    "Material accounting policies from the notes to the financial statements.",
   "administration.html": "Corporate, shareholder, and contact information.",
   "downloads.html": "Source PDF and spreadsheet exports for offline analysis.",
 };
@@ -464,8 +468,31 @@ function splitHighlightChunks(text: string): string[] {
 }
 
 function exploreCards(plan: SitePlan): string {
-  const cards = plan.nav
-    .filter((n) => n.href !== "index.html")
+  // Collapse paginated note groups into the Notes index card so explore
+  // stays scannable while sticky nav still lists every group.
+  const seen = new Set<string>();
+  const items = plan.nav.filter((n) => {
+    if (n.href === "index.html") return false;
+    if (/^financials\/notes-\d/.test(n.href)) {
+      if (seen.has("financials/notes.html")) return false;
+      seen.add("financials/notes.html");
+      return false; // Notes index already in nav when groups exist
+    }
+    if (seen.has(n.href)) return false;
+    seen.add(n.href);
+    return true;
+  });
+  // Ensure Notes index appears even if only group hrefs were present.
+  if (
+    plan.nav.some((n) => /^financials\/notes-\d/.test(n.href)) &&
+    !items.some((n) => n.href === "financials/notes.html")
+  ) {
+    const notesIdx = plan.nav.findIndex((n) => n.href.startsWith("financials/"));
+    const card = { label: "Notes", href: "financials/notes.html" };
+    if (notesIdx >= 0) items.splice(Math.min(notesIdx + 4, items.length), 0, card);
+    else items.push(card);
+  }
+  const cards = items
     .map((n, i) => {
       const n_ = String(i + 1).padStart(2, "0");
       const desc =
@@ -473,9 +500,9 @@ function exploreCards(plan: SitePlan): string {
       const cta = exploreCta(n.href, n.label);
       return `<a class="explore-card reveal" href="${escapeHtml(n.href)}">
 <span class="explore-n" data-allow-number>${n_}</span>
-<span class="explore-label">${escapeHtml(n.label)}</span>
+<span class="explore-label" data-allow-number>${escapeHtml(n.label)}</span>
 <span class="explore-desc">${escapeHtml(desc)}</span>
-<span class="explore-cta">${escapeHtml(cta)} <span class="explore-cta__arrow" aria-hidden="true">→</span></span>
+<span class="explore-cta" data-allow-number>${escapeHtml(cta)} <span class="explore-cta__arrow" aria-hidden="true">→</span></span>
 </a>`;
     })
     .join("");
