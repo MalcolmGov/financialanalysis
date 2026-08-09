@@ -28,10 +28,17 @@ export const BRAND_IMG_ONERROR =
 export const BANNER_IMG_ONERROR =
   "this.hidden=true;this.removeAttribute('src');var h=this.closest('.home-hero');if(h){h.classList.remove('home-hero--photo','home-hero--strip','home-hero--page');h.classList.add('home-hero--atmosphere');}";
 
+export interface NavChild {
+  label: string;
+  href: string;
+  /** Visual section label inside Financials dropdown (no link). */
+  heading?: boolean;
+}
+
 export interface NavItem {
   label: string;
   href: string;
-  children?: Array<{ label: string; href: string }>;
+  children?: NavChild[];
 }
 
 export interface PageChrome {
@@ -46,6 +53,23 @@ export interface PageChrome {
 
 const FINANCIALS_PREFIX = "financials/";
 
+/** Detect Group / Company book from path or nav label. */
+export function entityBookFromPath(path: string): "group" | "company" | "dual" | null {
+  if (/financials\/group\//i.test(path)) return "group";
+  if (/financials\/company\//i.test(path)) return "company";
+  return null;
+}
+
+function stripEntityNavPrefix(label: string): string {
+  return label.replace(/^(Group|Company)\s*[·•\-–—]\s*/i, "").trim() || label;
+}
+
+function entityOfNavItem(item: { label: string; href: string }): "group" | "company" | "shared" {
+  if (/financials\/group\//i.test(item.href) || /^Group\b/i.test(item.label)) return "group";
+  if (/financials\/company\//i.test(item.href) || /^Company\b/i.test(item.label)) return "company";
+  return "shared";
+}
+
 /** Group flat nav into sticky bar with a Financials dropdown when applicable. */
 export function groupNav(nav: Array<{ label: string; href: string }>): NavItem[] {
   const financials: Array<{ label: string; href: string }> = [];
@@ -58,6 +82,33 @@ export function groupNav(nav: Array<{ label: string; href: string }>): NavItem[]
     }
   }
   if (financials.length) {
+    const hasSplit =
+      financials.some((f) => entityOfNavItem(f) === "group") &&
+      financials.some((f) => entityOfNavItem(f) === "company");
+    let children: NavChild[];
+    if (hasSplit) {
+      children = [];
+      const buckets: Array<{ key: "group" | "company" | "shared"; title: string }> = [
+        { key: "group", title: "Group" },
+        { key: "company", title: "Company" },
+        { key: "shared", title: "Shared" },
+      ];
+      for (const bucket of buckets) {
+        const items = financials.filter((f) => entityOfNavItem(f) === bucket.key);
+        if (!items.length) continue;
+        if (bucket.key !== "shared") {
+          children.push({ label: bucket.title, href: items[0]!.href, heading: true });
+        }
+        for (const f of items) {
+          children.push({
+            label: bucket.key === "shared" ? f.label : stripEntityNavPrefix(f.label),
+            href: f.href,
+          });
+        }
+      }
+    } else {
+      children = financials.map((f) => ({ label: f.label, href: f.href }));
+    }
     // Insert Financials before Admin/Downloads so AFS pages (e.g. Directors'
     // report) stay top-level ahead of the Financials dropdown.
     const adminAt = top.findIndex((t) => /admin|download/i.test(t.label));
@@ -65,7 +116,7 @@ export function groupNav(nav: Array<{ label: string; href: string }>): NavItem[]
     top.splice(insertAt, 0, {
       label: "Financials",
       href: financials[0]!.href,
-      children: financials,
+      children,
     });
   }
   return top;
@@ -118,6 +169,9 @@ export function renderStickyNav(
       if (item.children?.length) {
         const kids = item.children
           .map((c) => {
+            if (c.heading) {
+              return `<li class="nav-dd-heading" role="presentation" data-allow-number>${escapeHtml(c.label)}</li>`;
+            }
             const href = hrefFrom(currentPath, c.href);
             const isCur = c.href === currentPath ? ' aria-current="page"' : "";
             return `<li><a href="${escapeHtml(href)}"${isCur} data-allow-number>${escapeHtml(c.label)}</a></li>`;
@@ -136,6 +190,9 @@ export function renderStickyNav(
       if (item.children?.length) {
         const kids = item.children
           .map((c) => {
+            if (c.heading) {
+              return `<div class="nav-mobile__heading nav-mobile__heading--sub" data-allow-number>${escapeHtml(c.label)}</div>`;
+            }
             const href = hrefFrom(currentPath, c.href);
             const isCur = c.href === currentPath ? ' aria-current="page"' : "";
             const active = c.href === currentPath ? " is-active" : "";
@@ -182,9 +239,30 @@ export function renderBreadcrumb(
   ];
   if (path.startsWith(FINANCIALS_PREFIX)) {
     crumbs.push(`<span>Financials</span>`);
+    const book = entityBookFromPath(path);
+    if (book === "group") crumbs.push(`<span>Group</span>`);
+    if (book === "company") crumbs.push(`<span>Company</span>`);
   }
   crumbs.push(`<span aria-current="page" data-allow-number>${escapeHtml(title)}</span>`);
   return `<nav class="breadcrumb" aria-label="Breadcrumb">${crumbs.join('<span class="bc-sep" aria-hidden="true">/</span>')}</nav>`;
+}
+
+/** Sticky entity cue under the masthead — Group / Company / dual-column boards. */
+export function renderEntityCue(
+  path: string,
+  opts?: { dualEntity?: boolean },
+): string {
+  if (opts?.dualEntity) {
+    return `<aside class="entity-cue entity-cue--dual" data-dna-component="entity-cue" aria-label="Entity scope"><span class="entity-cue__label">Board</span><span class="entity-cue__pill">Group</span><span class="entity-cue__sep" aria-hidden="true">|</span><span class="entity-cue__pill">Company</span><span class="entity-cue__hint">Side-by-side columns</span></aside>`;
+  }
+  const book = entityBookFromPath(path);
+  if (!book) return "";
+  const label = book === "group" ? "Group" : "Company";
+  const peer =
+    book === "group"
+      ? `<a class="entity-cue__switch" href="${escapeHtml(hrefFrom(path, path.replace("/group/", "/company/")))}">View Company</a>`
+      : `<a class="entity-cue__switch" href="${escapeHtml(hrefFrom(path, path.replace("/company/", "/group/")))}">View Group</a>`;
+  return `<aside class="entity-cue entity-cue--${book}" data-dna-component="entity-cue" data-entity="${book}" aria-label="Entity scope"><span class="entity-cue__label">Viewing</span><span class="entity-cue__pill">${label}</span>${peer}</aside>`;
 }
 
 export function renderPrevNext(
@@ -604,6 +682,20 @@ main[data-dna-component="page-shell"]{max-width:none!important;width:100%;margin
 .nav-dd-menu{display:none;position:absolute;right:0;left:auto;top:calc(100% - 2px);min-width:17.5rem;margin:0;padding:.5rem 0;list-style:none;background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,#070b12);border:1px solid rgba(255,255,255,.12);border-top:2px solid var(--dna-brand,#243B53);box-shadow:0 18px 44px rgba(0,0,0,.32);z-index:50}
 .nav-dd:hover .nav-dd-menu,.nav-dd:focus-within .nav-dd-menu,.nav-dd.is-open .nav-dd-menu{display:block}
 .nav-dd-menu a{display:block;text-transform:none;letter-spacing:-.005em;font-size:.9rem;font-weight:500;padding:.58rem 1.15rem;border-radius:0;min-height:0;color:rgba(255,255,255,.9)}
+.nav-dd-heading{display:block;padding:.7rem 1.15rem .25rem;font-size:.65rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:color-mix(in srgb,var(--dna-brand,#243B53) 55%,#94A3B8);pointer-events:none}
+.nav-dd-heading + li a{padding-top:.4rem}
+.nav-mobile__heading--sub{margin-top:.55rem;padding-left:1.35rem;font-size:.62rem;letter-spacing:.12em;color:color-mix(in srgb,var(--dna-brand,#243B53) 50%,#94A3B8)}
+/* Sticky entity cue — Group / Company / dual boards */
+.entity-cue{position:sticky;top:var(--rs-nav-h,3.6rem);z-index:35;display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .75rem;margin:0;padding:.55rem var(--rs-gutter);background:color-mix(in srgb,var(--dna-paper,#fff) 92%,var(--dna-shading,#F2F2F2));border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);box-sizing:border-box}
+.entity-cue__label{font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--dna-ink,#111) 48%,var(--dna-paper,#fff))}
+.entity-cue__pill{display:inline-flex;align-items:center;padding:.22rem .55rem;font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--dna-masthead,#1B2A3A);background:color-mix(in srgb,var(--dna-brand,#243B53) 14%,var(--dna-paper,#fff));border:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 35%,transparent)}
+.entity-cue--group .entity-cue__pill,.entity-cue--company .entity-cue__pill{background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 8%,var(--dna-paper,#fff));border-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 28%,transparent)}
+.entity-cue__sep{color:color-mix(in srgb,var(--dna-ink,#111) 35%,var(--dna-paper,#fff));font-weight:700}
+.entity-cue__hint{font-size:.78rem;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
+.entity-cue__switch{margin-left:auto;font-size:.78rem;font-weight:700;color:var(--dna-masthead,#1B2A3A);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 55%,transparent)}
+.entity-cue__switch:hover{border-bottom-color:var(--dna-brand,#243B53)}
+.entity-board-intro{margin:0 auto var(--rs-space-3);padding:.85rem 1.05rem;max-width:var(--rs-rail);border-left:3px solid var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 45%,var(--dna-paper,#fff));font-size:.92rem;line-height:1.55;color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff));box-sizing:border-box}
+.entity-board-intro strong{color:var(--dna-masthead,#1B2A3A);font-weight:800}
 .nav-dd-menu a:hover,.nav-dd-menu a[aria-current="page"]{background:rgba(255,255,255,.09);color:#fff;box-shadow:none}
 .nav-toggle{display:none;flex-direction:column;justify-content:center;gap:5px;margin-left:auto;padding:.45rem;background:none;border:0;cursor:pointer}
 .nav-toggle:focus-visible,.nav-dd-btn:focus-visible,.site-nav a:focus-visible{outline:2px solid var(--dna-brand,#243B53);outline-offset:2px}
@@ -861,14 +953,33 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
 .dl-link:hover .dl-label{color:var(--dna-masthead,#1B2A3A)}
 .dl-label{display:block;font-weight:700;font-size:1.02rem}
 .dl-note{display:block;margin-top:.3rem;font-size:.9rem;color:color-mix(in srgb,var(--dna-ink,#111) 60%,var(--dna-paper,#fff))}
+/* IR delivery pack — downloads as agency handoff surface */
+.downloads{max-width:var(--rs-rail);margin:0 auto;padding:0 var(--rs-gutter) var(--rs-space-6);box-sizing:border-box}
+.downloads__lede{margin:0 0 1.35rem;max-width:42rem;font-size:1.02rem;line-height:1.65;color:color-mix(in srgb,var(--dna-ink,#111) 72%,var(--dna-paper,#fff))}
+.downloads__grid{list-style:none;margin:0;padding:0;display:grid;gap:1rem}
+.downloads__item{display:grid;grid-template-columns:auto 1fr;gap:.85rem 1.1rem;align-items:start;padding:1.15rem 1.25rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);border-left:3px solid var(--dna-brand,#243B53);background:linear-gradient(180deg,var(--dna-paper,#fff),color-mix(in srgb,var(--dna-shading,#F2F2F2) 32%,var(--dna-paper,#fff)))}
+.downloads__item--muted{border-left-color:color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);opacity:.92}
+.downloads__kind{display:inline-flex;align-items:center;justify-content:center;min-width:3.4rem;padding:.35rem .45rem;font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dna-on-brand,#fff);background:var(--dna-masthead,#1B2A3A)}
+.downloads__item a.dl-link{grid-column:2}
+.downloads__item > .dl-label,.downloads__item > .dl-note{grid-column:2}
+.downloads__meta{margin:.35rem 0 0;font-size:.78rem;letter-spacing:.04em;color:color-mix(in srgb,var(--dna-ink,#111) 48%,var(--dna-paper,#fff))}
+/* Notes index — IR notes product chrome */
+.notes-index{margin:0 auto 1.5rem;padding:1.15rem 1.25rem 1.25rem;max-width:var(--rs-rail);border:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);border-top:3px solid var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff));box-sizing:border-box}
+.notes-index__lede{margin:0 0 .85rem;font-size:.95rem;line-height:1.55;color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff))}
+.notes-index__list{list-style:none;margin:0;padding:0;display:grid;gap:.55rem}
+.notes-index__list a{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .75rem;padding:.65rem .75rem;text-decoration:none;color:var(--dna-ink,#231F20);background:var(--dna-paper,#fff);border:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent);border-left:3px solid color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,var(--dna-brand,#243B53))}
+.notes-index__list a:hover{border-left-color:var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-brand,#243B53) 5%,var(--dna-paper,#fff))}
+.notes-index__range{font-weight:800;letter-spacing:.02em;color:var(--dna-masthead,#1B2A3A)}
+.notes-index__title{font-size:.9rem;color:color-mix(in srgb,var(--dna-ink,#111) 68%,var(--dna-paper,#fff))}
+.note-block{margin:1.75rem 0 1.15rem;padding-top:.65rem;scroll-margin-top:6.5rem;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
+.note-title{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.15rem;margin:0 0 .7rem;color:var(--dna-masthead,#1B2A3A);font-weight:700}
+.note-block .prose-p{margin:.4rem 0;line-height:1.55}
+.note-block + .note-block{margin-top:1.35rem}
 .xls-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.7rem 1.1rem;max-width:none;width:100%;margin:0;padding:.9rem var(--rs-gutter) .2rem;font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);background:color-mix(in srgb,var(--dna-ink,#111) 4%,var(--dna-paper,#fff));border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);box-sizing:border-box}
 .xls-toolbar__label{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--dna-ink,#231F20)}
 .xls-download{font-size:.86rem;color:var(--dna-ink,#231F20);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 60%,transparent);font-weight:600}
 .xls-download:hover{color:var(--dna-ink,#231F20)}
 .xls-download--secondary{border-bottom-color:color-mix(in srgb,var(--dna-ink,#111) 22%,transparent);color:color-mix(in srgb,var(--dna-ink,#111) 70%,var(--dna-paper,#fff));font-weight:500}
-.note-block{margin:1.75rem 0 1.15rem;padding-top:.65rem;scroll-margin-top:5.5rem;border-top:1px solid color-mix(in srgb,var(--dna-ink,#111) 8%,transparent)}
-.note-title{font-family:var(--dna-font-heading,"Open Sans","Segoe UI",sans-serif);font-size:1.15rem;margin:0 0 .7rem;color:var(--dna-masthead,#1B2A3A);font-weight:700}
-.note-block .prose-p{margin:.4rem 0;line-height:1.55}
 .statement-unit{display:inline-flex;align-items:center;gap:.45rem;margin:0 0 var(--rs-space-2);padding:.28rem .55rem;border:1px solid color-mix(in srgb,var(--dna-ink,#111) 12%,transparent);border-left:3px solid var(--dna-brand,#243B53);background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 42%,var(--dna-paper,#fff));font-size:var(--rs-fs-eyebrow);letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
 .statement-unit__value{color:var(--dna-masthead,#1B2A3A);font-weight:800;letter-spacing:.06em}
 .page-statement .statement-table,.page-statement .fin-wrapper{border-top:2px solid var(--dna-brand,#243B53);border-left:0;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);box-shadow:none}
@@ -1060,31 +1171,81 @@ html.rs-motion .kpi-card:not(.is-visible):not(.revealed){opacity:0;transform:tra
   color:var(--dna-ink,#231F20);background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 6%,var(--dna-paper,#fff));
   border:1px solid color-mix(in srgb,var(--dna-masthead,#1B2A3A) 28%,transparent);
 }
-[data-theme="statutory"] .home-cta__secondary{color:var(--dna-ink,#231F20);border-bottom-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,transparent)}
+[data-theme="statutory"] .home-cta__secondary{color:var(--dna-ink,#231F20);border-bottom-color:color-mix(in srgb,var(--dna-brand,#243B53) 70%,transparent)}
 [data-theme="statutory"] .home-cta__primary{
   color:var(--dna-on-brand,#fff)!important;
-  background:var(--dna-masthead,#1B2A3A)!important;
-  box-shadow:0 8px 22px color-mix(in srgb,var(--dna-masthead,#1B2A3A) 28%,transparent);
+  background:var(--dna-brand,#243B53)!important;
+  box-shadow:0 8px 22px color-mix(in srgb,var(--dna-brand,#243B53) 32%,transparent);
 }
 [data-theme="statutory"] .home-body__kpi-stage{margin:0 0 var(--rs-space-5)}
 [data-theme="statutory"] .home-body__kpi-stage .kpi-band{box-shadow:0 12px 32px rgba(15,23,42,.05);border-radius:2px}
 [data-theme="statutory"] .kpi-card{
-  border-left:3px solid var(--dna-masthead,#1B2A3A);
-  background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 35%,var(--dna-paper,#fff));
+  border:0;border-left:3px solid var(--dna-brand,#243B53);
+  background:color-mix(in srgb,var(--dna-shading,#F2F2F2) 28%,var(--dna-paper,#fff));
 }
-[data-theme="statutory"] .kpi-card:nth-child(even){border-left-color:transparent;border-top-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,var(--dna-brand,#243B53))}
+[data-theme="statutory"] .kpi-card:nth-child(even){border-left-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 70%,var(--dna-brand,#243B53));border-top-color:transparent}
 [data-theme="statutory"] .highlight-card,[data-theme="statutory"] .explore-card{
-  border-top:2px solid color-mix(in srgb,var(--dna-masthead,#1B2A3A) 55%,var(--dna-brand,#243B53));
+  border-top:2px solid var(--dna-brand,#243B53);
 }
 [data-theme="statutory"] .page-hero{
   border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);
 }
+[data-theme="statutory"] .page-hero__rail{background:var(--dna-brand,#243B53)}
 [data-theme="statutory"] .site-footer{
   background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 92%,#05080d);
 }
-[data-theme="statutory"] .site-footer__accent{height:3px;background:var(--dna-brand,#243B53)}
+[data-theme="statutory"] .site-footer__accent{height:4px;background:var(--dna-brand,#243B53)}
 [data-theme="statutory"] .site-footer__heading{color:rgba(255,255,255,.92)}
-[data-theme="statutory"] .share-bar{border-top-width:2px;border-top-color:var(--dna-masthead,#1B2A3A)}
-[data-theme="statutory"] .commentary-section__hdr{border-left-width:3px;border-left-color:var(--dna-masthead,#1B2A3A);padding-left:1.25rem}
+[data-theme="statutory"] .share-bar{border-top-width:2px;border-top-color:var(--dna-brand,#243B53)}
+[data-theme="statutory"] .commentary-section__hdr{border-left-width:3px;border-left-color:var(--dna-brand,#243B53);padding-left:1.25rem}
+[data-theme="statutory"] .site-nav{
+  border-top:3px solid var(--dna-brand,#243B53);
+}
+[data-theme="statutory"] .site-nav a[aria-current="page"],[data-theme="statutory"] .site-nav .is-active>a,[data-theme="statutory"] .site-nav .is-active>.nav-dd-btn{
+  box-shadow:inset 0 -3px 0 var(--dna-brand,#243B53);
+}
+[data-theme="statutory"] .nav-dd-menu{border-top-color:var(--dna-brand,#243B53)}
+[data-theme="statutory"] .home-kicker{color:var(--dna-brand-text,var(--dna-masthead,#1B2A3A))}
+[data-theme="statutory"] .home-meta__chip{
+  background:color-mix(in srgb,var(--dna-brand,#243B53) 10%,var(--dna-paper,#fff));
+  border-color:color-mix(in srgb,var(--dna-brand,#243B53) 38%,transparent);
+}
+[data-theme="statutory"] .home-hero__mesh{
+  background:radial-gradient(ellipse 90% 70% at 90% 0%,color-mix(in srgb,var(--dna-brand,#243B53) 18%,transparent),transparent 60%);
+}
+[data-theme="statutory"] .entity-cue__pill{
+  background:color-mix(in srgb,var(--dna-brand,#243B53) 18%,var(--dna-paper,#fff));
+  border-color:color-mix(in srgb,var(--dna-brand,#243B53) 42%,transparent);
+}
+[data-theme="statutory"] .downloads__kind{
+  color:var(--dna-on-brand,#fff);background:var(--dna-brand,#243B53);
+}
+[data-theme="statutory"] .downloads__item{border-left-color:var(--dna-brand,#243B53)}
+
+/* Bright DNA yellow (MTN) — premium yellow language without painting the masthead yellow */
+html[data-theme="statutory"][data-bright-brand="1"] .home-cta__primary{
+  color:var(--dna-on-brand,#262626)!important;
+  background:var(--dna-brand,#FFCB04)!important;
+  box-shadow:0 10px 26px color-mix(in srgb,var(--dna-brand,#FFCB04) 38%,transparent);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .site-nav{
+  border-top-width:4px;border-top-color:var(--dna-brand,#FFCB04);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .site-footer__accent{
+  height:5px;background:var(--dna-brand,#FFCB04);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .downloads__kind{
+  color:var(--dna-on-brand,#262626);background:var(--dna-brand,#FFCB04);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .kpi-card{
+  border-left-color:var(--dna-brand,#FFCB04);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dna-brand,#FFCB04) 12%,transparent);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .fin-table thead th.h-entity{
+  background:var(--dna-masthead,#262626)!important;
+  color:var(--dna-paper,#fff)!important;
+  border-bottom:2px solid var(--dna-brand,#FFCB04);
+}
+html[data-theme="statutory"][data-bright-brand="1"] .page-hero__rail{width:5px;background:var(--dna-brand,#FFCB04)}
 `.trim();
 

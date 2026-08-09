@@ -19,7 +19,11 @@ import {
 import { enrichMultiPageFiles } from "./enrich.js";
 import { normalizeIrThemeId } from "./ir-theme.js";
 import { extractHomeKpis, resolveDisplayPeriodLabel } from "./home-composer.js";
-import { linkNoteRefHtml, notesBaseHref } from "./notes-linker.js";
+import {
+  buildNotePageMap,
+  linkNoteRefHtml,
+  notesBaseHref,
+} from "./notes-linker.js";
 import { findDocTable, resolveCell, type ResolveContext } from "./resolve.js";
 import { fontFaceCss } from "./fonts.js";
 import {
@@ -215,7 +219,11 @@ function normalizedHeaderMatrix(
   });
 }
 
-function renderFinTable(table: FinTable, notesBase: string | null): string {
+function renderFinTable(
+  table: FinTable,
+  notesBase: string | null,
+  notePageByNum?: Map<number, string> | null,
+): string {
   const bodyColCount = Math.max(...table.rows.map((r) => r.cells.length), 1);
   const header_matrix = normalizedHeaderMatrix(table, bodyColCount);
   const normTable = { ...table, header_matrix };
@@ -319,7 +327,12 @@ function renderFinTable(table: FinTable, notesBase: string | null): string {
           }
           if (cell.kind === "noteRef" && cell.raw.trim() && notesBase) {
             const src = ` data-src="${escapeHtml(cell.src_ref)}"`;
-            const linked = linkNoteRefHtml(cell.raw, notesBase, escapeHtml);
+            const linked = linkNoteRefHtml(
+              cell.raw,
+              notesBase,
+              escapeHtml,
+              notePageByNum,
+            );
             return `<td class="cell-noteRef note${curCls}"${src}>${linked}</td>`;
           }
           // Every cell with CONTENT is provenance-tagged — text row-labels
@@ -358,6 +371,7 @@ function renderSlot(
   value: unknown,
   ctx: ResolveContext,
   notesBase: string | null,
+  notePageByNum?: Map<number, string> | null,
 ): string {
   switch (slotDef.type) {
     case "text":
@@ -369,7 +383,7 @@ function renderSlot(
       if (slotDef.accepts === "table") {
         const table = findDocTable(ref, ctx);
         return table
-          ? renderFinTable(table, notesBase)
+          ? renderFinTable(table, notesBase, notePageByNum)
           : `<!-- unresolved table ${escapeHtml(ref)} -->`;
       }
       const raw = resolveCell(ref, ctx);
@@ -403,13 +417,21 @@ function renderComponent(
   inst: ComponentInstance,
   ctx: ResolveContext,
   notesBase: string | null,
+  notePageByNum?: Map<number, string> | null,
 ): string {
   let html = def.html;
   html = html.replace(/\{\{variant\}\}/g, escapeHtml(inst.variant ?? "default"));
   html = html.replace(/\{\{slot:([a-zA-Z0-9_]+)\}\}/g, (_m, slotName: string) => {
     const slotDef = def.slots[slotName];
     if (!slotDef) return "";
-    return renderSlot(slotName, slotDef, inst.slots[slotName], ctx, notesBase);
+    return renderSlot(
+      slotName,
+      slotDef,
+      inst.slots[slotName],
+      ctx,
+      notesBase,
+      notePageByNum,
+    );
   });
   return html;
 }
@@ -439,9 +461,30 @@ export function renderSitePlan(
     .filter((p) => !p.path.startsWith("statements/"))
     .map((p) => ({ path: p.path, title: p.title }));
 
+  // Per-book note maps so statement note-refs land on the owning group page.
+  const noteMapsByDir = new Map<string, Map<number, string>>();
+  const noteDirOf = (path: string): string => {
+    if (path.startsWith("financials/group/")) return "financials/group/";
+    if (path.startsWith("financials/company/")) return "financials/company/";
+    if (path.startsWith("financials/")) return "financials/";
+    return "";
+  };
+  const groupedNotePaths = new Map<string, string[]>();
+  for (const p of plan.pages) {
+    const dir = noteDirOf(p.path);
+    if (!dir || !/notes-\d/.test(p.path)) continue;
+    (groupedNotePaths.get(dir) ?? groupedNotePaths.set(dir, []).get(dir)!).push(p.path);
+  }
+  for (const [dir, paths] of groupedNotePaths) {
+    noteMapsByDir.set(dir, buildNotePageMap(paths));
+  }
+
   for (const page of plan.pages) {
     const tpl = templates.get(page.template);
     const notesBase = notesBaseHref(page.path);
+    const notePageByNum = notesBase
+      ? noteMapsByDir.get(noteDirOf(page.path)) ?? null
+      : null;
     // Breadcrumb lives in page-hero for financial pages (enrich); keep top crumb elsewhere.
     const crumbInHero =
       multiPage &&
@@ -456,7 +499,9 @@ export function renderSitePlan(
       return instances
         .map((inst) => {
           const def = components.get(inst.component);
-          return def ? renderComponent(def, inst, ctx, notesBase) : "";
+          return def
+            ? renderComponent(def, inst, ctx, notesBase, notePageByNum)
+            : "";
         })
         .join("\n");
     });
@@ -515,7 +560,11 @@ export function renderSitePlan(
       }
     }
 
-    const doc = `<!doctype html><html lang="en" data-theme="${themeId}"><head>${head}</head><body>${body}</body></html>`;
+    const brightBrand =
+      /--dna-bright-brand\s*:\s*1/.test(blueprint.tokens.css ?? "") ||
+      /--dna-bright-brand:1/.test(css);
+    const brightAttr = brightBrand ? ' data-bright-brand="1"' : "";
+    const doc = `<!doctype html><html lang="en" data-theme="${themeId}"${brightAttr}><head>${head}</head><body>${body}</body></html>`;
     files[page.path] = doc;
   }
 
@@ -599,10 +648,17 @@ const STATEMENT_IR_CSS = `
 .fin-table[data-density="periods-3"] col.c-label{width:13rem}
 .fin-table[data-density="periods-3"] col.c-note{width:3rem}
 .fin-table[data-density="periods-3"] col.c-cur,.fin-table[data-density="periods-3"] col.c-cmp{width:7.5rem}
-.fin-table[data-density="dual-entity"]{min-width:56rem}
-.fin-table[data-density="dual-entity"] col.c-label{width:15rem}
-.fin-table[data-density="dual-entity"] col.c-note{width:3rem}
-.fin-table[data-density="dual-entity"] col.c-cur,.fin-table[data-density="dual-entity"] col.c-cmp{width:8rem}
+.fin-table[data-density="dual-entity"]{min-width:52rem;font-size:.78rem}
+.fin-table[data-density="dual-entity"] col.c-label{width:14rem}
+.fin-table[data-density="dual-entity"] col.c-note{width:2.75rem}
+.fin-table[data-density="dual-entity"] col.c-cur,.fin-table[data-density="dual-entity"] col.c-cmp{width:7.5rem}
+.fin-table[data-density="dual-entity"] thead th.h-entity{
+  letter-spacing:.14em;font-size:.7rem;padding:9px 8px;
+  box-shadow:inset 0 -2px 0 var(--dna-brand,#243B53);
+}
+.fin-table[data-density="dual-entity"] thead th.h-fig{padding:5px 7px;font-size:.64rem;line-height:1.25}
+.fin-table[data-density="dual-entity"] td{padding:3px 7px}
+.fin-table[data-density="dual-entity"] td.cell-label,.fin-table[data-density="dual-entity"] td.lbl{min-width:11rem;max-width:16rem;font-size:.78rem;line-height:1.38}
 .fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.3;border:none;border-bottom:2px solid var(--dna-brand,#243B53);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
 .fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#64748B);position:sticky;left:0;z-index:3}
 .fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F);width:3.25rem;padding-left:4px;padding-right:4px}
@@ -663,22 +719,25 @@ const STATEMENT_IR_CSS = `
   .fin-table td.cell-label,.fin-table td.lbl,.fin-table td:first-child{min-width:9.5rem;max-width:12rem}
 }
 @media print{
-  .site-nav,.nav-mobile,.nav-toggle,.share-bar,.page-pager,.xls-toolbar,.share-tooltip,.sel-share-mark{display:none!important}
-  .statement-table,.fin-wrapper{overflow:visible;border-top:2px solid #000;break-inside:avoid}
+  .site-nav,.nav-mobile,.nav-toggle,.share-bar,.page-pager,.xls-toolbar,.share-tooltip,.sel-share-mark,.entity-cue{display:none!important}
+  .statement-table,.fin-wrapper{overflow:visible;border-top:2px solid var(--dna-brand,#243B53);break-inside:avoid}
   .fin-table{font-size:9.5pt;table-layout:auto;min-width:0}
   .fin-table thead th{position:static;background:#fff!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .fin-table thead th.h-fig{background:#E8E8E8!important;color:#000!important}
-  .fin-table thead th.h-fig.cur{background:#D4D4D4!important;color:#000!important}
-  .fin-table tr.grp > td.cell-num.num-edge-start{border-left:1.5px solid #000}
-  .fin-table tr.grp > td.cell-num.num-edge-end{border-right:1.5px solid #000}
-  .fin-table tr.grp-top > td.cell-num{border-top:1.5px solid #000}
-  .fin-table tr.grp-bot > td.cell-num{border-bottom:1.5px solid #000}
+  .fin-table thead th.h-fig.cur{background:var(--dna-brand,#243B53)!important;color:var(--dna-on-brand,#000)!important}
+  .fin-table thead th.h-entity{background:#111!important;color:#fff!important;border-bottom:2px solid var(--dna-brand,#243B53)}
+  .fin-table tr.grp > td.cell-num.num-edge-start{border-left:1.5px solid var(--dna-brand,#243B53)}
+  .fin-table tr.grp > td.cell-num.num-edge-end{border-right:1.5px solid var(--dna-brand,#243B53)}
+  .fin-table tr.grp-top > td.cell-num{border-top:1.5px solid var(--dna-brand,#243B53)}
+  .fin-table tr.grp-bot > td.cell-num{border-bottom:1.5px solid var(--dna-brand,#243B53)}
   .fin-table tr.grp > td.cell-num.cur,.fin-table[data-cur-col] tbody tr.grp > td.cell-num.cur{background:#F2F2F2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .fin-table tbody tr:hover td,.fin-table tbody tr:hover td.cell-num,.fin-table tbody tr:hover td.cell-num.cur{background:inherit!important}
   .fin-table .note-ref{color:#000;border-bottom:none;font-weight:700}
   a.note-ref::after{content:""}
   .fin-table tr.bd-tan>td:first-child{border-top-color:#000}
   .fin-table tr.bd-blue>td:first-child{border-top-color:#666}
+  .page-hero__rail{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .downloads__item{break-inside:avoid;border-left-color:var(--dna-brand,#243B53)}
 }
 /* end-rs-statement-ir */
 `.trim();

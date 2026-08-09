@@ -123,7 +123,7 @@ async function main() {
     ["table hover CSS", income.includes("tbody tr:hover") || home.includes("tbody tr:hover")],
     ["statement unit", bs.includes("statement-unit") && bs.includes("colgroup")],
     ["stacked headers", bs.includes("h-fig") && bs.includes("h-fig__date")],
-    ["note links", bs.includes('class="note-ref"') && bs.includes("notes.html#note-")],
+    ["note links", bs.includes('class="note-ref"') && /notes(?:-\d+(?:-\d+)?)?\.html#note-/.test(bs)],
     ["note anchors", /id="note-\d+"/.test(notes)],
     // P2 — statement IR design system
     ["rs-statement-ir CSS", bs.includes("/* rs-statement-ir */") && income.includes("/* rs-statement-ir */")],

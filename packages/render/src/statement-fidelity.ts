@@ -6,7 +6,7 @@
 import type { ReliabilityFinding } from "./corporate-reliability.js";
 
 const STATEMENT_PAGE =
-  /financials\/(income-statement|balance-sheet|cash-flows|changes-in-equity|equity)\.html$/i;
+  /financials\/(?:(?:group|company)\/)?(income-statement|balance-sheet|cash-flows|changes-in-equity|equity)\.html$/i;
 
 export function isStatementFinancialPage(path: string): boolean {
   return STATEMENT_PAGE.test(path);
@@ -187,7 +187,9 @@ export function checkStatementIrFidelity(
   );
 
   // Note links required only when note cells carry digits (ignore empty note cols / CSS).
-  const hasNoteLinks = /notes\.html#note-\d+/.test(markup);
+  // Paginated packs resolve to notes-1-10.html#note-N (or notes.html#note-N when unsplit).
+  const hasNoteLinks =
+    /notes(?:-\d+(?:-\d+)?|-part-\d+)?\.html#note-\d+/.test(markup);
   const noteCellsWithDigits = [
     ...markup.matchAll(
       /<td\b[^>]*class="[^"]*(?:cell-noteRef|\bnote\b)[^"]*"[^>]*>([\s\S]*?)<\/td>/gi,
@@ -200,8 +202,8 @@ export function checkStatementIrFidelity(
         "statement-note-links",
         path,
         hasNoteLinks
-          ? `${path}: live notes.html#note-N links present`
-          : `${path}: note digits without notes.html#note-N links`,
+          ? `${path}: live notes…#note-N links present`
+          : `${path}: note digits without notes…#note-N links`,
       ),
     );
   }

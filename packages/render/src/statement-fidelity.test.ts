@@ -7,7 +7,7 @@ import type {
 } from "@rs/contracts";
 import { gateA } from "./gate-a.js";
 import { gateB } from "./gate-b.js";
-import { linkNoteRefHtml, notesBaseHref, noteHref } from "./notes-linker.js";
+import { linkNoteRefHtml, notesBaseHref, noteHref, buildNotePageMap, resolveNoteHref } from "./notes-linker.js";
 import { renderSitePlan } from "./renderer.js";
 import type { ResolveContext } from "./resolve.js";
 import { classifyStatementRow, groupBorderClass, rowRoleClass } from "./row-taxonomy.js";
@@ -58,6 +58,23 @@ describe("notes linker", () => {
     );
     expect(linkNoteRefHtml("2.1; 2.2", "notes.html", esc)).toBe(
       '<a class="note-ref" href="notes.html#note-2">2.1</a>; <a class="note-ref" href="notes.html#note-2">2.2</a>',
+    );
+  });
+
+  it("resolves paginated note packs to the owning group page", () => {
+    const map = buildNotePageMap([
+      "financials/notes-1-10.html",
+      "financials/notes-11-20.html",
+    ]);
+    expect(map.get(3)).toBe("notes-1-10.html");
+    expect(map.get(15)).toBe("notes-11-20.html");
+    expect(resolveNoteHref("notes.html", 3, map)).toBe("notes-1-10.html#note-3");
+    expect(resolveNoteHref("../financials/notes.html", 15, map)).toBe(
+      "../financials/notes-11-20.html#note-15",
+    );
+    const esc = (s: string) => s;
+    expect(linkNoteRefHtml("3", "notes.html", esc, map)).toBe(
+      '<a class="note-ref" href="notes-1-10.html#note-3">3</a>',
     );
   });
 });

@@ -1,5 +1,5 @@
 import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
-import { renderBreadcrumb } from "./chrome.js";
+import { renderBreadcrumb, renderEntityCue } from "./chrome.js";
 import { composeCommentaryBody } from "./commentary-composer.js";
 import {
   assetHrefFromPage,
@@ -9,10 +9,9 @@ import {
   type ExcelExportResult,
 } from "./excel-exporter.js";
 import { composeHome } from "./home-composer.js";
-import { noteAnchorId, noteNumberFromTitle } from "./notes-linker.js";
+import { noteAnchorId, noteNumberFromTitle, noteRangeFromPath } from "./notes-linker.js";
 import type { BrandAssetUris } from "./resolve.js";
 
-/** Optional binary download wiring (Excel always; PDF when bundled). */
 export interface DownloadEnrichOptions {
   excel?: Pick<ExcelExportResult, "workbookHref" | "statementFiles" | "workbookSheetNames">;
   /** When true, downloads.html links to assets/source.pdf. */
@@ -87,29 +86,32 @@ function downloadsHtml(
   opts: DownloadEnrichOptions = {},
 ): string {
   const company = escapeHtml(docModel.meta.company || "Results");
+  const period = docModel.meta.period_label?.trim()
+    ? ` · <span data-allow-number>${escapeHtml(docModel.meta.period_label.trim())}</span>`
+    : "";
   const pdfHref = opts.pdfHref ?? SOURCE_PDF_HREF;
   const workbookHref = opts.excel?.workbookHref ?? WORKBOOK_HREF;
-  const sheetNote = opts.excel?.workbookSheetNames?.length
-    ? `<span class="dl-note" data-allow-number>${opts.excel.workbookSheetNames.length} sheets — income, financial position, equity, cash flows, and notes when present. Values match the HTML tables.</span>`
+  const sheetCount = opts.excel?.workbookSheetNames?.length;
+  const sheetNote = sheetCount
+    ? `<span class="dl-note" data-allow-number>${sheetCount} sheets — income, financial position, equity, cash flows, and notes when present. Values match the HTML tables.</span>`
     : `<span class="dl-note">Multi-sheet workbook built from the statement tables. Values match the HTML tables.</span>`;
 
   const pdfItem = opts.pdfBundled
-    ? `<li><a class="dl-link" href="${escapeHtml(pdfHref)}"><span class="dl-label">Full results PDF</span><span class="dl-note">Source interim results booklet bundled under assets/ for offline use.</span></a></li>`
-    : `<li><span class="dl-label">Full results PDF</span><span class="dl-note">Source PDF was not available at export time (offline JSON fixtures omit binary uploads). Re-export from the portal after upload to bundle assets/source.pdf.</span></li>`;
+    ? `<li class="downloads__item"><span class="downloads__kind">PDF</span><a class="dl-link" href="${escapeHtml(pdfHref)}"><span class="dl-label">Source results PDF</span><span class="dl-note">Full announcement booklet bundled under assets/ for offline review and print.</span><p class="downloads__meta">Primary source · provenance-bound</p></a></li>`
+    : `<li class="downloads__item downloads__item--muted"><span class="downloads__kind">PDF</span><span class="dl-label">Source results PDF</span><span class="dl-note">Source PDF was not available at export time (offline JSON fixtures omit binary uploads). Re-export from the portal after upload to bundle assets/source.pdf.</span></li>`;
 
   const statementItems = (opts.excel?.statementFiles ?? [])
     .map(
       (f) =>
-        `<li><a class="dl-link" href="${escapeHtml(f.href)}"><span class="dl-label">${escapeHtml(f.label)} (Excel)</span><span class="dl-note">Single-sheet workbook for this statement.</span></a></li>`,
+        `<li class="downloads__item"><span class="downloads__kind">XLS</span><a class="dl-link" href="${escapeHtml(f.href)}"><span class="dl-label">${escapeHtml(f.label)}</span><span class="dl-note">Single-sheet Excel for this statement — figures match the IR tables.</span></a></li>`,
     )
     .join("\n");
 
   return `<section class="downloads" data-dna-component="downloads">
-<h2 class="prose-h">Downloads</h2>
-<p class="prose-p">Source PDF and spreadsheet exports for <span data-allow-number>${company}</span>.</p>
-<ul class="download-list">
+<p class="downloads__lede">Investor pack for <span data-allow-number>${company}</span>${period}. Excel and PDF artifacts below are export outputs — not retyped figures.</p>
+<ul class="downloads__grid download-list">
 ${pdfItem}
-<li><a class="dl-link" href="${escapeHtml(workbookHref)}"><span class="dl-label">Financial statements (Excel)</span>${sheetNote}</a></li>
+<li class="downloads__item"><span class="downloads__kind">XLSX</span><a class="dl-link" href="${escapeHtml(workbookHref)}"><span class="dl-label">Financial statements workbook</span>${sheetNote}<p class="downloads__meta">Full pack · multi-sheet</p></a></li>
 ${statementItems}
 </ul>
 </section>`;
@@ -311,16 +313,6 @@ function notesProseBlocks(
     .join("\n");
 }
 
-/** Parse notes-1-10.html / notes-3.html (incl. group/company books) into a range. */
-function noteRangeFromPath(path: string): { lo: number; hi: number } | null {
-  const m =
-    /^financials\/(?:(?:group|company)\/)?notes-(\d+)(?:-(\d+))?\.html$/.exec(path);
-  if (!m) return null;
-  const lo = Number(m[1]);
-  const hi = m[2] != null ? Number(m[2]) : lo;
-  return { lo, hi };
-}
-
 function isNotesIndexPath(path: string): boolean {
   return /^financials\/(?:(?:group|company)\/)?notes\.html$/.test(path);
 }
@@ -517,7 +509,7 @@ export function enrichMultiPageFiles(
       title: "Downloads",
       company,
       periodLabel,
-      eyebrow: "Source documents",
+      eyebrow: "Investor pack",
     });
     let html = out["downloads.html"].replace(
       /<header class="page-hero"[\s\S]*?<\/header>/i,
@@ -554,18 +546,25 @@ export function enrichMultiPageFiles(
           : "Condensed Consolidated — Unaudited"
         : "Notes to the financial statements",
     });
+    const notesCue = renderEntityCue(page.path);
     let toc = "";
     if (isIndex && hasNoteGroups) {
       const links = siblingNotes
         .filter((p) => !isNotesIndexPath(p.path))
         .map((p) => {
           const href = p.path.slice(bookPrefix.length);
-          return `<li><a href="${escapeHtml(href)}">${escapeHtml(p.title)}</a></li>`;
+          const range = noteRangeFromPath(p.path);
+          const rangeLabel = range
+            ? range.lo === range.hi
+              ? `Note ${range.lo}`
+              : `Notes ${range.lo}–${range.hi}`
+            : p.title;
+          return `<li><a href="${escapeHtml(href)}"><span class="notes-index__range" data-allow-number>${escapeHtml(rangeLabel)}</span><span class="notes-index__title" data-allow-number>${escapeHtml(p.title)}</span></a></li>`;
         })
         .join("");
-      toc = `<nav class="notes-index" data-dna-component="notes-index" aria-label="Note groups" data-allow-number><p class="prose-p">This annual report has a large notes set — open a group below, or use the Financials menu.</p><ul class="prose-ul">${links}</ul></nav>`;
+      toc = `<nav class="notes-index" data-dna-component="notes-index" aria-label="Notes index" data-allow-number><p class="notes-index__lede">Large notes pack — open a group below. Statement note references jump to the matching group page.</p><ul class="notes-index__list">${links}</ul></nav>`;
     }
-    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${toc}`);
+    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${notesCue}${toc}`);
     html = anchorNotes(html, docModel);
     // Index with groups: TOC only (avoid dumping every note). Group pages:
     // prose for that range. Single-page notes: full prose merge as before.
@@ -654,15 +653,34 @@ export function enrichMultiPageFiles(
     const dualEntity =
       /Group and Company/i.test(page.title) ||
       (/\bGROUP\b/i.test(html) && /\bCOMPANY\b/i.test(html));
+    const splitBook = /financials\/(group|company)\//i.test(page.path);
+    const bookEyebrow = page.path.includes("/group/")
+      ? "Group statements"
+      : page.path.includes("/company/")
+        ? "Company statements"
+        : undefined;
     const hero = pageHero({
       path: page.path,
-      title: page.title.replace(/\s*\(Group and Company\)\s*$/i, ""),
+      title: page.title
+        .replace(/\s*\(Group and Company\)\s*$/i, "")
+        .replace(/^(Group|Company)\s*[·•]\s*/i, ""),
       company,
       periodLabel,
-      eyebrow: dualEntity ? "Group and Company" : undefined,
+      eyebrow: dualEntity
+        ? "Group and Company"
+        : bookEyebrow ?? undefined,
     });
+    const cue = renderEntityCue(page.path, { dualEntity });
+    const intro = dualEntity
+      ? `<p class="entity-board-intro" data-dna-component="entity-board-intro">Figures are presented in side-by-side <strong>Group</strong> and <strong>Company</strong> columns. Use the header band to stay oriented while scrolling.</p>`
+      : splitBook
+        ? `<p class="entity-board-intro" data-dna-component="entity-board-intro">You are in the <strong>${page.path.includes("/group/") ? "Group" : "Company"}</strong> book. Switch entity from the cue above or the Financials menu.</p>`
+        : "";
     const bar = xlsToolbarHtml(page.path, downloadOpts.excel);
-    html = html.replace(/(<main[^>]*>)/i, (_m, open: string) => `${open}${hero}${bar}`);
+    html = html.replace(
+      /(<main[^>]*>)/i,
+      (_m, open: string) => `${open}${hero}${cue}${bar}${intro}`,
+    );
     // Empty statement pages: honest empty-state (no invented figures) so
     // reliability does not hard-fail on missing .fin-table.
     if (
@@ -710,7 +728,7 @@ export function applyDownloadArtifacts(
         title: "Downloads",
         company: docModel.meta.company,
         periodLabel: docModel.meta.period_label,
-        eyebrow: "Source documents",
+        eyebrow: "Investor pack",
       });
       let html = out["downloads.html"].replace(
         /<header class="page-hero"[\s\S]*?<\/header>/i,
