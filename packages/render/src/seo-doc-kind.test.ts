@@ -24,6 +24,19 @@ describe("doc kind labels", () => {
     ).toBe("interim_unaudited");
   });
 
+  it("keeps DRD condensed HY as interim even with an FY period slug", () => {
+    expect(
+      inferDocKind(
+        [
+          "Condensed Consolidated Financial Statements",
+          "Six months ended 31 Dec 2025",
+          "compared with the year ended 30 June 2025",
+        ],
+        "FY2026",
+      ),
+    ).toBe("interim_unaudited");
+  });
+
   it("prefers cover AFS wording over stale interim meta", () => {
     expect(
       resolveDocKindLabel("interim_unaudited", {

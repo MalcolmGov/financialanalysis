@@ -78,6 +78,18 @@ export function inferDocKind(
     return "interim_unaudited";
   }
 
+  // DRD-style HY booklets say "Condensed Consolidated" / "six months ended"
+  // even when the portal period slug is FY#### or cover mentions an annual year.
+  if (
+    /\bcondensed\s+consolidated\b/i.test(blob) ||
+    /\bsix\s+months\s+ended\b/i.test(blob)
+  ) {
+    if (/\b(reviewed\s+interim|interim\s+reviewed)\b/i.test(blob)) {
+      return "interim_reviewed";
+    }
+    return "interim_unaudited";
+  }
+
   if (
     /\b(annual\s+financial\s+statements|audited\s+annual(?:\s+financial)?|group\s+annual\s+financial)\b/i.test(
       blob,
