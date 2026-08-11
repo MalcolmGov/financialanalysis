@@ -483,6 +483,7 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
         entity: entity ?? null,
         dualEntity: Boolean(opts.dualLabel && ids.length),
         sourceTitle,
+        periodLabel: docModel.meta.period_label,
       };
       const title = officialStatementTitle(titleOpts);
       const navLabel = officialStatementNavLabel(titleOpts);

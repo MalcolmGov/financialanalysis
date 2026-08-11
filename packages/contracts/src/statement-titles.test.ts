@@ -78,6 +78,18 @@ describe("officialStatementTitle", () => {
     ).toBe("Consolidated Statement of Financial Position (Group and Company)");
   });
 
+  it("uses Condensed when period is HY even if doc_kind was stored as annual", () => {
+    expect(
+      officialStatementTitle({
+        docKind: "annual_audited",
+        statementType: "pnl_oci",
+        periodLabel: "HY1 FY2026",
+      }),
+    ).toBe(
+      "Condensed Consolidated Statement of Profit or Loss and Other Comprehensive Income",
+    );
+  });
+
   it("sets eyebrows from doc_kind", () => {
     expect(officialStatementEyebrow("interim_unaudited")).toBe(
       "Condensed Consolidated — Unaudited",

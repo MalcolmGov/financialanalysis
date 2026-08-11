@@ -421,7 +421,9 @@ export function enrichMultiPageFiles(
   const company = docModel.meta.company;
   const periodLabel = docModel.meta.period_label;
   const docKind = docModel.meta.doc_kind;
-  const defaultEyebrow = officialStatementEyebrow(docKind);
+  const defaultEyebrow = officialStatementEyebrow(docKind, {
+    periodLabel,
+  });
 
   if (out["index.html"]) {
     const home = composeHome(plan, docModel, {
