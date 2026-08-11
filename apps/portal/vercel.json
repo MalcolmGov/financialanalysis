@@ -1,0 +1,3 @@
+{
+  "buildCommand": "cd ../.. && pnpm -r --filter \"./packages/**\" build && pnpm --filter portal build"
+}
