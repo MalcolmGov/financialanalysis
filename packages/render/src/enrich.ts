@@ -735,6 +735,7 @@ export function enrichMultiPageFiles(
       eyebrow: officialStatementEyebrow(docKind, {
         dualEntity,
         entity: bookEntity,
+        periodLabel,
       }),
     });
     const cue = renderEntityCue(page.path, { dualEntity });
