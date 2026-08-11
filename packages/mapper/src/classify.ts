@@ -21,8 +21,17 @@ const STATEMENT_ROW_LABELS: { re: RegExp; type: StatementType }[] = [
   { re: /^(assets|non[- ]current assets|current assets|equity and liabilities)$/i, type: "financial_position" },
   { re: /^cash\s*flows?\s+(from|used)/i, type: "cash_flows" },
   { re: /^(continuing operations|revenue\b|gross profit)/i, type: "pnl_oci" },
-  { re: /^(balance at\b|stated capital|treasury shares)/i, type: "changes_in_equity" },
+  // "Balance at beginning" also appears on note reconciliations (e.g. Rand Refinery).
+  // Only treat equity column/line names as a primary SCE fingerprint.
+  {
+    re: /^(stated capital|treasury shares|share capital|non-controlling interest)$/i,
+    type: "changes_in_equity",
+  },
 ];
+
+/** Note / recon captions that must not occupy primary statement slots. */
+const NOTE_LIKE_TITLE =
+  /\bnote\s+\d|reconcil|earnings per share|headline earnings|\bassumptions?\b|investment in /i;
 
 /** Weak titles that are entity headers, not statement names. */
 const WEAK_TABLE_TITLE = /^(group|company|rmillion|r'?000|notes|rm\b)$/i;
@@ -112,6 +121,28 @@ export function classifySectionTitle(title: string): { kind: SectionKind; statem
   return { kind: "other" };
 }
 
+/** Numbered notes, note banners, and typical note-table captions. */
+export function isNoteLikeTitle(title: string): boolean {
+  const t = title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return false;
+  if (noteNumberOf(t) != null) return true;
+  if (/^notes?\s+to\s+the\b/i.test(t)) return true;
+  if (NOTE_LIKE_TITLE.test(t) && !STATEMENT_TITLES.some((s) => s.re.test(t))) return true;
+  return false;
+}
+
+/** Body-row fingerprints for EPS / investment reconciliations without a note caption. */
+const NOTE_ROW_FINGERPRINTS =
+  /reconcil|headline earnings|earnings per share|weighted average number of|diluted (?:basic |headline )?earnings|fair value adjustment on equity/i;
+
+export function tableHasNoteFingerprints(
+  title: string,
+  rowLabels: readonly string[],
+): boolean {
+  if (isNoteLikeTitle(title)) return true;
+  return rowLabels.some((l) => NOTE_ROW_FINGERPRINTS.test(l));
+}
+
 export function isWeakTableTitle(title: string | null | undefined): boolean {
   const t = (title ?? "").replace(/\u00a0/g, " ").trim();
   if (!t) return true;
@@ -183,12 +214,22 @@ export function classifyTable(table: ExtractionTable): TableClassification {
     (/%\s*change/i.test(headerText) && unitLike >= 2) ||
     (col1.length >= 3 && unitLike >= Math.ceil(col1.length * 0.6) && table.num_cols <= 5);
 
+  const titleCls = classifySectionTitle(title);
+  const rowLabels = table.cells
+    .filter((c) => c.c === 0 && !c.is_col_header)
+    .sort((a, b) => a.r - b.r)
+    .slice(0, 16)
+    .map((c) => c.text.replace(/\u00a0/g, " ").trim())
+    .filter(Boolean);
+  const noteLike = tableHasNoteFingerprints(title, rowLabels) || titleCls.kind === "note";
+
   let table_type: TableClassification["table_type"] = "statement";
-  if (wide) table_type = "wide";
+  if (noteLike) table_type = /reconcil/i.test(title) ? "reconciliation" : "note";
+  else if (wide) table_type = "wide";
   else if (sensitivity) table_type = "sensitivity";
   else if (facts) table_type = "facts";
 
-  const fromTitle = classifySectionTitle(title).statement_type;
+  const fromTitle = noteLike ? undefined : titleCls.statement_type;
   const statement_type =
     fromTitle ?? (table_type === "statement" ? statementTypeFromRowLabels(table) ?? undefined : undefined);
 

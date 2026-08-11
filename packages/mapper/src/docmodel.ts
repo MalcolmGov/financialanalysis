@@ -11,10 +11,12 @@ import {
   classifyTable,
   entityBookOf,
   headerRows,
+  isNoteLikeTitle,
   isWeakTableTitle,
   noteNumberOf,
   statementTypeFromRowLabels,
   stripContinuedSuffix,
+  tableHasNoteFingerprints,
 } from "./classify.js";
 
 /**
@@ -601,11 +603,12 @@ function extractionTableTitle(
   const caption = table.caption_block?.trim() ?? "";
   if (caption) {
     const cls = classifySectionTitle(caption);
-    if (cls.statement_type || cls.kind === "note" || cls.kind === "reviewOfOperations") {
+    const captionNote = isNoteLikeTitle(caption) || cls.kind === "note";
+    if (cls.statement_type || captionNote || cls.kind === "reviewOfOperations") {
       return {
         title: caption,
-        statement_type: cls.statement_type,
-        forceNote: cls.kind === "note",
+        statement_type: captionNote ? undefined : cls.statement_type,
+        forceNote: captionNote,
         forceOps: cls.kind === "reviewOfOperations",
         note_number: noteNumberOf(caption) ?? undefined,
         entity: entityBookOf(caption) ?? undefined,
@@ -619,6 +622,13 @@ function extractionTableTitle(
     (marker?.entity as "group" | "company" | undefined) ??
     (page > 0 ? activeEntityForPage(markers, page) : undefined);
 
+  const rowLabels = table.cells
+    .filter((c) => c.c === 0 && !c.is_col_header)
+    .sort((a, b) => a.r - b.r)
+    .slice(0, 16)
+    .map((c) => c.text.replace(/\u00a0/g, " ").trim())
+    .filter(Boolean);
+
   // Prefer an intrinsic statement title in row 0 over a stale page marker.
   // DRD: "Group Operational…" (reviewOfOperations) on p3 must not steal SoPL/SoFP
   // tables on p5–6 whose IFRS titles live only in the table tip cell.
@@ -630,13 +640,33 @@ function extractionTableTitle(
   const row0Tip = row0Cells[0] ?? "";
   if (row0Tip && !isWeakTableTitle(row0Tip)) {
     const row0Cls = classifySectionTitle(row0Tip);
-    if (row0Cls.statement_type) {
+    if (row0Cls.statement_type && !isNoteLikeTitle(row0Tip)) {
       return {
         title: row0Tip,
         statement_type: row0Cls.statement_type,
         entity: entityBookOf(row0Tip) ?? entity,
       };
     }
+    // Numbered notes / reconciliations in the tip cell beat a stale SoPL marker
+    // (DRD EPS "4. Earnings per share" after cash-flow pages).
+    if (row0Cls.kind === "note" || isNoteLikeTitle(row0Tip)) {
+      return {
+        title: row0Tip,
+        forceNote: true,
+        note_number: noteNumberOf(row0Tip) ?? marker?.note_number,
+        entity: entityBookOf(row0Tip) ?? entity,
+      };
+    }
+  }
+
+  // Investment / EPS / recon grids whose title is only a period banner.
+  if (tableHasNoteFingerprints(row0Tip || caption, rowLabels)) {
+    return {
+      title: caption || row0Tip || marker?.title || `Table ${extId}`,
+      forceNote: true,
+      note_number: noteNumberOf(caption) ?? noteNumberOf(row0Tip) ?? marker?.note_number,
+      entity,
+    };
   }
 
   if (marker?.kind === "statement" && marker.statement_type) {

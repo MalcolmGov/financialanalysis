@@ -1,4 +1,5 @@
 import type { ExtractionResult, FinancialDocModel, SitePlan } from "@rs/contracts";
+import { officialStatementEyebrow } from "@rs/contracts";
 import { renderBreadcrumb, renderEntityCue } from "./chrome.js";
 import { composeCommentaryBody } from "./commentary-composer.js";
 import {
@@ -258,7 +259,7 @@ function pageHero(opts: {
   eyebrow?: string;
 }): string {
   const crumb = renderBreadcrumb(opts.path, opts.title, opts.company);
-  const eyebrow = opts.eyebrow ?? "Condensed Consolidated — Unaudited";
+  const eyebrow = opts.eyebrow ?? "Financial statements";
   const sub = opts.periodLabel?.trim()
     ? `<p class="page-hero__sub" data-allow-number>${escapeHtml(opts.periodLabel.trim())}</p>`
     : "";
@@ -419,6 +420,8 @@ export function enrichMultiPageFiles(
   const out = { ...files };
   const company = docModel.meta.company;
   const periodLabel = docModel.meta.period_label;
+  const docKind = docModel.meta.doc_kind;
+  const defaultEyebrow = officialStatementEyebrow(docKind);
 
   if (out["index.html"]) {
     const home = composeHome(plan, docModel, {
@@ -603,7 +606,7 @@ export function enrichMultiPageFiles(
       eyebrow: isIndex
         ? hasNoteGroups
           ? "Notes index"
-          : "Condensed Consolidated — Unaudited"
+          : defaultEyebrow
         : "Notes to the financial statements",
     });
     const notesCue = renderEntityCue(page.path);
@@ -715,11 +718,11 @@ export function enrichMultiPageFiles(
       !splitBook &&
       (/Group and Company/i.test(page.title) ||
         (/\bGROUP\b/i.test(html) && /\bCOMPANY\b/i.test(html)));
-    const bookEyebrow = page.path.includes("/group/")
-      ? "Group statements"
+    const bookEntity = page.path.includes("/group/")
+      ? ("group" as const)
       : page.path.includes("/company/")
-        ? "Company statements"
-        : undefined;
+        ? ("company" as const)
+        : null;
     const hero = pageHero({
       path: page.path,
       title: page.title
@@ -727,9 +730,10 @@ export function enrichMultiPageFiles(
         .replace(/^(Group|Company)\s*[·•]\s*/i, ""),
       company,
       periodLabel,
-      eyebrow: dualEntity
-        ? "Group and Company"
-        : bookEyebrow ?? undefined,
+      eyebrow: officialStatementEyebrow(docKind, {
+        dualEntity,
+        entity: bookEntity,
+      }),
     });
     const cue = renderEntityCue(page.path, { dualEntity });
     const intro = dualEntity

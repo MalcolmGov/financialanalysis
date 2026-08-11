@@ -743,6 +743,121 @@ describe("mapper → render → gates (end to end, no API key)", () => {
     expect(ids("financials/income-statement.html")).not.toContain(bsId);
   });
 
+  it("does not let a stale statement marker steal EPS / investment recon note tables (DRD)", () => {
+    const cell = (
+      r: number,
+      c: number,
+      text: string,
+      flags: Partial<{ is_col_header: boolean; is_row_header: boolean }> = {},
+    ): Cell => ({
+      r,
+      c,
+      row_span: 1,
+      col_span: 1,
+      text,
+      is_col_header: flags.is_col_header ?? r === 0,
+      is_row_header: flags.is_row_header ?? (c === 0 && r > 0),
+      is_section: false,
+    });
+    const eps: Cell[] = [
+      cell(0, 0, "4. Earnings per share"),
+      cell(0, 1, "Six months ended 31 Dec 2025 Rm Unaudited"),
+      cell(0, 2, "Six months ended 31 Dec 2024 Rm Unaudited"),
+      cell(1, 0, "Profit for the period"),
+      cell(1, 1, "1 927.7"),
+      cell(1, 2, "970.1"),
+      cell(2, 0, "Headline earnings"),
+      cell(2, 1, "1 932.4"),
+      cell(2, 2, "970.1"),
+    ];
+    const recon: Cell[] = [
+      cell(0, 0, "Reconciliation of investment in Rand Refinery:"),
+      cell(0, 1, "Six months ended 31 Dec 2025 Rm Unaudited"),
+      cell(0, 2, "Six months ended 31 Dec 2024 Rm Unaudited"),
+      cell(1, 0, "Balance at the beginning of the period"),
+      cell(1, 1, "302.0"),
+      cell(1, 2, "166.8"),
+    ];
+    const ex: ExtractionResult = {
+      ...extraction(),
+      body: [
+        {
+          id: "h-cf",
+          type: "heading",
+          text: "Condensed Consolidated Statement of Cash Flows",
+          prov: [{ page_no: 8, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          children: [],
+        },
+      ],
+      tables: {
+        t_eps: {
+          id: "t_eps",
+          caption_block: null,
+          prov: [{ page_no: 10, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 3,
+          num_cols: 3,
+          cells: eps,
+          column_roles: null,
+        },
+        t_rr: {
+          id: "t_rr",
+          caption_block: null,
+          prov: [{ page_no: 11, bbox: { l: 0, t: 0, r: 1, b: 1 } }],
+          num_rows: 2,
+          num_cols: 3,
+          cells: recon,
+          column_roles: null,
+        },
+      },
+    };
+    const dm = mapToDocModel(ex, meta);
+    const epsSec = dm.sections.find((s) =>
+      s.blocks.some((b) => b.kind === "table" && b.table_ref === dm.tables[0]!.id),
+    );
+    const rrSec = dm.sections.find((s) =>
+      s.blocks.some((b) => b.kind === "table" && b.table_ref === dm.tables[1]!.id),
+    );
+    expect(epsSec?.kind).toBe("note");
+    expect(epsSec?.statement_type).toBeUndefined();
+    expect(epsSec?.note_number).toBe(4);
+    expect(rrSec?.kind).toBe("note");
+    expect(rrSec?.statement_type).toBeUndefined();
+
+    const bp = blueprint();
+    bp.page_templates.push(
+      {
+        id: "bp:tpl_home",
+        name: "Home",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_statement_page",
+        name: "Statement page",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+      {
+        id: "bp:tpl_prose",
+        name: "Prose",
+        shell_html: "<main>{{region:main}}</main>",
+        regions: [{ id: "main", accepts: ["bp:cmp_FinTableBlock"], min: 0, max: null }],
+      },
+    );
+    const plan = buildSitePlan(dm, bp);
+    const ids = (path: string) =>
+      Object.values(plan.pages.find((p) => p.path === path)!.regions)
+        .flat()
+        .map((i) => Object.values(i.slots).flat())
+        .flat();
+    expect(ids("financials/notes.html")).toEqual(
+      expect.arrayContaining([dm.tables[0]!.id, dm.tables[1]!.id]),
+    );
+    expect(ids("financials/income-statement.html")).not.toContain(dm.tables[0]!.id);
+    expect(ids("financials/changes-in-equity.html")).not.toContain(dm.tables[1]!.id);
+    expect(ids("financials/cash-flows.html")).not.toContain(dm.tables[0]!.id);
+  });
+
   it("Gate B catches a MAPPER bug (a mis-copied number) against the source extraction", () => {
     const ex = extraction();
     const dm = mapToDocModel(ex, meta);

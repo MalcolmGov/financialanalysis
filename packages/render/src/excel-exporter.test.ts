@@ -169,15 +169,15 @@ function docModelWithOps(): FinancialDocModel {
 describe("ExcelExporter", () => {
   it("collects statement sheets with stable names", () => {
     const sheets = collectExcelSheets(docModel());
-    expect(sheets.map((s) => s.name)).toEqual(["Income Statement", "Balance Sheet"]);
+    expect(sheets.map((s) => s.name)).toEqual(["Profit or Loss", "Financial Position"]);
     expect(sheets.map((s) => s.slug)).toEqual(["income-statement", "balance-sheet"]);
   });
 
   it("adds a named Review of Operations workbook sheet", () => {
     const sheets = collectExcelSheets(docModelWithOps());
     expect(sheets.map((s) => s.name)).toEqual([
-      "Income Statement",
-      "Balance Sheet",
+      "Profit or Loss",
+      "Financial Position",
       "Review of Operations",
     ]);
     expect(sheets.map((s) => s.slug)).toContain("review-of-operations");
@@ -223,7 +223,7 @@ describe("ExcelExporter", () => {
 
   it("exports multi-sheet workbook + per-statement files", () => {
     const result = exportExcelFromDocModel(docModel());
-    expect(result.workbookSheetNames).toEqual(["Income Statement", "Balance Sheet"]);
+    expect(result.workbookSheetNames).toEqual(["Profit or Loss", "Financial Position"]);
     expect(result.files["assets/excel/financial-statements.xlsx"]).toBeTruthy();
     expect(result.files["assets/excel/income-statement.xlsx"]).toBeTruthy();
     expect(result.files["assets/excel/balance-sheet.xlsx"]).toBeTruthy();

@@ -1,5 +1,6 @@
 import { deflateRawSync } from "node:zlib";
 import type { FinancialDocModel, FinTable, StatementType } from "@rs/contracts";
+import { officialStatementTitle } from "@rs/contracts";
 import { classifyStatementRow } from "./row-taxonomy.js";
 
 /**
@@ -36,34 +37,11 @@ export interface ExcelExportResult {
   workbookHref: string;
 }
 
-const STATEMENT_META: Record<
-  StatementType,
-  { sheet: string; slug: string; label: string; title: string }
-> = {
-  pnl_oci: {
-    sheet: "Income Statement",
-    slug: "income-statement",
-    label: "Income statement",
-    title: "Condensed Consolidated Statement of Profit or Loss and OCI",
-  },
-  financial_position: {
-    sheet: "Balance Sheet",
-    slug: "balance-sheet",
-    label: "Statement of financial position",
-    title: "Condensed Consolidated Statement of Financial Position",
-  },
-  changes_in_equity: {
-    sheet: "Changes in Equity",
-    slug: "changes-in-equity",
-    label: "Changes in equity",
-    title: "Condensed Consolidated Statement of Changes in Equity",
-  },
-  cash_flows: {
-    sheet: "Cash Flows",
-    slug: "cash-flows",
-    label: "Cash flows",
-    title: "Condensed Consolidated Statement of Cash Flows",
-  },
+const STATEMENT_META: Record<StatementType, { sheet: string; slug: string }> = {
+  pnl_oci: { sheet: "Profit or Loss", slug: "income-statement" },
+  financial_position: { sheet: "Financial Position", slug: "balance-sheet" },
+  changes_in_equity: { sheet: "Changes in Equity", slug: "changes-in-equity" },
+  cash_flows: { sheet: "Cash Flows", slug: "cash-flows" },
 };
 
 const STATEMENT_ORDER: StatementType[] = [
@@ -165,12 +143,16 @@ export function collectExcelSheets(docModel: FinancialDocModel): ExcelSheetSpec[
     tables.forEach((table, idx) => {
       const sheetBase = idx === 0 ? meta.sheet : `${meta.sheet} ${idx + 1}`;
       const slug = idx === 0 ? meta.slug : `${meta.slug}-${idx + 1}`;
+      const official = officialStatementTitle({
+        docKind: docModel.meta.doc_kind,
+        statementType: st,
+      });
       sheets.push({
         name: sanitizeSheetName(sheetBase, usedNames),
         slug,
         table,
         statementType: st,
-        title: idx === 0 ? meta.title : `${meta.title} (${idx + 1})`,
+        title: idx === 0 ? official : `${official} (${idx + 1})`,
       });
     });
   }
@@ -551,7 +533,7 @@ export function buildWorkbookXlsx(
   };
   sheets.forEach((spec, i) => {
     files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(spec.table, {
-      title: spec.title ?? (spec.statementType ? STATEMENT_META[spec.statementType].title : spec.name),
+      title: spec.title ?? spec.name,
       company: meta.company,
       periodLabel: meta.periodLabel,
     });
@@ -590,7 +572,12 @@ export function exportExcelFromDocModel(docModel: FinancialDocModel): ExcelExpor
     const href = `assets/excel/${first.slug}.xlsx`;
     files[href] = buildWorkbookXlsx([first], meta);
     statementFiles.push({
-      label: STATEMENT_META[st].label,
+      label:
+        first.title ??
+        officialStatementTitle({
+          docKind: docModel.meta.doc_kind,
+          statementType: st,
+        }),
       href,
       slug: first.slug,
     });

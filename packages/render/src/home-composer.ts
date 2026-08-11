@@ -65,7 +65,8 @@ const EXPLORE_CTA: Record<string, string> = {
 
 function exploreCta(href: string, label: string): string {
   if (EXPLORE_CTA[href]) return EXPLORE_CTA[href]!;
-  if (href.startsWith("financials/")) return `View ${label.toLowerCase()}`;
+  if (href.startsWith("financials/") && /notes/i.test(href)) return "View notes";
+  if (href.startsWith("financials/")) return "View statement";
   return `Open ${label.toLowerCase()}`;
 }
 

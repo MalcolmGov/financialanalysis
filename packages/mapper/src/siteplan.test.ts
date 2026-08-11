@@ -329,5 +329,139 @@ describe("adaptive siteplan", () => {
     expect(plan.nav.some((n) => n.href === "financials/group/income-statement.html")).toBe(true);
     expect(plan.nav.some((n) => n.href === "financials/company/income-statement.html")).toBe(true);
     expect(plan.nav.some((n) => n.href === "financials/income-statement.html")).toBe(false);
+    expect(plan.pages.find((p) => p.path === "financials/group/income-statement.html")?.title).toBe(
+      "Group Statement of Profit or Loss",
+    );
+    expect(plan.nav.find((n) => n.href === "financials/group/income-statement.html")?.label).toBe(
+      "Group Statement of Profit or Loss",
+    );
+  });
+
+  it("uses official IAS/IFRS titles on interim statement pages and nav", () => {
+    const dm = baseDoc({
+      meta: {
+        company: "DRDGOLD Limited",
+        period_label: "HY1 FY2026",
+        doc_kind: "interim_unaudited",
+        currency: "ZAR",
+      },
+      sections: [
+        {
+          id: "doc:sec_tbl_1",
+          kind: "statement",
+          statement_type: "pnl_oci",
+          title: {
+            text: "Condensed Consolidated Statement of Profit or Loss and Other Comprehensive Income",
+            src_ref: "ext:t1:r0c0",
+          },
+          blocks: [{ kind: "table", table_ref: "doc:tbl_1" }],
+          items: [],
+        },
+      ],
+      tables: [
+        {
+          id: "doc:tbl_1",
+          src_table: "ext:t1",
+          must_appear: true,
+          table_type: "statement",
+          header_matrix: [[{ raw: "2025", col_span: 1, row_span: 1, src_ref: "ext:t1:h" }]],
+          unit_context: { default: "Rm", per_row: {} },
+          row_groups: [],
+          rows: [{ cells: [cell("Revenue"), cell("10")] }],
+        },
+      ],
+    });
+    const plan = buildSitePlan(dm, stubBlueprint());
+    expect(plan.pages.find((p) => p.path === "financials/income-statement.html")?.title).toBe(
+      "Condensed Consolidated Statement of Profit or Loss and Other Comprehensive Income",
+    );
+    expect(plan.nav.find((n) => n.href === "financials/income-statement.html")?.label).toBe(
+      "Condensed Consolidated Statement of Profit or Loss and Other Comprehensive Income",
+    );
+    expect(plan.nav.find((n) => n.href === "financials/balance-sheet.html")?.label).toBe(
+      "Condensed Consolidated Statement of Financial Position",
+    );
+    expect(plan.nav.some((n) => n.label === "Income statement" || n.label === "Balance sheet")).toBe(
+      false,
+    );
+  });
+
+  it("keeps EPS and investment reconciliations on notes, not statement pages", () => {
+    const dm = baseDoc({
+      meta: {
+        company: "DRDGOLD Limited",
+        period_label: "HY1 FY2026",
+        doc_kind: "interim_unaudited",
+        currency: "ZAR",
+      },
+      sections: [
+        {
+          id: "doc:sec_pnl",
+          kind: "statement",
+          statement_type: "pnl_oci",
+          title: { text: "Statement of profit or loss", src_ref: "ext:pnl" },
+          blocks: [{ kind: "table", table_ref: "doc:tbl_pnl" }],
+          items: [],
+        },
+        {
+          id: "doc:sec_eps",
+          kind: "note",
+          note_number: 4,
+          title: { text: "4. Earnings per share", src_ref: "ext:eps" },
+          blocks: [{ kind: "table", table_ref: "doc:tbl_eps" }],
+          items: [],
+        },
+        {
+          id: "doc:sec_rr",
+          kind: "note",
+          note_number: 5,
+          title: { text: "Reconciliation of investment in Rand Refinery:", src_ref: "ext:rr" },
+          blocks: [{ kind: "table", table_ref: "doc:tbl_rr" }],
+          items: [],
+        },
+      ],
+      tables: [
+        {
+          id: "doc:tbl_pnl",
+          src_table: "ext:pnl",
+          must_appear: true,
+          table_type: "statement",
+          header_matrix: [[{ raw: "2025", col_span: 1, row_span: 1, src_ref: "ext:pnl:h" }]],
+          unit_context: { default: "Rm", per_row: {} },
+          row_groups: [],
+          rows: [{ cells: [cell("Revenue"), cell("10")] }],
+        },
+        {
+          id: "doc:tbl_eps",
+          src_table: "ext:eps",
+          must_appear: true,
+          table_type: "note",
+          header_matrix: [[{ raw: "Note 4", col_span: 1, row_span: 1, src_ref: "ext:eps:h" }]],
+          unit_context: { default: "Rm", per_row: {} },
+          row_groups: [],
+          rows: [{ cells: [cell("Headline earnings"), cell("1 932.4")] }],
+        },
+        {
+          id: "doc:tbl_rr",
+          src_table: "ext:rr",
+          must_appear: true,
+          table_type: "reconciliation",
+          header_matrix: [[{ raw: "2025", col_span: 1, row_span: 1, src_ref: "ext:rr:h" }]],
+          unit_context: { default: "Rm", per_row: {} },
+          row_groups: [],
+          rows: [{ cells: [cell("Balance at the beginning of the period"), cell("302.0")] }],
+        },
+      ],
+    });
+    const plan = buildSitePlan(dm, stubBlueprint());
+    const ids = (path: string) =>
+      Object.values(plan.pages.find((p) => p.path === path)!.regions)
+        .flat()
+        .map((i) => Object.values(i.slots).flat())
+        .flat();
+    expect(ids("financials/income-statement.html")).toEqual(["doc:tbl_pnl"]);
+    expect(ids("financials/income-statement.html")).not.toContain("doc:tbl_eps");
+    expect(ids("financials/changes-in-equity.html")).not.toContain("doc:tbl_rr");
+    expect(ids("financials/notes.html")).toEqual(expect.arrayContaining(["doc:tbl_eps", "doc:tbl_rr"]));
   });
 });

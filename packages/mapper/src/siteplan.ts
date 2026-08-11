@@ -1,5 +1,12 @@
-import type { Blueprint, FinancialDocModel, SitePlan, StatementType } from "@rs/contracts";
-import { classifySectionTitle, noteNumberOf } from "./classify.js";
+import {
+  officialStatementNavLabel,
+  officialStatementTitle,
+  type Blueprint,
+  type FinancialDocModel,
+  type SitePlan,
+  type StatementType,
+} from "@rs/contracts";
+import { classifySectionTitle, isNoteLikeTitle, noteNumberOf } from "./classify.js";
 
 /**
  * FinancialDocModel → SitePlan (references only). Deterministic baseline.
@@ -54,27 +61,11 @@ function supportsMultiPage(blueprint: Blueprint): boolean {
   return hasTemplate(blueprint, "bp:tpl_home") && hasTemplate(blueprint, "bp:tpl_statement_page");
 }
 
-const STATEMENT_PATHS: Record<StatementType, { path: string; title: string; nav: string }> = {
-  pnl_oci: {
-    path: "financials/income-statement.html",
-    title: "Income statement",
-    nav: "Income statement",
-  },
-  financial_position: {
-    path: "financials/balance-sheet.html",
-    title: "Statement of financial position",
-    nav: "Balance sheet",
-  },
-  changes_in_equity: {
-    path: "financials/changes-in-equity.html",
-    title: "Changes in equity",
-    nav: "Changes in equity",
-  },
-  cash_flows: {
-    path: "financials/cash-flows.html",
-    title: "Cash flows",
-    nav: "Cash flows",
-  },
+const STATEMENT_PATHS: Record<StatementType, { path: string }> = {
+  pnl_oci: { path: "financials/income-statement.html" },
+  financial_position: { path: "financials/balance-sheet.html" },
+  changes_in_equity: { path: "financials/changes-in-equity.html" },
+  cash_flows: { path: "financials/cash-flows.html" },
 };
 
 /** Split large note sets into ranges of this many note numbers. */
@@ -355,7 +346,6 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
     shared: [],
   };
   const commentaryTables: string[] = [];
-  const otherFinancial: string[] = [];
 
   const titleByTableId = new Map<string, string>();
   for (const sec of docModel.sections) {
@@ -404,21 +394,19 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
       }
     } else if (isOpsFactsTable(t, title)) {
       commentaryTables.push(t.id);
-    } else if (isNoteTitle(title) || t.table_type === "note" || t.table_type === "wide") {
+    } else if (
+      isNoteTitle(title) ||
+      isNoteLikeTitle(title) ||
+      t.table_type === "note" ||
+      t.table_type === "reconciliation" ||
+      t.table_type === "sensitivity" ||
+      t.table_type === "wide"
+    ) {
       noteTables.push(t.id);
       noteTablesEntity[ent === "shared" ? "shared" : ent].push(t.id);
-    } else if (t.table_type === "statement" || t.must_appear) {
-      otherFinancial.push(t.id);
     }
-  }
-
-  // Unclassified must-appear tables: put on income statement page as fallback bucket
-  if (otherFinancial.length) {
-    if (splitBooks) {
-      (byStatementEntity.group.pnl_oci ??= []).push(...otherFinancial);
-    } else {
-      (byStatement.pnl_oci ??= []).push(...otherFinancial);
-    }
+    // Do not dump leftover must-appear tables onto the income statement —
+    // that is how EPS / Rand Refinery recon stole statement slots.
   }
 
   // Shared notes on a split AFS default into the Group book.
@@ -480,18 +468,24 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
   ) => {
     const entity = opts.entity;
     const pathBase = entity ? `financials/${entity}` : "financials";
-    const labelPrefix =
-      entity === "group" ? "Group · " : entity === "company" ? "Company · " : "";
+    const docKind = docModel.meta.doc_kind;
     for (const st of Object.keys(STATEMENT_PATHS) as StatementType[]) {
       const meta = STATEMENT_PATHS[st];
       const ids = bucket[st] ?? [];
       const file = meta.path.replace(/^financials\//, "");
       const path = `${pathBase}/${file}`;
-      const title = opts.dualLabel && ids.length
-        ? `${meta.title} (Group and Company)`
-        : entity
-          ? `${entity === "group" ? "Group" : "Company"} ${meta.title.toLowerCase()}`
-          : meta.title;
+      const sourceTitle = ids
+        .map((id) => titleByTableId.get(id) ?? "")
+        .find((t) => t.length > 0);
+      const titleOpts = {
+        docKind,
+        statementType: st,
+        entity: entity ?? null,
+        dualEntity: Boolean(opts.dualLabel && ids.length),
+        sourceTitle,
+      };
+      const title = officialStatementTitle(titleOpts);
+      const navLabel = officialStatementNavLabel(titleOpts);
       pages.push({
         path,
         template: stmtTpl,
@@ -499,7 +493,7 @@ function buildMultiPageSitePlan(docModel: FinancialDocModel, blueprint: Blueprin
         regions: { [region]: tableInstances(ids, tableComponent, slotName) },
         downloads: [],
       });
-      nav.push({ label: `${labelPrefix}${meta.nav}`, href: path });
+      nav.push({ label: navLabel, href: path });
     }
   };
 

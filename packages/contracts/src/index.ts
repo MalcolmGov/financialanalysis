@@ -4,6 +4,7 @@ export * from "./dna.js";
 export * from "./prototype.js";
 export * from "./blueprint.js";
 export * from "./docmodel.js";
+export * from "./statement-titles.js";
 export * from "./siteplan.js";
 export * from "./qa.js";
 export * from "./pipeline.js";
