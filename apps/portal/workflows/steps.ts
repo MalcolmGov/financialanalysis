@@ -874,14 +874,10 @@ export async function mapContent(
 }
 
 /**
- * Step 8 — final QA. Real mode: render the SitePlan (@rs/render), run Gate A
- * (referential + coverage), Gate B (rendered-DOM number audit) and the
- * conformance linter, and persist an honest QA report. Deliberately does NOT
- * force-fit the full QAReport/NumberAuditReport contracts shapes, which also
- * require an extraction↔PDF cross-check, an arithmetic re-summing pass and a
- * Playwright smoke/axe suite — none of which exist yet. Fabricating a "pass"
- * for a check that never ran would defeat the point of an audit gate; the
- * report says plainly what wasn't checked. MOCK: stub.
+ * Step 8 — final QA. Gate A/B + conformance lint block export. Arithmetic
+ * re-summing and HTML link smoke are advisory (never force a fail). Pdfium
+ * extraction crosscheck and Playwright viewport/axe are still unimplemented
+ * and listed as such — we do not fabricate a pass for checks that did not run.
  */
 export async function runQa(
   runId: string,
@@ -897,7 +893,8 @@ export async function runQa(
   }
   const { getPrivate, putPrivate } = await import("../lib/blob");
   const { mapToDocModel } = await import("@rs/mapper");
-  const { renderSitePlan, gateA, gateB, conformanceLint } = await import("@rs/render");
+  const { renderSitePlan, gateA, gateB, conformanceLint, arithmeticAdvisory, htmlBundleSmoke } =
+    await import("@rs/render");
   const { db, schema } = await loadDb();
 
   const [bpRow] = await db()
@@ -929,6 +926,9 @@ export async function runQa(
     }
   }
 
+  const arith = arithmeticAdvisory(docModel);
+  const smoke = htmlBundleSmoke(files);
+
   const verdict: "pass" | "fail" = a.status === "pass" && b.status === "pass" && lintErrors.length === 0 ? "pass" : "fail";
   const report = {
     schema_version: "results-studio-qa/1",
@@ -939,10 +939,20 @@ export async function runQa(
     gate_a: a,
     gate_b: b,
     conformance_lint: { passed: lintErrors.length === 0, errors: lintErrors },
+    arithmetic_advisory: {
+      checked: arith.checked,
+      discrepancies: arith.discrepancies,
+      note: arith.note,
+    },
+    html_smoke: {
+      status: smoke.status,
+      dangling: smoke.dangling,
+      external: smoke.external,
+      note: smoke.note,
+    },
     not_yet_implemented: [
       "extraction_crosscheck (pdfium text-layer diff)",
-      "arithmetic_advisory (statement re-summing)",
-      "automated smoke/axe suite (Playwright)",
+      "Playwright viewport/axe (layout)",
     ],
   };
 

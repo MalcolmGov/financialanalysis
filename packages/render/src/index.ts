@@ -23,3 +23,5 @@ export * from "./legal-company.js";
 export * from "./ir-fallbacks.js";
 export * from "./ir-theme.js";
 export * from "./brand-contrast.js";
+export * from "./arithmetic-advisory.js";
+export * from "./html-smoke.js";

@@ -18,6 +18,8 @@ import {
   resolveLegalCompanyName,
   themeIdFromDna,
   SOURCE_PDF_HREF,
+  arithmeticAdvisory,
+  htmlBundleSmoke,
   type BrandAssetUris,
   type GateAResult,
   type GateBResult,
@@ -91,6 +93,17 @@ export interface MultipageExportResult {
   themeId: "classic" | "editorial" | "statutory";
   /** Doc-shape classifier label for operator gates / checklist. */
   docShape: string;
+  arithmeticAdvisory: {
+    checked: number;
+    discrepancies: number;
+    note: string;
+  };
+  htmlSmoke: {
+    status: "pass" | "fail";
+    dangling: number;
+    external: number;
+    note: string;
+  };
 }
 
 function sha256Hex(body: string | Buffer): string {
@@ -302,10 +315,26 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
   files["README.md"] = renderClientDeliveryReadme(finalMeta);
   files["_meta/export.json"] = JSON.stringify(finalMeta, null, 2);
 
+  const arith = arithmeticAdvisory(docModel);
+  const smoke = htmlBundleSmoke(files, Object.keys(binaries));
+  files["_meta/qa-advisory.json"] = JSON.stringify(
+    {
+      schema_version: "qa-advisory/1",
+      arithmetic_advisory: arith,
+      html_smoke: smoke,
+      not_yet_implemented: [
+        "extraction_crosscheck (pdfium text-layer diff)",
+        "Playwright viewport/axe (layout)",
+      ],
+    },
+    null,
+    2,
+  );
+
   return {
     files,
     binaries,
-    paths,
+    paths: [...Object.keys(files), ...Object.keys(binaries)].sort(),
     pages,
     sitePlan,
     sitePlanId: sitePlan.site_plan_id,
@@ -324,5 +353,16 @@ export function buildMultipageExport(input: MultipageExportInput): MultipageExpo
     periodLabel,
     themeId,
     docShape,
+    arithmeticAdvisory: {
+      checked: arith.checked,
+      discrepancies: arith.discrepancies,
+      note: arith.note,
+    },
+    htmlSmoke: {
+      status: smoke.status,
+      dangling: smoke.dangling.length,
+      external: smoke.external.length,
+      note: smoke.note,
+    },
   };
 }

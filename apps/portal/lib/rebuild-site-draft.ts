@@ -290,6 +290,8 @@ export async function rebuildProjectSiteDraft(
     theme_id: built.themeId,
     doc_shape: built.docShape,
     delivery_pack: "client-delivery",
+    arithmetic_advisory: built.arithmeticAdvisory,
+    html_smoke: built.htmlSmoke,
   };
   const manifestPut = await putPrivate(
     `${prefix}/_meta/draft.json`,

@@ -291,6 +291,9 @@ describe("adaptive siteplan", () => {
     expect(noteTopicFromTitle("Notes to the Group financial statements (continued)")).toBeNull();
     expect(noteTopicFromTitle("Notes to the Company financial statements")).toBeNull();
     expect(noteTopicFromTitle("1. Accounting policies")).toBe("Accounting policies");
+    expect(noteTopicFromTitle("Group — 31 December 2025 Tower sale and leaseback")).toBe(
+      "Tower sale and leaseback",
+    );
 
     const ids = Array.from({ length: 12 }, (_, i) => `doc:tbl_n${i + 1}`);
     const titleBy = new Map(

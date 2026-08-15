@@ -37,6 +37,8 @@ Copy `.env.example` → `apps/portal/.env.local` and `services/worker/.env`. Pen
 
 **Node:** pin to 22 LTS (`.nvmrc`, `engines`: `>=20 <26`). Railway's portal image is `node:22-bookworm-slim`. Node 26 breaks local `tsx` rebuilds (`util.deepClone` missing). Prefer console **Rebuild** over local scripts.
 
+**Deploy:** pushing `main` runs `.github/workflows/deploy-portal.yml` when the GitHub secret `RAILWAY_TOKEN` is set. Until that secret exists, deploy with `railway up --service portal --ci` from the repo root.
+
 ## Dev
 
 ```bash

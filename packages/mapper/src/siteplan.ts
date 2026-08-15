@@ -167,14 +167,30 @@ export function isGenericNoteShellTitle(title: string): boolean {
 export function noteTopicFromTitle(raw: string): string | null {
   const cleaned = stripContinuedSuffix(raw.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim());
   if (isGenericNoteShellTitle(cleaned)) return null;
-  const stripped = cleaned
+  const withoutBanner = stripPeriodRunningHeader(cleaned);
+  if (!withoutBanner || isGenericNoteShellTitle(withoutBanner)) return null;
+  const stripped = withoutBanner
     .replace(/^notes?\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .replace(/^note\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .replace(/^\d{1,2}(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .trim();
   if (stripped.length < 4 || /^notes?\s+\d/i.test(stripped)) return null;
   if (isGenericNoteShellTitle(stripped)) return null;
+  if (PERIOD_DATE_ONLY.test(stripped)) return null;
   return stripped.length > 42 ? `${stripped.slice(0, 40)}…` : stripped;
+}
+
+const MONTH =
+  "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const CAL_DATE = `\\d{1,2}\\s+${MONTH}\\s+\\d{4}`;
+const PERIOD_DATE_ONLY = new RegExp(`^(?:${CAL_DATE}|year ended|six months ended)\\b`, "i");
+const RUNNING_HEADER = new RegExp(
+  `^(?:group|company|the\\s+spar\\s+group(?:\\s+limited|\\s+ltd)?)\\s*[—\\-–]\\s*(?:${CAL_DATE}|(?:year|six months)\\s+ended(?:\\s+${CAL_DATE})?)\\s*`,
+  "i",
+);
+
+function stripPeriodRunningHeader(title: string): string {
+  return title.replace(RUNNING_HEADER, "").trim();
 }
 
 function topicByNoteNumber(
