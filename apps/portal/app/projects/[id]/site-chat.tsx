@@ -144,6 +144,13 @@ export function SiteChatPanel(props: {
         previewBust?: number;
         pages?: SiteChatPage[];
         needsNumberOverride?: boolean;
+        applyError?: string;
+        extractionContext?: {
+          available?: boolean;
+          chars?: number;
+          chunks?: number;
+          truncated?: boolean;
+        };
         error?: string;
       };
 
@@ -162,6 +169,12 @@ export function SiteChatPanel(props: {
       } else if (data.needsNumberOverride) {
         metaParts.push("Number override required");
         setPendingOverride(true);
+      } else if (data.applyError) {
+        metaParts.push("Patches did not land — try a shorter unique HTML snippet");
+      }
+      if (data.extractionContext?.available) {
+        const k = Math.round((data.extractionContext.chars ?? 0) / 1000);
+        metaParts.push(`Grounded ${k}k`);
       }
 
       append("assistant", reply, metaParts.length ? metaParts.join(" · ") : undefined);

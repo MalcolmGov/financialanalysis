@@ -11,7 +11,7 @@ Reference/golden project: DRDGOLD HY1 FY2026 (`444cd443-97cc-4b9c-b0f6-eef4f65c2
 | Path | What | Runs on |
 |---|---|---|
 | `packages/contracts` | **Source of truth** for every cross-boundary artifact shape (zod, authoritative) + emitted JSON Schemas. Built first; portal and worker consume it. | — |
-| `apps/portal` | Next.js App Router portal: auth, upload lane, review workspace, run timeline, Workflow DevKit pipeline. | Vercel (Fluid, region `fra1`) |
+| `apps/portal` | Next.js App Router portal: auth, upload lane, review workspace, run timeline, Workflow DevKit pipeline. | Railway (daily extract/rebuild). Vercel clone is UI-only. |
 | `services/worker` | Python FastAPI: Docling extraction, design-DNA probe, asset extraction, Playwright render/QA. One container. | Railway (EU) |
 
 ## Non-negotiable invariants (from the adversarial review)
@@ -27,6 +27,15 @@ Reference/golden project: DRDGOLD HY1 FY2026 (`444cd443-97cc-4b9c-b0f6-eef4f65c2
 ## Environments
 
 Copy `.env.example` → `apps/portal/.env.local` and `services/worker/.env`. Pending provisioning decisions (EU region recommended, fixed at store creation): Neon Postgres (Frankfurt), Vercel Blob private store (EU), Resend domain, Anthropic API key.
+
+**Hosts**
+
+| Host | URL | Use for |
+|---|---|---|
+| Railway portal + worker | https://portal-production-518a.up.railway.app | Daily production: extract, rebuild, Studio Chat, sign-off, export |
+| Vercel UI | https://portal-alpha-drab.vercel.app | Sign-in / console chrome only. Worker is Railway-internal, so pipeline from this host will fail. |
+
+**Node:** pin to 22 LTS (`.nvmrc`, `engines`: `>=20 <26`). Railway's portal image is `node:22-bookworm-slim`. Node 26 breaks local `tsx` rebuilds (`util.deepClone` missing). Prefer console **Rebuild** over local scripts.
 
 ## Dev
 

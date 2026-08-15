@@ -2,7 +2,7 @@
  * Rebuild multipage site draft for a project from its latest DNA + extraction.
  * Persists the same artifact shape as workflows/steps.buildSiteDraftArtifact.
  *
- * Usage:
+ * Usage (Node 20–22; Railway uses 22. Node 26 breaks tsx/undici):
  *   DATABASE_URL=... BLOB_READ_WRITE_TOKEN=... \
  *     pnpm exec tsx scripts/rebuild-site-draft.ts [projectId]
  */

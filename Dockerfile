@@ -10,7 +10,8 @@
 
 FROM node:22-bookworm-slim AS base
 # Debian/glibc base: matches the glibc `sharp` binaries in pnpm-lock.yaml and
-# avoids musl edge cases. Node 22 LTS satisfies root engines (">=20") and Next 16.3.
+# avoids musl edge cases. Node 22 LTS matches `.nvmrc` / engines (">=20 <26").
+# Node 26 breaks local `tsx` rebuilds (`util.deepClone` missing on undici).
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 ENV NEXT_TELEMETRY_DISABLED=1

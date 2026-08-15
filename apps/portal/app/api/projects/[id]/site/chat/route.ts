@@ -485,6 +485,8 @@ export async function POST(
             targetPath,
             needsNumberOverride: false,
             costUsd: usageCost,
+            applyError: lastErr,
+            extractionContext: extractionMeta,
           });
         }
       } catch (err) {
@@ -496,6 +498,8 @@ export async function POST(
           targetPath,
           needsNumberOverride: false,
           costUsd: usageCost,
+          applyError: lastErr ?? msg,
+          extractionContext: extractionMeta,
         });
       }
     }
@@ -515,6 +519,8 @@ export async function POST(
           targetPath,
           needsNumberOverride: false,
           costUsd: usageCost,
+          applyError: lastErr,
+          extractionContext: extractionMeta,
         });
       }
     }

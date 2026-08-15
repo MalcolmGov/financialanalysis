@@ -34,6 +34,25 @@ describe("applyPatches", () => {
     ]);
     expect(out).toContain("<a>Overview</a>");
   });
+
+  it("matches HTML entities and quote-style flex", () => {
+    const html = `<h1 class='hero'>Q1&nbsp;results</h1>`;
+    const out = applyPatches(html, [
+      {
+        search: `<h1 class="hero">Q1 results</h1>`,
+        replace: `<h1 class='hero'>Interim results</h1>`,
+      },
+    ]);
+    expect(out).toContain("Interim results");
+  });
+
+  it("unescapes literal \\n in the search string", () => {
+    const html = "<p>Line one\nLine two</p>";
+    const out = applyPatches(html, [
+      { search: "<p>Line one\\nLine two</p>", replace: "<p>Line one<br>Line two</p>" },
+    ]);
+    expect(out).toContain("<br>");
+  });
 });
 
 describe("assertNumeralsUnchanged", () => {

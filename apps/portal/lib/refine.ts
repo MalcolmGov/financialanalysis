@@ -34,9 +34,41 @@ export function normalizeWs(s: string): string {
 }
 
 /**
+ * Decode the handful of HTML entities models mix into copy-paste anchors.
+ * Named entities last so `&amp;nbsp;` still resolves.
+ */
+export function decodeHtmlFlex(s: string): string {
+  return s
+    .replace(/&nbsp;|&#160;|&#x0*A0;/gi, " ")
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/[\u2018\u2019\u201A]/g, "'")
+    .replace(/[\u201C\u201D\u201E]/g, '"')
+    .replace(/&amp;/gi, "&");
+}
+
+function searchVariants(search: string): string[] {
+  const out: string[] = [];
+  const add = (s: string) => {
+    if (s && !out.includes(s)) out.push(s);
+  };
+  add(search);
+  add(decodeHtmlFlex(search));
+  if (search.includes("\\n") || search.includes("\\t")) {
+    add(search.replace(/\\n/g, "\n").replace(/\\t/g, "\t"));
+  }
+  const decoded = decodeHtmlFlex(search);
+  if (/"/.test(decoded) && !/'/.test(decoded)) add(decoded.replace(/"/g, "'"));
+  if (/'/.test(decoded) && !/"/.test(decoded)) add(decoded.replace(/'/g, '"'));
+  return out;
+}
+
+/**
  * Apply anchored search/replace patches. Exact match first, then
- * whitespace-normalized. Fails if any block matches 0 or >1 times (unless
- * occurrence is set). All-or-nothing.
+ * whitespace-normalized (entity/quote flex). Fails if any block matches 0
+ * or >1 times (unless occurrence is set). All-or-nothing.
  */
 export function applyPatches(html: string, patches: RefinePatch[]): string {
   if (!patches.length) throw new PatchApplyError("empty patch list");
@@ -45,49 +77,51 @@ export function applyPatches(html: string, patches: RefinePatch[]): string {
     const p = patches[i]!;
     if (!p.search) throw new PatchApplyError(`patch[${i}]: empty search`);
     const applied = applyOne(out, p, i);
+    if (applied === out) {
+      throw new PatchApplyError(`patch[${i}]: search/replace produced no change`);
+    }
     out = applied;
   }
   return out;
 }
 
 function applyOne(html: string, p: RefinePatch, index: number): string {
-  const exactIdxs = allIndexes(html, p.search);
-  if (exactIdxs.length === 1 || (p.occurrence != null && exactIdxs.length > 0)) {
-    const which = p.occurrence ?? 1;
-    if (which < 1 || which > exactIdxs.length) {
-      throw new PatchApplyError(
-        `patch[${index}]: occurrence ${which} out of range (${exactIdxs.length} exact matches)`,
-      );
+  let lastAmbiguous: string | null = null;
+  for (const search of searchVariants(p.search)) {
+    const exactIdxs = allIndexes(html, search);
+    if (exactIdxs.length === 1 || (p.occurrence != null && exactIdxs.length > 0)) {
+      const which = p.occurrence ?? 1;
+      if (which < 1 || which > exactIdxs.length) {
+        lastAmbiguous = `patch[${index}]: occurrence ${which} out of range (${exactIdxs.length} exact matches)`;
+        continue;
+      }
+      const at = exactIdxs[which - 1]!;
+      return html.slice(0, at) + p.replace + html.slice(at + search.length);
     }
-    const at = exactIdxs[which - 1]!;
-    return html.slice(0, at) + p.replace + html.slice(at + p.search.length);
-  }
-  if (exactIdxs.length > 1) {
-    throw new PatchApplyError(
-      `patch[${index}]: search matched ${exactIdxs.length} times exactly — set occurrence or tighten the anchor`,
-    );
-  }
+    if (exactIdxs.length > 1) {
+      lastAmbiguous = `patch[${index}]: search matched ${exactIdxs.length} times exactly — set occurrence or tighten the anchor`;
+      continue;
+    }
 
-  // Fuzzy: whitespace-normalized unique match.
-  const needle = normalizeWs(p.search);
-  if (!needle) throw new PatchApplyError(`patch[${index}]: empty search after normalize`);
-  const matches = fuzzyMatches(html, needle);
-  if (matches.length === 0) {
-    throw new PatchApplyError(`patch[${index}]: search not found (exact or whitespace-fuzzy)`);
+    const needle = normalizeWs(decodeHtmlFlex(search));
+    if (!needle) continue;
+    const matches = fuzzyMatches(html, needle);
+    if (matches.length === 0) continue;
+    if (matches.length > 1 && p.occurrence == null) {
+      lastAmbiguous = `patch[${index}]: search matched ${matches.length} times (fuzzy) — set occurrence or tighten the anchor`;
+      continue;
+    }
+    const which = p.occurrence ?? 1;
+    if (which < 1 || which > matches.length) {
+      lastAmbiguous = `patch[${index}]: occurrence ${which} out of range (${matches.length} fuzzy matches)`;
+      continue;
+    }
+    const m = matches[which - 1]!;
+    return html.slice(0, m.start) + p.replace + html.slice(m.end);
   }
-  if (matches.length > 1 && p.occurrence == null) {
-    throw new PatchApplyError(
-      `patch[${index}]: search matched ${matches.length} times (fuzzy) — set occurrence or tighten the anchor`,
-    );
-  }
-  const which = p.occurrence ?? 1;
-  if (which < 1 || which > matches.length) {
-    throw new PatchApplyError(
-      `patch[${index}]: occurrence ${which} out of range (${matches.length} fuzzy matches)`,
-    );
-  }
-  const m = matches[which - 1]!;
-  return html.slice(0, m.start) + p.replace + html.slice(m.end);
+  throw new PatchApplyError(
+    lastAmbiguous ?? `patch[${index}]: search not found (exact, entity, or whitespace-fuzzy)`,
+  );
 }
 
 function allIndexes(haystack: string, needle: string): number[] {
@@ -103,26 +137,60 @@ function allIndexes(haystack: string, needle: string): number[] {
   return out;
 }
 
+const FLEX_NAMED: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+};
+
+function readHtmlEntity(html: string, i: number): { value: string; end: number } | null {
+  if (html[i] !== "&") return null;
+  const semi = html.indexOf(";", i + 1);
+  if (semi < 0 || semi - i > 12) return null;
+  const body = html.slice(i + 1, semi);
+  if (/^#x[0-9a-f]+$/i.test(body)) {
+    const n = parseInt(body.slice(2), 16);
+    if (!Number.isFinite(n)) return null;
+    return { value: String.fromCharCode(n), end: semi + 1 };
+  }
+  if (/^#\d+$/.test(body)) {
+    const n = parseInt(body.slice(1), 10);
+    if (!Number.isFinite(n)) return null;
+    return { value: String.fromCharCode(n), end: semi + 1 };
+  }
+  const named = FLEX_NAMED[body.toLowerCase()];
+  if (!named) return null;
+  return { value: named, end: semi + 1 };
+}
+
 function fuzzyMatches(html: string, normalizedNeedle: string): { start: number; end: number }[] {
   const matches: { start: number; end: number }[] = [];
-  // Walk the HTML, building a normalized view with index map back to original.
-  const map: number[] = [];
+  const startMap: number[] = [];
+  const endMap: number[] = [];
   let norm = "";
   let i = 0;
   while (i < html.length) {
-    const ch = html[i]!;
-    if (/[\s\u00a0\u202f\u2009]/.test(ch)) {
-      // Collapse whitespace run to a single space in normalized form.
+    const entity = readHtmlEntity(html, i);
+    const raw = entity?.value ?? html[i]!;
+    const next = entity?.end ?? i + 1;
+    if (/[\s\u00a0\u202f\u2009]/.test(raw)) {
       if (norm.length === 0 || norm[norm.length - 1] !== " ") {
-        map.push(i);
+        startMap.push(i);
+        endMap.push(next);
         norm += " ";
+      } else {
+        endMap[endMap.length - 1] = next;
       }
-      while (i < html.length && /[\s\u00a0\u202f\u2009]/.test(html[i]!)) i++;
+      i = next;
       continue;
     }
-    map.push(i);
-    norm += ch;
-    i++;
+    startMap.push(i);
+    endMap.push(next);
+    norm += raw;
+    i = next;
   }
   const trimmed = norm.trim();
   const trimOffset = norm.length - norm.trimStart().length;
@@ -132,9 +200,8 @@ function fuzzyMatches(html: string, normalizedNeedle: string): { start: number; 
     if (at < 0) break;
     const absStart = at + trimOffset;
     const absEnd = absStart + normalizedNeedle.length - 1;
-    const start = map[absStart] ?? 0;
-    const endIdx = map[absEnd];
-    const end = endIdx != null ? endIdx + 1 : html.length;
+    const start = startMap[absStart] ?? 0;
+    const end = endMap[absEnd] ?? html.length;
     matches.push({ start, end });
     from = at + Math.max(normalizedNeedle.length, 1);
   }

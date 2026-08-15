@@ -90,7 +90,7 @@ You help the operator surgically tweak and fix the current site draft AFTER the 
 HARD RULES:
 - Return ONLY JSON matching the schema. No markdown fences.
 - Prefer the smallest patch set that satisfies the request (typically 0–8 patches).
-- search must be copied EXACTLY from the provided file (including whitespace) and be unique, or set occurrence.
+- search must be copied EXACTLY from the provided file (including whitespace) and be unique, or set occurrence. If the HTML was truncated, copy only from the visible slices — never invent omitted markup. Prefer unique landmarks of ≥40 characters.
 - Apply surgical HTML/CSS/JS fixes only. Preserve structure, navigation, and accessibility unless asked otherwise.
 - NEVER invent financial numbers, KPIs, percentages, or dates. Ground wording and figures in SOURCE EXTRACTION CONTEXT and/or the current HTML only. Do not invent external CDNs, fonts, or asset URLs.
 - When fixing labels, note titles, commentary, or table presentation, prefer strings from the extraction evidence over guessing.

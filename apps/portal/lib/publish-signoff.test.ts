@@ -3,6 +3,8 @@ import {
   buildPublishChecklist,
   canSignOffPublish,
   checklistBlockers,
+  isPublishSignoffStale,
+  signoffBindsToDraft,
 } from "./publish-signoff";
 
 describe("publish readiness checklist", () => {
@@ -97,5 +99,20 @@ describe("publish readiness checklist", () => {
     expect(contrast?.status).toBe("pass");
     expect(contrast?.detail).toMatch(/remapped|Bright brand/i);
     expect(canSignOffPublish(items)).toBe(true);
+  });
+});
+
+describe("publish sign-off draft binding", () => {
+  const prior = { draft_id: "d1", draft_version: 12 };
+
+  it("binds when draft id or version still match", () => {
+    expect(signoffBindsToDraft(prior, "d1", 99)).toBe(true);
+    expect(signoffBindsToDraft(prior, "other", 12)).toBe(true);
+  });
+
+  it("is stale after a new rebuild that neither id nor version match", () => {
+    expect(isPublishSignoffStale(prior, "d2", 13)).toBe(true);
+    expect(isPublishSignoffStale(prior, "d1", 12)).toBe(false);
+    expect(isPublishSignoffStale(null, "d2", 13)).toBe(false);
   });
 });

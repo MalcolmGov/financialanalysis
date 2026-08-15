@@ -7,6 +7,11 @@ import {
   normalizeBrandHex,
 } from "../../../lib/live-brand-preview";
 import { statusToneClass } from "../../../lib/status-tone";
+import {
+  RAILWAY_PIPELINE_URL,
+  classifyHost,
+  type OperatorHostKind,
+} from "../../../lib/runtime-host";
 import { SiteChatPanel } from "./site-chat";
 
 /** Multipage-as-product rail — Opus shell is optional preview only. */
@@ -50,6 +55,7 @@ type PublishReadiness = {
     signed_off_by_email?: string;
     signed_off_by: string;
     signed_off_at: string;
+    draft_id?: string;
     draft_version: number;
   } | null;
   signoffStale: boolean;
@@ -417,6 +423,7 @@ export function ProjectConsole(props: {
   const [pagesOpen, setPagesOpen] = useState(false);
   const [typeDensity, setTypeDensity] = useState<TypeDensity>("balanced");
   const [chatDraftPrompt, setChatDraftPrompt] = useState<string | null>(null);
+  const [hostKind, setHostKind] = useState<OperatorHostKind | null>(null);
   const [pageGroupsOpen, setPageGroupsOpen] = useState<Record<string, boolean>>({
     overview: true,
     group: true,
@@ -679,6 +686,10 @@ export function ProjectConsole(props: {
     if (!showSiteReview) return;
     void refreshPublishAndBrand();
   }, [showSiteReview, refreshPublishAndBrand, siteDraft?.draftId, siteDraft?.version]);
+
+  useEffect(() => {
+    setHostKind(classifyHost(window.location.host));
+  }, []);
 
   useEffect(() => {
     if (!showSiteReview) return;
@@ -1439,6 +1450,8 @@ export function ProjectConsole(props: {
           </div>
           {publishReady?.signoff && !publishReady.signoffStale ? (
             <span className="rs-pill rs-pill--pass">Signed off</span>
+          ) : publishReady?.signoffStale ? (
+            <span className="rs-pill rs-pill--warn">Re-sign required</span>
           ) : (
             <span className="rs-pill rs-pill--warn">Awaiting</span>
           )}
@@ -1481,6 +1494,13 @@ export function ProjectConsole(props: {
             Blockers: {publishReady.blockers.join("; ")}
           </p>
         ) : null}
+        {publishReady?.signoffStale && publishReady.canSignOff ? (
+          <p className="rs-note" style={{ margin: 0 }}>
+            Draft v{publishReady.draftVersion} was rebuilt after the last sign-off (was v
+            {publishReady.signoff?.draft_version ?? "?"}). Gates still pass — click{" "}
+            <strong>Re-sign this draft</strong>. Approve &amp; export stays locked until then.
+          </p>
+        ) : null}
         {status === "in_review" ? (
           <div className="rs-row">
             <button
@@ -1493,7 +1513,7 @@ export function ProjectConsole(props: {
               }
               onClick={() => void signOffPublish()}
             >
-              Sign off for publish
+              {publishReady?.signoffStale ? "Re-sign this draft" : "Sign off for publish"}
             </button>
             <button
               type="button"
@@ -1502,7 +1522,9 @@ export function ProjectConsole(props: {
               onClick={() => void approveExport()}
               title={
                 exportBlocked
-                  ? "Sign off required; critical gates must pass"
+                  ? publishReady?.signoffStale
+                    ? "Draft rebuilt after the last sign-off — re-sign first"
+                    : "Sign off required; critical gates must pass"
                   : undefined
               }
             >
@@ -1513,8 +1535,10 @@ export function ProjectConsole(props: {
         {publishReady?.signoff ? (
           <p className="rs-tiny rs-muted" style={{ margin: 0 }}>
             Last sign-off {new Date(publishReady.signoff.signed_off_at).toLocaleString()}
-            {publishReady.signoffStale ? " · stale after new draft — re-sign" : ""}
-            {" · "}draft v{publishReady.signoff.draft_version}
+            {publishReady.signoffStale
+              ? ` · stale after draft v${publishReady.draftVersion} — re-sign`
+              : ""}
+            {" · "}was draft v{publishReady.signoff.draft_version}
           </p>
         ) : null}
       </div>
@@ -1641,6 +1665,9 @@ export function ProjectConsole(props: {
           (data.draft?.brandLogo ? " · logo on" : "") +
           (data.draft?.brandBanner ? " · hero on" : "") +
           warn +
+          (publishReady?.signoff
+            ? " · re-sign this draft before Approve & export"
+            : "") +
           ".",
       );
       await Promise.all([refreshPublishAndBrand(), refreshSiteDraft()]);
@@ -1695,7 +1722,9 @@ export function ProjectConsole(props: {
     }
     if (!publishReady?.signoff || publishReady.signoffStale) {
       setNote(
-        "Complete Sign off for publish on the readiness checklist before Approve & export.",
+        publishReady?.signoffStale
+          ? "This draft was rebuilt after the last sign-off. Open Publish and click Re-sign this draft."
+          : "Complete Sign off for publish on the readiness checklist before Approve & export.",
       );
       return;
     }
@@ -1762,6 +1791,12 @@ export function ProjectConsole(props: {
       <a href="/" className="rs-back">
         ← Projects
       </a>
+      {hostKind === "ui-preview" ? (
+        <p className="rs-note" style={{ margin: "0 0 14px" }}>
+          This is the Vercel UI preview. Extraction and rebuild run on the Railway pipeline:{" "}
+          <a href={RAILWAY_PIPELINE_URL}>{RAILWAY_PIPELINE_URL.replace(/^https:\/\//, "")}</a>.
+        </p>
+      ) : null}
 
       <div className="rs-stage">
         <header className="rs-stage-head">
@@ -1856,7 +1891,9 @@ export function ProjectConsole(props: {
                 onClick={() => void approveExport()}
                 title={
                   exportBlocked
-                    ? "Complete publish sign-off and ensure Gate A/B + reliability pass"
+                    ? publishReady?.signoffStale
+                      ? "Draft rebuilt after the last sign-off — re-sign in Publish first"
+                      : "Complete publish sign-off and ensure Gate A/B + reliability pass"
                     : "Package the multipage zip"
                 }
               >

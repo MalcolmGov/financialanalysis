@@ -382,6 +382,25 @@ export function canSignOffPublish(items: PublishChecklistItem[]): boolean {
   return checklistBlockers(items).length === 0;
 }
 
+/** True when a recorded sign-off still binds to this draft id or version. */
+export function signoffBindsToDraft(
+  signoff: { draft_id: string; draft_version: number },
+  draftId: string,
+  draftVersion: number,
+): boolean {
+  return signoff.draft_id === draftId || signoff.draft_version === draftVersion;
+}
+
+/** True when a prior sign-off exists but the current draft is a newer rebuild. */
+export function isPublishSignoffStale(
+  signoff: { draft_id: string; draft_version: number } | null | undefined,
+  draftId: string,
+  draftVersion: number,
+): boolean {
+  if (!signoff) return false;
+  return !signoffBindsToDraft(signoff, draftId, draftVersion);
+}
+
 export async function loadPublishSignoff(
   projectId: string,
 ): Promise<PublishSignoffT | null> {

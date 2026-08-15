@@ -10,6 +10,7 @@ import {
   buildPublishChecklist,
   canSignOffPublish,
   checklistBlockers,
+  isPublishSignoffStale,
   loadPublishSignoff,
   savePublishSignoff,
 } from "../../../../../lib/publish-signoff";
@@ -203,15 +204,15 @@ async function readinessFromDraft(projectId: string) {
 
   const blockers = checklistBlockers(checklist);
   const existing = await loadPublishSignoff(projectId);
-  const signoffMatchesDraft =
-    existing?.draft_id === (meta.draftId ?? ctx.art.id) ||
-    existing?.draft_version === ctx.art.version;
+  const draftId = meta.draftId ?? ctx.art.id;
+  const draftVersion = ctx.art.version;
+  const signoffStale = isPublishSignoffStale(existing, draftId, draftVersion);
 
   return {
     status: 200 as const,
     payload: {
-      draftId: meta.draftId ?? ctx.art.id,
-      draftVersion: ctx.art.version,
+      draftId,
+      draftVersion,
       projectStatus: ctx.project.status,
       company,
       gateA: checklist.find((c) => c.id === "gate_a")?.detail ?? meta.gateA,
@@ -220,8 +221,10 @@ async function readinessFromDraft(projectId: string) {
       checklist,
       blockers,
       canSignOff: canSignOffPublish(checklist),
-      signoff: signoffMatchesDraft ? existing : null,
-      signoffStale: Boolean(existing && !signoffMatchesDraft),
+      // Keep the prior signature visible after rebuild so the console can
+      // say “re-sign this draft” instead of looking like Publish is broken.
+      signoff: existing,
+      signoffStale,
       brand: {
         logoOrigin,
         bannerOrigin,
