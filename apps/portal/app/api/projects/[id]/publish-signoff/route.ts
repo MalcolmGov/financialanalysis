@@ -340,5 +340,31 @@ export async function POST(
 
   await logAccess("operator", operator.id, "publish_signoff", `project:${projectId}`);
 
-  return Response.json({ ok: true, signoff });
+  // Materialize the delivery zip immediately so GET /export never 404s after
+  // sign-off is allowed / recorded.
+  let deliveryZip: {
+    bundleId: string;
+    zipPath: string;
+    draftVersion: number;
+    created: boolean;
+  } | null = null;
+  try {
+    const { ensureDeliveryZip } = await import("../../../../../lib/export-signed-draft");
+    const zip = await ensureDeliveryZip({
+      projectId,
+      actorUserId: operator.id,
+      actorEmail: operator.email,
+      requireSignoff: true,
+    });
+    deliveryZip = {
+      bundleId: zip.bundleId,
+      zipPath: zip.zipPath,
+      draftVersion: zip.draftVersion,
+      created: zip.created,
+    };
+  } catch (err) {
+    console.warn(`[publish-signoff] delivery zip materialize failed:`, err);
+  }
+
+  return Response.json({ ok: true, signoff, deliveryZip });
 }

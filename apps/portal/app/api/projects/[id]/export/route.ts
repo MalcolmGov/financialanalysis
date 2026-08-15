@@ -1,9 +1,9 @@
-import { latestExportZipPath } from "../../../../../lib/gate-ids";
 import { requireOperator, logAccess } from "../../../../../lib/authz";
 import { getPrivate } from "../../../../../lib/blob";
 import { env } from "../../../../../lib/env";
 import {
   ExportSignedDraftError,
+  ensureDeliveryZip,
   exportSignedDraft,
 } from "../../../../../lib/export-signed-draft";
 
@@ -12,8 +12,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  let operator;
   try {
-    await requireOperator();
+    operator = await requireOperator();
   } catch (res) {
     return res as Response;
   }
@@ -23,8 +24,24 @@ export async function GET(
     return Response.json({ error: "export unavailable in MOCK_BLOB mode" }, { status: 404 });
   }
 
-  const zipPath = await latestExportZipPath(projectId);
-  if (!zipPath) {
+  // Always ensure a zip for the current draft when publish is allowed (gates
+  // green). Reuses an existing matching bundle; materializes when missing.
+  let zipPath: string;
+  try {
+    const ensured = await ensureDeliveryZip({
+      projectId,
+      actorUserId: operator.id,
+      actorEmail: operator.email,
+      requireSignoff: false,
+    });
+    zipPath = ensured.zipPath;
+  } catch (err) {
+    if (err instanceof ExportSignedDraftError) {
+      return Response.json(
+        { error: err.message, details: err.details },
+        { status: err.status === 409 ? 404 : err.status },
+      );
+    }
     return Response.json({ error: "no export bundle for this project yet" }, { status: 404 });
   }
 
@@ -75,6 +92,7 @@ export async function POST(
       projectId,
       actorUserId: operator.id,
       actorEmail: operator.email,
+      requireSignoff: true,
     });
     await logAccess("operator", operator.id, "approve_export", `project:${projectId}`);
     return Response.json({ ok: true, ...result });

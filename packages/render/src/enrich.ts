@@ -29,6 +29,26 @@ export interface EnrichContext {
 }
 
 /**
+ * True only when the statement board has real Group×Company column bands.
+ * Do not infer from prose/nav mentions of "Group" / "Company" — that falsely
+ * flags single-entity condensed consolidated interims (e.g. DRD).
+ */
+export function htmlHasDualEntityBoard(html: string): boolean {
+  if (/data-density=["']dual-entity["']/i.test(html)) return true;
+  const entityHeaders = [
+    ...html.matchAll(/<th\b[^>]*\bh-entity\b[^>]*>([\s\S]*?)<\/th>/gi),
+  ].map((m) =>
+    (m[1] ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+  const hasGroup = entityHeaders.some((t) => /^group$/i.test(t));
+  const hasCompany = entityHeaders.some((t) => /^company$/i.test(t));
+  return hasGroup && hasCompany;
+}
+
+/**
  * Fill WW-style prose pages after the deterministic table render.
  * Prose is injected as HTML (with data-src) so SitePlan text slots never
  * carry numerals — Gate B still covers any .num / data-src spans in tables.
@@ -716,10 +736,8 @@ export function enrichMultiPageFiles(
     html = html.replace(/<header class="page-title-banner"[\s\S]*?<\/header>/i, "");
     html = html.replace(/<header class="page-hero"[\s\S]*?<\/header>/i, "");
     const splitBook = /financials\/(group|company)\//i.test(page.path);
-    const dualEntity =
-      !splitBook &&
-      (/Group and Company/i.test(page.title) ||
-        (/\bGROUP\b/i.test(html) && /\bCOMPANY\b/i.test(html)));
+    // Require real dual-column table chrome — never title/prose word hits alone.
+    const dualEntity = !splitBook && htmlHasDualEntityBoard(html);
     const bookEntity = page.path.includes("/group/")
       ? ("group" as const)
       : page.path.includes("/company/")

@@ -33,18 +33,7 @@ type DraftMeta = {
   pdfBundled?: boolean;
 };
 
-const TEXT_EXT = /\.(html?|css|js|mjs|json|md|txt|svg|csv|xml)$/i;
-
-/**
- * Zip the current multipage site draft with the IR/CFO publish sign-off
- * embedded in `_meta/export.json`. Works without a live workflow review hook
- * (needed after offline rebuilds leave status `in_review` on a completed run).
- */
-export async function exportSignedDraft(opts: {
-  projectId: string;
-  actorUserId: string;
-  actorEmail?: string;
-}): Promise<{
+export type DeliveryZipResult = {
   bundleId: string;
   zipPath: string;
   manifestPath: string;
@@ -52,8 +41,127 @@ export async function exportSignedDraft(opts: {
   draftVersion: number;
   draftId: string;
   downloadUrl: string;
-}> {
+  created: boolean;
+  signed: boolean;
+};
+
+const TEXT_EXT = /\.(html?|css|js|mjs|json|md|txt|svg|csv|xml)$/i;
+
+async function latestExportMetaForRun(runId: string): Promise<{
+  zipPath?: string;
+  draftId?: string;
+  draftVersion?: number;
+} | null> {
+  const [art] = await db()
+    .select({ meta: schema.artifacts.meta })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, runId), eq(schema.artifacts.kind, "export_bundle")))
+    .orderBy(desc(schema.artifacts.createdAt))
+    .limit(1);
+  return (art?.meta as { zipPath?: string; draftId?: string; draftVersion?: number } | null) ?? null;
+}
+
+/**
+ * Ensure a client-delivery zip exists for the current draft when publish is
+ * allowed (Gate A/B + reliability). Prefer an existing zip for this draft;
+ * otherwise materialize one. Sign-off is required only when `requireSignoff`.
+ */
+export async function ensureDeliveryZip(opts: {
+  projectId: string;
+  actorUserId: string;
+  actorEmail?: string;
+  /** Default true — Approve & export / post-signoff path. */
+  requireSignoff?: boolean;
+}): Promise<DeliveryZipResult> {
+  const requireSignoff = opts.requireSignoff !== false;
   const { projectId, actorUserId, actorEmail } = opts;
+
+  const [run] = await db()
+    .select({ id: schema.pipelineRuns.id })
+    .from(schema.pipelineRuns)
+    .where(eq(schema.pipelineRuns.projectId, projectId))
+    .orderBy(desc(schema.pipelineRuns.createdAt))
+    .limit(1);
+  if (!run) throw new ExportSignedDraftError("no pipeline run for project", 404);
+
+  const [art] = await db()
+    .select({
+      id: schema.artifacts.id,
+      version: schema.artifacts.version,
+      meta: schema.artifacts.meta,
+    })
+    .from(schema.artifacts)
+    .where(and(eq(schema.artifacts.runId, run.id), eq(schema.artifacts.kind, "site_plan")))
+    .orderBy(desc(schema.artifacts.version), desc(schema.artifacts.createdAt))
+    .limit(1);
+  if (!art) throw new ExportSignedDraftError("no multipage site draft yet", 404);
+
+  const meta = (art.meta ?? {}) as DraftMeta;
+  const prefix = meta.prefix;
+  let draftManifest: Record<string, unknown> = {};
+  if (prefix) {
+    try {
+      draftManifest = JSON.parse(
+        (await getPrivate(`${prefix}/_meta/draft.json`)).toString("utf8"),
+      ) as Record<string, unknown>;
+    } catch {
+      draftManifest = {};
+    }
+  }
+  const draftId =
+    (typeof draftManifest.draft_id === "string" && draftManifest.draft_id) ||
+    meta.draftId ||
+    art.id;
+  const draftVersion =
+    (typeof draftManifest.version === "number" && draftManifest.version) || art.version;
+
+  const existing = await latestExportMetaForRun(run.id);
+  if (
+    existing?.zipPath &&
+    (existing.draftId === draftId || existing.draftVersion === draftVersion)
+  ) {
+    try {
+      const bytes = await getPrivate(existing.zipPath);
+      return {
+        bundleId: existing.zipPath.split("/").pop()?.replace(/\.zip$/, "") ?? "existing",
+        zipPath: existing.zipPath,
+        manifestPath: existing.zipPath.replace(/\.zip$/, ".json"),
+        zipBytes: bytes.byteLength,
+        draftVersion,
+        draftId,
+        downloadUrl: `/api/projects/${projectId}/export`,
+        created: false,
+        signed: true,
+      };
+    } catch {
+      /* missing blob — rebuild below */
+    }
+  }
+
+  return exportSignedDraft({
+    projectId,
+    actorUserId,
+    actorEmail,
+    requireSignoff,
+  });
+}
+
+/**
+ * Zip the current multipage site draft with the IR/CFO publish sign-off
+ * embedded in `_meta/export.json`. Works without a live workflow review hook
+ * (needed after offline rebuilds leave status `in_review` on a completed run).
+ *
+ * When `requireSignoff` is false, still requires Gate A/B + reliability (publish
+ * allowed) so GET /export can materialize a delivery zip before Approve is clicked.
+ */
+export async function exportSignedDraft(opts: {
+  projectId: string;
+  actorUserId: string;
+  actorEmail?: string;
+  requireSignoff?: boolean;
+}): Promise<DeliveryZipResult> {
+  const { projectId, actorUserId, actorEmail } = opts;
+  const requireSignoff = opts.requireSignoff !== false;
 
   const [project] = await db()
     .select({
@@ -132,26 +240,38 @@ export async function exportSignedDraft(opts: {
   }
 
   const publishSignoff = await loadPublishSignoff(projectId);
-  if (!publishSignoff) {
-    throw new ExportSignedDraftError(
-      "Publish sign-off required — complete Sign off for publish before Approve & export",
-      409,
-    );
+  if (requireSignoff) {
+    if (!publishSignoff) {
+      throw new ExportSignedDraftError(
+        "Publish sign-off required — complete Sign off for publish before Approve & export",
+        409,
+      );
+    }
+    const signoffMatches =
+      publishSignoff.draft_id === draftId || publishSignoff.draft_version === draftVersion;
+    if (!signoffMatches) {
+      throw new ExportSignedDraftError(
+        `Publish sign-off is stale (signed draft v${publishSignoff.draft_version}, current v${draftVersion}) — re-sign before export`,
+        409,
+        {
+          signedDraftId: publishSignoff.draft_id,
+          signedDraftVersion: publishSignoff.draft_version,
+          currentDraftId: draftId,
+          currentDraftVersion: draftVersion,
+        },
+      );
+    }
+  } else if (publishSignoff) {
+    const signoffMatches =
+      publishSignoff.draft_id === draftId || publishSignoff.draft_version === draftVersion;
+    if (!signoffMatches) {
+      // Stale sign-off: still allow a gate-green delivery zip for the current draft.
+    }
   }
-  const signoffMatches =
-    publishSignoff.draft_id === draftId || publishSignoff.draft_version === draftVersion;
-  if (!signoffMatches) {
-    throw new ExportSignedDraftError(
-      `Publish sign-off is stale (signed draft v${publishSignoff.draft_version}, current v${draftVersion}) — re-sign before export`,
-      409,
-      {
-        signedDraftId: publishSignoff.draft_id,
-        signedDraftVersion: publishSignoff.draft_version,
-        currentDraftId: draftId,
-        currentDraftVersion: draftVersion,
-      },
-    );
-  }
+
+  const signed =
+    Boolean(publishSignoff) &&
+    (publishSignoff!.draft_id === draftId || publishSignoff!.draft_version === draftVersion);
 
   const bundleId = `exp_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const zipInput: Record<string, Uint8Array> = {};
@@ -208,14 +328,18 @@ export async function exportSignedDraft(opts: {
     draft_version: draftVersion,
     refinement_mode: "multipage_draft",
     created_at: new Date().toISOString(),
-    signed_off_by: actorEmail ?? actorUserId,
-    publish_signoff: {
-      by: publishSignoff.signed_off_by_email ?? publishSignoff.signed_off_by,
-      at: publishSignoff.signed_off_at,
-      draft_id: publishSignoff.draft_id,
-      draft_version: publishSignoff.draft_version,
-      checklist: publishSignoff.checklist,
-    },
+    signed_off_by: signed
+      ? (actorEmail ?? actorUserId)
+      : null,
+    publish_signoff: signed && publishSignoff
+      ? {
+          by: publishSignoff.signed_off_by_email ?? publishSignoff.signed_off_by,
+          at: publishSignoff.signed_off_at,
+          draft_id: publishSignoff.draft_id,
+          draft_version: publishSignoff.draft_version,
+          checklist: publishSignoff.checklist,
+        }
+      : null,
     entrypoint: (draftManifest.entrypoint as string) || meta.entrypoint || "index.html",
     mode: "multipage",
     gate_a: gateA,
@@ -240,7 +364,7 @@ export async function exportSignedDraft(opts: {
       static_host:
         "Upload the unzipped folder as a static site root; default document index.html; no server runtime",
     },
-    exported_via: "exportSignedDraft",
+    exported_via: signed ? "exportSignedDraft" : "ensureDeliveryZip",
   };
 
   zipInput["_meta/export.json"] = strToU8(JSON.stringify(exportMeta, null, 2));
@@ -287,41 +411,57 @@ export async function exportSignedDraft(opts: {
       pages,
       gateA,
       gateB,
-      exportedVia: "exportSignedDraft",
+      exportedVia: signed ? "exportSignedDraft" : "ensureDeliveryZip",
+      signed,
     },
   });
 
-  await db()
-    .update(schema.projects)
-    .set({ status: "exported", updatedAt: new Date() })
-    .where(eq(schema.projects.id, projectId));
+  if (signed) {
+    await db()
+      .update(schema.projects)
+      .set({ status: "exported", updatedAt: new Date() })
+      .where(eq(schema.projects.id, projectId));
 
-  await db().insert(schema.runEvents).values({
-    runId: run.id,
-    type: "run.completed",
-    payload: {
-      bundleId,
-      draftId,
-      draftVersion,
-      via: "exportSignedDraft",
-      actor: actorEmail ?? actorUserId,
-    },
-    actorId: null,
-  });
+    await db().insert(schema.runEvents).values({
+      runId: run.id,
+      type: "run.completed",
+      payload: {
+        bundleId,
+        draftId,
+        draftVersion,
+        via: "exportSignedDraft",
+        actor: actorEmail ?? actorUserId,
+      },
+      actorId: null,
+    });
 
-  await db().insert(schema.approvals).values({
-    projectId,
-    action: "approve_export",
-    actorUserId: null,
-    actorRole: "operator",
-    note: JSON.stringify({
-      by: actorEmail ?? actorUserId,
-      bundleId,
-      draftId,
-      draftVersion,
-      at: exportMeta.created_at,
-    }),
-  });
+    await db().insert(schema.approvals).values({
+      projectId,
+      action: "approve_export",
+      actorUserId: null,
+      actorRole: "operator",
+      note: JSON.stringify({
+        by: actorEmail ?? actorUserId,
+        bundleId,
+        draftId,
+        draftVersion,
+        at: exportMeta.created_at,
+      }),
+    });
+  } else {
+    await db().insert(schema.runEvents).values({
+      runId: run.id,
+      type: "export.draft_zip",
+      payload: {
+        bundleId,
+        draftId,
+        draftVersion,
+        via: "ensureDeliveryZip",
+        actor: actorEmail ?? actorUserId,
+      },
+      actorId: null,
+    });
+  }
 
   return {
     bundleId,
@@ -331,5 +471,7 @@ export async function exportSignedDraft(opts: {
     draftVersion,
     draftId,
     downloadUrl: `/api/projects/${projectId}/export`,
+    created: true,
+    signed,
   };
 }

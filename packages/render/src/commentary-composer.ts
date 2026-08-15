@@ -144,7 +144,9 @@ function bandHtml(
   const matching = sections.filter((s) => s.kind === band.kind);
   const maxBlocks =
     compactAfsBands && (band.kind === "directorsReport" || band.kind === "accountingPolicies")
-      ? 8
+      ? band.kind === "directorsReport"
+        ? 36
+        : 12
       : band.kind === "accountingPolicies"
         ? 24
         : undefined;
