@@ -257,12 +257,21 @@ export function renderEntityCue(
   }
   const book = entityBookFromPath(path);
   if (!book) return "";
-  const label = book === "group" ? "Group" : "Company";
-  const peer =
+  const peerHref = escapeHtml(
+    hrefFrom(
+      path,
+      book === "group" ? path.replace("/group/", "/company/") : path.replace("/company/", "/group/"),
+    ),
+  );
+  const groupPill =
     book === "group"
-      ? `<a class="entity-cue__switch" href="${escapeHtml(hrefFrom(path, path.replace("/group/", "/company/")))}">View Company</a>`
-      : `<a class="entity-cue__switch" href="${escapeHtml(hrefFrom(path, path.replace("/company/", "/group/")))}">View Group</a>`;
-  return `<aside class="entity-cue entity-cue--${book}" data-dna-component="entity-cue" data-entity="${book}" aria-label="Entity scope"><span class="entity-cue__label">Viewing</span><span class="entity-cue__pill">${label}</span>${peer}</aside>`;
+      ? `<span class="entity-cue__pill is-active">Group</span>`
+      : `<a class="entity-cue__pill" href="${peerHref}">Group</a>`;
+  const companyPill =
+    book === "company"
+      ? `<span class="entity-cue__pill is-active">Company</span>`
+      : `<a class="entity-cue__pill" href="${peerHref}">Company</a>`;
+  return `<aside class="entity-cue entity-cue--${book}" data-dna-component="entity-cue" data-entity="${book}" aria-label="Entity scope"><span class="entity-cue__label">Entity</span><span class="entity-cue__switcher" role="group">${groupPill}${companyPill}</span></aside>`;
 }
 
 export function renderPrevNext(
@@ -688,8 +697,15 @@ main[data-dna-component="page-shell"]{max-width:none!important;width:100%;margin
 /* Sticky entity cue — Group / Company / dual boards */
 .entity-cue{position:sticky;top:var(--rs-nav-h,3.6rem);z-index:35;display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .75rem;margin:0;padding:.55rem var(--rs-gutter);background:color-mix(in srgb,var(--dna-paper,#fff) 92%,var(--dna-shading,#F2F2F2));border-bottom:1px solid color-mix(in srgb,var(--dna-ink,#111) 10%,transparent);font-family:var(--dna-font-body,"Open Sans","Segoe UI",system-ui,sans-serif);box-sizing:border-box}
 .entity-cue__label{font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--dna-ink,#111) 48%,var(--dna-paper,#fff))}
-.entity-cue__pill{display:inline-flex;align-items:center;padding:.22rem .55rem;font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--dna-masthead,#1B2A3A);background:color-mix(in srgb,var(--dna-brand,#243B53) 14%,var(--dna-paper,#fff));border:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 35%,transparent)}
+.entity-cue__switcher{display:inline-flex;align-items:stretch;margin-left:.15rem;border:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 40%,transparent);overflow:hidden}
+.entity-cue__pill{display:inline-flex;align-items:center;padding:.22rem .55rem;font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--dna-masthead,#1B2A3A);background:color-mix(in srgb,var(--dna-brand,#243B53) 14%,var(--dna-paper,#fff));border:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 35%,transparent);text-decoration:none}
+.entity-cue__switcher .entity-cue__pill{border:0;border-radius:0}
+.entity-cue__switcher .entity-cue__pill + .entity-cue__pill{border-left:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 35%,transparent)}
+.entity-cue__switcher a.entity-cue__pill{background:var(--dna-paper,#fff);color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff));font-weight:700}
+.entity-cue__switcher a.entity-cue__pill:hover{background:color-mix(in srgb,var(--dna-brand,#243B53) 10%,var(--dna-paper,#fff));color:var(--dna-masthead,#1B2A3A)}
+.entity-cue__switcher .entity-cue__pill.is-active{background:var(--dna-brand,#243B53);color:var(--dna-on-brand,#fff)}
 .entity-cue--group .entity-cue__pill,.entity-cue--company .entity-cue__pill{background:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 8%,var(--dna-paper,#fff));border-color:color-mix(in srgb,var(--dna-masthead,#1B2A3A) 28%,transparent)}
+.entity-cue--group .entity-cue__switcher .entity-cue__pill.is-active,.entity-cue--company .entity-cue__switcher .entity-cue__pill.is-active{background:var(--dna-masthead,#1B2A3A);color:#fff;border-color:transparent}
 .entity-cue__sep{color:color-mix(in srgb,var(--dna-ink,#111) 35%,var(--dna-paper,#fff));font-weight:700}
 .entity-cue__hint{font-size:.78rem;color:color-mix(in srgb,var(--dna-ink,#111) 55%,var(--dna-paper,#fff))}
 .entity-cue__switch{margin-left:auto;font-size:.78rem;font-weight:700;color:var(--dna-masthead,#1B2A3A);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--dna-brand,#243B53) 55%,transparent)}

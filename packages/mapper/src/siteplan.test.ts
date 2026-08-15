@@ -266,6 +266,27 @@ describe("adaptive siteplan", () => {
     expect(planNotePages(dm, ["doc:tbl_1"], titleBy)).toBeNull();
   });
 
+  it("names paginated note groups from extracted note topics", () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `doc:tbl_n${i + 1}`);
+    const titleBy = new Map(ids.map((id, i) => [id, `${i + 1}. ${i === 0 ? "Revenue" : `Disclosure ${i + 1}`}`]));
+    const dm = baseDoc({
+      tables: ids.map((id, i) => noteTable(id, i + 1)),
+      sections: ids.map((id, i) => ({
+        id: `doc:sec_${id}`,
+        kind: "note" as const,
+        note_number: i + 1,
+        title: { text: `${i + 1}. ${i === 0 ? "Revenue" : `Disclosure ${i + 1}`}`, src_ref: `ext:n${i + 1}` },
+        blocks: [{ kind: "table" as const, table_ref: id }],
+        items: [] as [],
+      })),
+    });
+    const plan = planNotePages(dm, ids, titleBy);
+    expect(plan).not.toBeNull();
+    expect(plan!.groups[0]?.title).toMatch(/Notes 1–10 — Revenue/);
+    expect(plan!.groups[0]?.nav).toMatch(/Revenue/);
+    expect(plan!.groups[1]?.title).toMatch(/Notes 11–12 — Disclosure 11/);
+  });
+
   it("parses MTN-style note numbers without a period", () => {
     expect(noteNumberOf("2 RESULTS OF OPERATIONS")).toBe(2);
     expect(noteNumberOf("2 RESULTS OF OPERATIONS (continued)")).toBe(2);

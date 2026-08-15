@@ -69,4 +69,13 @@ describe("renderEntityCue", () => {
     expect(dual).toContain("entity-cue--dual");
     expect(dual).toContain("Side-by-side columns");
   });
+
+  it("renders Group/Company switcher pills on split-book paths", () => {
+    const html = renderEntityCue("financials/group/income-statement.html");
+    expect(html).toContain("entity-cue--group");
+    expect(html).toContain("entity-cue__switcher");
+    expect(html).toContain('class="entity-cue__pill is-active">Group');
+    expect(html).toContain("financials/company/income-statement.html");
+    expect(html).toContain(">Company</a>");
+  });
 });

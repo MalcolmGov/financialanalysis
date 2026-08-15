@@ -265,8 +265,9 @@ function renderFinTable(
           const isCur = cur0 != null && cur0 >= start && cur0 < start + span;
           const isNote = /^notes?$/i.test(h.raw.trim());
           const isEntity = /^(group|company)$/i.test(h.raw.trim());
+          const isUnit = unitCol != null && start === unitCol && !isNote && !isEntity;
           const isTitle =
-            start === 0 && !isNote && !isEntity && !/\b(19|20)\d{2}\b/.test(h.raw);
+            start === 0 && !isNote && !isEntity && !isUnit && !/\b(19|20)\d{2}\b/.test(h.raw);
           // Header cells carry provenance too: they hold dates ("31 Dec 2025")
           // and unit labels whose digits must be traceable + verified. Empty
           // header slots (real tables are sparse) carry no data-src.
@@ -275,14 +276,15 @@ function renderFinTable(
             isCur ? "cur" : "",
             isNote ? "h-notes" : "",
             isEntity ? "h-entity" : "",
+            isUnit ? "h-unit" : "",
             isTitle ? "h-title" : "",
-            !isNote && !isTitle && !isEntity && h.raw.trim() ? "h-fig" : "",
+            !isNote && !isTitle && !isEntity && !isUnit && h.raw.trim() ? "h-fig" : "",
           ]
             .filter(Boolean)
             .join(" ");
           const cls = classes ? ` class="${classes}"` : "";
           const inner =
-            isNote || isTitle || isEntity ? escapeHtml(h.raw) : formatHeaderCellHtml(h.raw);
+            isNote || isTitle || isEntity || isUnit ? escapeHtml(h.raw) : formatHeaderCellHtml(h.raw);
           return `<th${cls}${src}${span > 1 ? ` colspan="${span}"` : ""}${h.row_span > 1 ? ` rowspan="${h.row_span}"` : ""}>${inner}</th>`;
         })
         .join("");
@@ -356,7 +358,13 @@ function renderFinTable(
     })
     .join("");
 
-  const unit = table.unit_context?.default?.trim();
+  const unitFromCol =
+    unitCol != null
+      ? table.rows
+          .map((r) => r.cells[unitCol]?.raw?.trim() ?? "")
+          .find((u) => /^(kg|oz|%|R\b|US\$|R\/|years?\b|South African cents)/i.test(u))
+      : "";
+  const unit = table.unit_context?.default?.trim() || unitFromCol || "";
   const unitHtml = unit
     ? `<p class="statement-unit" data-dna-component="statement-unit"><span>Unit</span><span class="statement-unit__value" data-allow-number>${escapeHtml(unit)}</span></p>`
     : "";
@@ -662,6 +670,7 @@ const STATEMENT_IR_CSS = `
 .fin-table thead th{position:relative;z-index:1;letter-spacing:.01em;font-size:.72rem;font-weight:700;padding:8px 10px;vertical-align:bottom;line-height:1.3;border:none;border-bottom:2px solid var(--dna-brand,#243B53);background:var(--dna-paper,#fff);color:var(--dna-ink,#221F1F)}
 .fin-table thead th.h-title{text-align:left;font-size:.875rem;letter-spacing:-.005em;font-weight:800;padding:10px 8px 6px 2px;background:var(--dna-paper,#fff)!important;color:var(--dna-table-header-bg,#64748B);position:sticky;left:0;z-index:3}
 .fin-table thead th.h-notes{text-align:center;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:var(--dna-ink,#221F1F);width:3.25rem;padding-left:4px;padding-right:4px}
+.fin-table thead th.h-unit{text-align:left;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;vertical-align:bottom;font-weight:800;background:var(--dna-paper,#fff)!important;color:color-mix(in srgb,var(--dna-ink,#221F1F) 62%,var(--dna-paper,#fff));width:5.5rem;padding-left:6px;padding-right:8px}
 .fin-table thead th.h-entity{text-align:center;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:.72rem;color:var(--dna-table-header-text,#fff)!important;background:var(--dna-table-header-bg,#64748B)!important;border-left:1px solid var(--dna-paper,#fff);padding:8px 10px;vertical-align:middle}
 /* Period headers: prior year soft gray; current year brand accent (MTN yellow / DRD gold). */
 .fin-table thead th.h-fig{text-align:right;font-weight:700;color:var(--dna-ink,#221F1F)!important;background:color-mix(in srgb,var(--dna-ink,#111) 10%,var(--dna-paper,#fff))!important;border-left:2px solid var(--dna-paper,#fff);border-radius:3px 3px 0 0;white-space:normal;padding:7px 9px;line-height:1.3;overflow-wrap:break-word;hyphens:manual;vertical-align:bottom}

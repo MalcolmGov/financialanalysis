@@ -152,6 +152,37 @@ function entityFromTitle(title: string): "group" | "company" | null {
   return null;
 }
 
+function noteTopicFromTitle(raw: string): string | null {
+  const stripped = raw
+    .replace(/\u00a0/g, " ")
+    .replace(/^notes?\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
+    .replace(/^note\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
+    .replace(/^\d{1,2}(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
+    .trim();
+  if (stripped.length < 4 || /^notes?\s+\d/i.test(stripped)) return null;
+  return stripped.length > 42 ? `${stripped.slice(0, 40)}…` : stripped;
+}
+
+function topicByNoteNumber(
+  docModel: FinancialDocModel,
+  titleByTableId: Map<string, string>,
+): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const sec of docModel.sections) {
+    const n = sec.note_number ?? (sec.title?.text ? noteNumberOf(sec.title.text) : null);
+    if (n == null) continue;
+    const topic = noteTopicFromTitle(sec.title?.text ?? "");
+    if (topic && !map.has(n)) map.set(n, topic);
+  }
+  for (const [id, title] of titleByTableId) {
+    const n = noteNumberOf(title);
+    if (n == null || map.has(n)) continue;
+    const topic = noteTopicFromTitle(title);
+    if (topic) map.set(n, topic);
+  }
+  return map;
+}
+
 type NoteGroup = {
   path: string;
   title: string;
@@ -237,6 +268,7 @@ export function planNotePages(
   }
 
   const groups: NoteGroup[] = [];
+  const topics = topicByNoteNumber(docModel, titleByTableId);
   for (let i = 0; i < nums.length; i += NOTE_GROUP_SIZE) {
     const slice = nums.slice(i, i + NOTE_GROUP_SIZE);
     const lo = slice[0]!;
@@ -249,17 +281,8 @@ export function planNotePages(
     // first topic so nav is not only "Notes 1–31".
     const topic = (() => {
       for (const n of slice) {
-        for (const id of byNum.get(n) ?? []) {
-          const raw = (titleByTableId.get(id) ?? "").replace(/\u00a0/g, " ").trim();
-          if (!raw) continue;
-          const stripped = raw
-            .replace(/^notes?\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
-            .replace(/^note\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
-            .trim();
-          if (stripped.length >= 4 && !/^notes?\s+\d/i.test(stripped)) {
-            return stripped.length > 42 ? `${stripped.slice(0, 40)}…` : stripped;
-          }
-        }
+        const fromSec = topics.get(n);
+        if (fromSec) return fromSec;
       }
       return null;
     })();
@@ -271,7 +294,7 @@ export function planNotePages(
           : rangeLabel;
     groups.push({
       path,
-      title: lo === hi && topic ? `Note ${lo} — ${topic}` : rangeLabel,
+      title: topic ? `${rangeLabel} — ${topic}` : rangeLabel,
       nav: label,
       lo,
       hi,

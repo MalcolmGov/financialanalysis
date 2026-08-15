@@ -18,10 +18,13 @@ function escapeHtml(s: string): string {
 
 type SectionKind =
   | "letter"
+  | "highlights"
   | "directorsReport"
   | "reviewOfOperations"
+  | "auditorReport"
   | "accountingPolicies"
-  | "dividendDeclaration";
+  | "dividendDeclaration"
+  | "other";
 
 interface CommentaryBand {
   kind: SectionKind;
@@ -38,6 +41,12 @@ const BANDS: CommentaryBand[] = [
     eyebrow: "From the Chief Executive Officer",
   },
   {
+    kind: "highlights",
+    id: "highlights",
+    label: "Performance highlights",
+    eyebrow: "At a glance",
+  },
+  {
     kind: "directorsReport",
     id: "directors-report",
     label: "Directors' report",
@@ -48,6 +57,12 @@ const BANDS: CommentaryBand[] = [
     id: "operations",
     label: "Review of operations",
     eyebrow: "Operational performance",
+  },
+  {
+    kind: "auditorReport",
+    id: "auditors-report",
+    label: "Independent auditor's report",
+    eyebrow: "Assurance",
   },
   {
     kind: "accountingPolicies",
@@ -145,11 +160,15 @@ function bandHtml(
   const maxBlocks =
     compactAfsBands && (band.kind === "directorsReport" || band.kind === "accountingPolicies")
       ? band.kind === "directorsReport"
-        ? 36
-        : 12
+        ? 80
+        : 20
       : band.kind === "accountingPolicies"
         ? 24
-        : undefined;
+        : band.kind === "auditorReport"
+          ? 16
+          : band.kind === "highlights"
+            ? 20
+            : undefined;
   const bodies = matching
     .map((sec) => {
       const inner = sectionInnerHtml(sec, { maxBlocks });
@@ -171,14 +190,31 @@ function bandHtml(
       const sub = showTitle
         ? `<h3 class="commentary-section__doc-title"${titleSrc}>${escapeHtml(titleText)}</h3>`
         : "";
+      const moreHref =
+        band.kind === "directorsReport"
+          ? "directors-report.html"
+          : band.kind === "auditorReport"
+            ? "auditors-report.html"
+            : band.kind === "accountingPolicies"
+              ? "financials/accounting-policies.html"
+              : "";
+      const moreLabel =
+        band.kind === "directorsReport"
+          ? "Continue reading the Directors' report"
+          : band.kind === "auditorReport"
+            ? "Read the independent auditor's report"
+            : band.kind === "accountingPolicies"
+              ? "Read accounting policies"
+              : "";
       const more =
         compactAfsBands &&
-        (band.kind === "directorsReport" || band.kind === "accountingPolicies") &&
+        moreHref &&
+        (band.kind === "directorsReport" ||
+          band.kind === "accountingPolicies" ||
+          band.kind === "auditorReport") &&
         sec.blocks.filter((b) => b.kind !== "table" && (b.text ?? "").trim()).length >
           (maxBlocks ?? 0)
-          ? band.kind === "directorsReport"
-            ? `<p class="commentary-more"><a href="directors-report.html">Read the full Directors' report</a></p>`
-            : `<p class="commentary-more"><a href="financials/accounting-policies.html">Read accounting policies</a></p>`
+          ? `<p class="commentary-more"><a href="${moreHref}">${moreLabel}</a></p>`
           : "";
       return `${sub}${inner}${more}`;
     })
@@ -318,6 +354,35 @@ export function composeCommentaryBody(
     }
     return `<p class="prose-p">Commentary will appear when the extraction includes a shareholder letter, directors' report, or other narrative prose.</p>`;
   }
+  const EXTRA_KINDS = new Set(["other", "forwardLooking", "shareholderInfo"]);
+  const extras = sections.filter(
+    (s) =>
+      EXTRA_KINDS.has(s.kind) &&
+      s.blocks.some((b) => b.kind !== "table" && Boolean((b.text ?? "").trim())),
+  );
+  for (const sec of extras.slice(0, 4)) {
+    const inner = sectionInnerHtml(sec, { maxBlocks: 20 });
+    if (!inner) continue;
+    const title = (sec.title?.text ?? "From the report").trim();
+    const id = `narrative-${sec.id.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40) || "extra"}`;
+    const band: CommentaryBand = {
+      kind: "other",
+      id,
+      label: title.length > 48 ? `${title.slice(0, 46)}…` : title,
+      eyebrow: "From the report",
+    };
+    rendered.push({
+      band,
+      html: `<section class="commentary-section" id="${escapeHtml(id)}" data-kind="${escapeHtml(sec.kind)}" data-dna-component="commentary-section">
+<header class="commentary-section__hdr">
+<p class="commentary-section__eyebrow">From the report</p>
+<h2 class="commentary-section__title">${escapeHtml(title)}</h2>
+</header>
+<div class="commentary-section__body prose-rail">${inner}</div>
+</section>`,
+    });
+  }
+
   const toc = tocHtml(rendered.map((r) => r.band));
   const missingOps = !rendered.some((r) => r.band.kind === "reviewOfOperations");
   const hasLetter = rendered.some((r) => r.band.kind === "letter");

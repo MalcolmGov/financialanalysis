@@ -384,6 +384,40 @@ describe("CommentaryComposer", () => {
     expect(html).not.toContain("Commentary will appear when the extraction includes a shareholder letter.");
   });
 
+  it("keeps substantial AFS directors prose plus extra CEO/CFO narrative", () => {
+    const dm = docModel();
+    dm.sections = dm.sections.filter((s) => s.kind !== "letter");
+    dm.sections.unshift({
+      id: "doc:sec_directorsReport",
+      kind: "directorsReport",
+      title: { text: "Directors' report", src_ref: "ext:hdr-dr" },
+      blocks: Array.from({ length: 8 }, (_, i) => ({
+        kind: "paragraph" as const,
+        text: `Directors paragraph ${i + 1} describes the Group's principal activities.`,
+        src_ref: `ext:blk-dr${i + 1}`,
+      })),
+      items: [],
+    });
+    dm.sections.push({
+      id: "doc:sec_ceo",
+      kind: "other",
+      title: { text: "CEO and CFO responsibility statement", src_ref: "ext:ceo" },
+      blocks: [
+        {
+          kind: "paragraph",
+          text: "Each of the directors, whose names are stated below, hereby confirm that the annual financial statements fairly present.",
+          src_ref: "ext:ceo1",
+        },
+      ],
+      items: [],
+    });
+    const html = composeCommentaryBody(dm, { compactAfsBands: true });
+    expect(html).toContain("Directors paragraph 1");
+    expect(html).toContain("Directors paragraph 8");
+    expect(html).toContain("CEO and CFO responsibility statement");
+    expect(html).toContain("fairly present");
+  });
+
   it("never-drops other narrative when letter and directors' report are absent", () => {
     const dm = docModel();
     dm.sections = [
