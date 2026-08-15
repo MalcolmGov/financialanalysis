@@ -34,7 +34,11 @@ export interface EnrichContext {
  * flags single-entity condensed consolidated interims (e.g. DRD).
  */
 export function htmlHasDualEntityBoard(html: string): boolean {
-  if (/data-density=["']dual-entity["']/i.test(html)) return true;
+  // Match TABLE attributes only — inlined stylesheet selectors also contain
+  // `[data-density="dual-entity"]` and would flag every statement page (DRD).
+  if (/<table\b[^>]*\bdata-density=["']dual-entity["'][^>]*>/i.test(html)) {
+    return true;
+  }
   const entityHeaders = [
     ...html.matchAll(/<th\b[^>]*\bh-entity\b[^>]*>([\s\S]*?)<\/th>/gi),
   ].map((m) =>

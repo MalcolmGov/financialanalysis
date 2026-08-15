@@ -40,6 +40,25 @@ describe("htmlHasDualEntityBoard", () => {
       </table>`;
     expect(htmlHasDualEntityBoard(html)).toBe(false);
   });
+
+  it("ignores dual-entity strings that only exist in inlined CSS", () => {
+    const html = `
+      <style>
+        .fin-table[data-density="dual-entity"] thead th.h-entity { font-weight: 800; }
+        .fin-table[data-density="periods-3"] { min-width: 48rem; }
+      </style>
+      <table class="fin-table" data-density="notes">
+        <thead>
+          <tr>
+            <th class="h-title">Statement of Profit or Loss</th>
+            <th class="h-notes">Notes</th>
+            <th class="h-fig">Six months ended 31 Dec 2025</th>
+            <th class="h-fig">Six months ended 31 Dec 2024</th>
+          </tr>
+        </thead>
+      </table>`;
+    expect(htmlHasDualEntityBoard(html)).toBe(false);
+  });
 });
 
 describe("renderEntityCue", () => {
