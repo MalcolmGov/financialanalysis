@@ -244,10 +244,34 @@ export function planNotePages(
     const tableIds = slice.flatMap((n) => byNum.get(n) ?? []);
     const path =
       lo === hi ? `${base}/notes-${lo}.html` : `${base}/notes-${lo}-${hi}.html`;
-    const label = lo === hi ? `Note ${lo}` : `Notes ${lo}–${hi}`;
+    const rangeLabel = lo === hi ? `Note ${lo}` : `Notes ${lo}–${hi}`;
+    // Prefer a real note topic for single-note pages; for ranges, tip the
+    // first topic so nav is not only "Notes 1–31".
+    const topic = (() => {
+      for (const n of slice) {
+        for (const id of byNum.get(n) ?? []) {
+          const raw = (titleByTableId.get(id) ?? "").replace(/\u00a0/g, " ").trim();
+          if (!raw) continue;
+          const stripped = raw
+            .replace(/^notes?\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
+            .replace(/^note\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
+            .trim();
+          if (stripped.length >= 4 && !/^notes?\s+\d/i.test(stripped)) {
+            return stripped.length > 42 ? `${stripped.slice(0, 40)}…` : stripped;
+          }
+        }
+      }
+      return null;
+    })();
+    const label =
+      lo === hi && topic
+        ? `Note ${lo} · ${topic}`
+        : topic
+          ? `${rangeLabel} · ${topic}`
+          : rangeLabel;
     groups.push({
       path,
-      title: lo === hi ? `Note ${lo}` : `Notes ${lo}–${hi}`,
+      title: lo === hi && topic ? `Note ${lo} — ${topic}` : rangeLabel,
       nav: label,
       lo,
       hi,
