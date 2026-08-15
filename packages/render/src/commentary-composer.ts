@@ -143,8 +143,8 @@ function bandShell(band: CommentaryBand, bodyHtml: string): string {
   // No .reveal — editorial must stay visible even if site.js/IO fails in iframe.
   return `<section class="commentary-section" id="${band.id}" data-kind="${band.kind}" data-dna-component="commentary-section">
 <header class="commentary-section__hdr">
-<p class="commentary-section__eyebrow">${escapeHtml(band.eyebrow)}</p>
-<h2 class="commentary-section__title">${escapeHtml(band.label)}</h2>
+<p class="commentary-section__eyebrow" data-allow-number>${escapeHtml(band.eyebrow)}</p>
+<h2 class="commentary-section__title" data-allow-number>${escapeHtml(band.label)}</h2>
 </header>
 <div class="commentary-section__body prose-rail">${bodyHtml}</div>
 </section>`;
@@ -188,7 +188,7 @@ function bandHtml(
         ? ` data-src="${escapeHtml(sec.title.src_ref)}"`
         : "";
       const sub = showTitle
-        ? `<h3 class="commentary-section__doc-title"${titleSrc}>${escapeHtml(titleText)}</h3>`
+        ? `<h3 class="commentary-section__doc-title"${titleSrc} data-allow-number>${escapeHtml(titleText)}</h3>`
         : "";
       const moreHref =
         band.kind === "directorsReport"
@@ -235,7 +235,7 @@ function tocHtml(present: CommentaryBand[]): string {
   const links = present
     .map(
       (b, i) =>
-        `<a class="commentary-toc__link" href="#${b.id}"><span class="commentary-toc__n" data-allow-number>${String(i + 1).padStart(2, "0")}</span>${escapeHtml(b.label)}</a>`,
+        `<a class="commentary-toc__link" href="#${b.id}" data-allow-number><span class="commentary-toc__n">${String(i + 1).padStart(2, "0")}</span>${escapeHtml(b.label)}</a>`,
     )
     .join("");
   return `<nav class="commentary-toc" aria-label="On this page" data-dna-component="commentary-toc">
@@ -340,8 +340,8 @@ export function composeCommentaryBody(
           const title = (sec.title?.text ?? "Narrative").trim();
           return `<section class="commentary-section" data-kind="${escapeHtml(sec.kind)}" data-dna-component="commentary-section">
 <header class="commentary-section__hdr">
-<p class="commentary-section__eyebrow">From the report</p>
-<h2 class="commentary-section__title">${escapeHtml(title)}</h2>
+<p class="commentary-section__eyebrow" data-allow-number>From the report</p>
+<h2 class="commentary-section__title" data-allow-number>${escapeHtml(title)}</h2>
 </header>
 <div class="commentary-section__body prose-rail">${inner}</div>
 </section>`;
@@ -375,8 +375,8 @@ export function composeCommentaryBody(
       band,
       html: `<section class="commentary-section" id="${escapeHtml(id)}" data-kind="${escapeHtml(sec.kind)}" data-dna-component="commentary-section">
 <header class="commentary-section__hdr">
-<p class="commentary-section__eyebrow">From the report</p>
-<h2 class="commentary-section__title">${escapeHtml(title)}</h2>
+<p class="commentary-section__eyebrow" data-allow-number>From the report</p>
+<h2 class="commentary-section__title" data-allow-number>${escapeHtml(title)}</h2>
 </header>
 <div class="commentary-section__body prose-rail">${inner}</div>
 </section>`,
