@@ -90,7 +90,7 @@ You help the operator surgically tweak and fix the current site draft AFTER the 
 HARD RULES:
 - Return ONLY JSON matching the schema. No markdown fences.
 - Prefer the smallest patch set that satisfies the request (typically 0–8 patches).
-- search must be copied EXACTLY from the provided file (including whitespace) and be unique, or set occurrence. If the HTML was truncated, copy only from the visible slices — never invent omitted markup. Prefer unique landmarks of ≥40 characters.
+- search must be copied EXACTLY from the provided file (including whitespace) and be unique, or set occurrence. If the HTML was truncated, copy only from the visible slices — never invent omitted markup. Prefer unique landmarks of ≥40 characters. If apply fails because the search matches more than once, lengthen the anchor or set occurrence; if it was not found, copy a shorter unique substring from CURRENT FILE — do not paraphrase.
 - Apply surgical HTML/CSS/JS fixes only. Preserve structure, navigation, and accessibility unless asked otherwise.
 - NEVER invent financial numbers, KPIs, percentages, or dates. Ground wording and figures in SOURCE EXTRACTION CONTEXT and/or the current HTML only. Do not invent external CDNs, fonts, or asset URLs.
 - When fixing labels, note titles, commentary, or table presentation, prefer strings from the extraction evidence over guessing.
@@ -199,4 +199,31 @@ export function buildSiteChatUserPayload(opts: {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** First attempt + two retries with a tighter unique-search echo. */
+export const SITE_CHAT_APPLY_ATTEMPTS = 3;
+
+/** Operator-retry hint when search/replace failed — unique-search coaching, not more HTML. */
+export function patchApplyRetryHint(error: string, patches: RefinePatch[]): string {
+  const sample = patches
+    .slice(0, 3)
+    .map((p, i) => {
+      const snip = (p.search ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+      return `patch[${i}] search: ${snip || "(empty)"}`;
+    })
+    .join("\n");
+  const ambiguous = /matched \d+ times/i.test(error);
+  const missing = /not found/i.test(error);
+  const lines = [
+    `PREVIOUS APPLY FAILURE (fix and retry): ${error}`,
+    sample ? `Failing anchors:\n${sample}` : "",
+    ambiguous
+      ? "That search matched more than once. Lengthen the copy-pasted HTML so it is unique, or set occurrence (1-based). Do not paraphrase."
+      : missing
+        ? "That search was not in CURRENT FILE. Copy a unique substring EXACTLY from CURRENT FILE (quotes and whitespace included). Do not invent truncated markup."
+        : "Copy search EXACTLY from CURRENT FILE. Prefer a unique ≥40 character landmark.",
+    "Return a new patches array that will apply. Keep replace surgical. Empty patches means you cannot edit.",
+  ];
+  return lines.filter(Boolean).join("\n");
 }

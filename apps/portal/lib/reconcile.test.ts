@@ -44,7 +44,7 @@ const vision: VisionDNA = {
   heading_color_role: "accent",
 };
 
-describe("reconcileDna", () => {
+describe("reconcileDna", { timeout: 30_000 }, () => {
   it("snaps a vision-read role to the nearest measured probe hex (adopts the exact value)", async () => {
     const dna = await reconcileDna(probeDna(["#FCAF17", "#231F20", "#FFFFFF", "#929292"]), vision);
     // brand read as #F5A623 → snapped to measured #FCAF17

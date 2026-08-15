@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Blueprint, FinancialDocModel } from "@rs/contracts";
-import { buildSitePlan, classifyDocShape, docModelHasSeparateEntityBooks, planNotePages } from "./siteplan.js";
+import { buildSitePlan, classifyDocShape, docModelHasSeparateEntityBooks, planNotePages, noteTopicFromTitle } from "./siteplan.js";
 import { noteNumberOf } from "./classify.js";
 
 function cell(raw: string, r = 0, c = 0) {
@@ -285,6 +285,55 @@ describe("adaptive siteplan", () => {
     expect(plan!.groups[0]?.title).toMatch(/Notes 1–10 — Revenue/);
     expect(plan!.groups[0]?.nav).toMatch(/Revenue/);
     expect(plan!.groups[1]?.title).toMatch(/Notes 11–12 — Disclosure 11/);
+  });
+
+  it("skips generic Notes-to-the-Group shell banners when naming groups", () => {
+    expect(noteTopicFromTitle("Notes to the Group financial statements (continued)")).toBeNull();
+    expect(noteTopicFromTitle("Notes to the Company financial statements")).toBeNull();
+    expect(noteTopicFromTitle("1. Accounting policies")).toBe("Accounting policies");
+
+    const ids = Array.from({ length: 12 }, (_, i) => `doc:tbl_n${i + 1}`);
+    const titleBy = new Map(
+      ids.map((id, i) => [
+        id,
+        i < 10
+          ? `${i + 1}. ${i === 0 ? "Accounting policies" : `Disclosure ${i + 1}`}`
+          : "Notes to the Group financial statements (continued)",
+      ]),
+    );
+    const dm = baseDoc({
+      tables: ids.map((id, i) => noteTable(id, i + 1)),
+      sections: ids.flatMap((id, i) => [
+        {
+          id: `doc:sec_shell_${id}`,
+          kind: "note" as const,
+          note_number: i + 1,
+          title: { text: "Notes to the Group financial statements (continued)", src_ref: `ext:shell${i + 1}` },
+          blocks: [{ kind: "table" as const, table_ref: id }],
+          items: [] as [],
+        },
+        ...(i < 10
+          ? [
+              {
+                id: `doc:sec_${id}`,
+                kind: "note" as const,
+                note_number: i + 1,
+                title: {
+                  text: `${i + 1}. ${i === 0 ? "Accounting policies" : `Disclosure ${i + 1}`}`,
+                  src_ref: `ext:n${i + 1}`,
+                },
+                blocks: [{ kind: "table" as const, table_ref: id }],
+                items: [] as [],
+              },
+            ]
+          : []),
+      ]),
+    });
+    const plan = planNotePages(dm, ids, titleBy);
+    expect(plan).not.toBeNull();
+    expect(plan!.groups[0]?.title).toMatch(/Notes 1–10 — Accounting policies/);
+    expect(plan!.groups[1]?.title).toBe("Notes 11–12");
+    expect(plan!.groups[1]?.title).not.toMatch(/Notes to the Group/i);
   });
 
   it("parses MTN-style note numbers without a period", () => {

@@ -6,7 +6,7 @@ import {
   type SitePlan,
   type StatementType,
 } from "@rs/contracts";
-import { classifySectionTitle, isNoteLikeTitle, noteNumberOf } from "./classify.js";
+import { classifySectionTitle, isNoteLikeTitle, noteNumberOf, stripContinuedSuffix } from "./classify.js";
 
 /**
  * FinancialDocModel → SitePlan (references only). Deterministic baseline.
@@ -152,14 +152,28 @@ function entityFromTitle(title: string): "group" | "company" | null {
   return null;
 }
 
-function noteTopicFromTitle(raw: string): string | null {
-  const stripped = raw
-    .replace(/\u00a0/g, " ")
+/** Section banners like “Notes to the Group financial statements (continued)”. */
+const GENERIC_NOTE_SHELL =
+  /^(?:notes?\s+to\s+the\s+(?:group\s+|company\s+|consolidated\s+)?(?:annual\s+)?financial statements|notes?\s+to\s+(?:consolidated\s+)?(?:annual\s+)?financial statements|notes?)$/i;
+
+export function isGenericNoteShellTitle(title: string): boolean {
+  const t = stripContinuedSuffix(title.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+    .replace(/[.:\-–—]+$/g, "")
+    .trim();
+  return GENERIC_NOTE_SHELL.test(t);
+}
+
+/** Topic label for a note heading, or null for numbering-only / shell banners. */
+export function noteTopicFromTitle(raw: string): string | null {
+  const cleaned = stripContinuedSuffix(raw.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim());
+  if (isGenericNoteShellTitle(cleaned)) return null;
+  const stripped = cleaned
     .replace(/^notes?\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .replace(/^note\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .replace(/^\d{1,2}(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .trim();
   if (stripped.length < 4 || /^notes?\s+\d/i.test(stripped)) return null;
+  if (isGenericNoteShellTitle(stripped)) return null;
   return stripped.length > 42 ? `${stripped.slice(0, 40)}…` : stripped;
 }
 

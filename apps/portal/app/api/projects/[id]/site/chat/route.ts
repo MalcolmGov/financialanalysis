@@ -15,7 +15,9 @@ import {
 import {
   SITE_CHAT_SCHEMA,
   SITE_CHAT_SYSTEM,
+  SITE_CHAT_APPLY_ATTEMPTS,
   buildSiteChatUserPayload,
+  patchApplyRetryHint,
   summarizeDnaForChat,
   truncateForModel,
   type SiteChatModelReply,
@@ -444,9 +446,9 @@ export async function POST(
   let appliedPatches: RefinePatch[] = patches;
   let lastErr: string | null = null;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < SITE_CHAT_APPLY_ATTEMPTS; attempt++) {
     let attemptPatches = appliedPatches;
-    if (attempt === 1) {
+    if (attempt > 0) {
       try {
         const retry = await generateStructured<SiteChatModelReply>({
           model: MODELS.refine,
@@ -456,7 +458,7 @@ export async function POST(
               role: "user",
               content: [
                 userPayload,
-                `\nPREVIOUS APPLY FAILURE (fix and retry):\n${lastErr}`,
+                `\n${patchApplyRetryHint(lastErr ?? "search/replace failed", appliedPatches)}`,
                 `\nYour previous message was:\n${assistantMessage}`,
               ].join("\n"),
             },
@@ -491,16 +493,19 @@ export async function POST(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        return Response.json({
-          message: `${assistantMessage}\n\n(Could not apply patches: ${lastErr ?? msg})`,
-          applied: false,
-          patchesApplied: 0,
-          targetPath,
-          needsNumberOverride: false,
-          costUsd: usageCost,
-          applyError: lastErr ?? msg,
-          extractionContext: extractionMeta,
-        });
+        if (attempt === SITE_CHAT_APPLY_ATTEMPTS - 1) {
+          return Response.json({
+            message: `${assistantMessage}\n\n(Could not apply patches: ${lastErr ?? msg})`,
+            applied: false,
+            patchesApplied: 0,
+            targetPath,
+            needsNumberOverride: false,
+            costUsd: usageCost,
+            applyError: lastErr ?? msg,
+            extractionContext: extractionMeta,
+          });
+        }
+        continue;
       }
     }
 
@@ -511,7 +516,8 @@ export async function POST(
       break;
     } catch (err) {
       lastErr = err instanceof PatchApplyError || err instanceof Error ? err.message : String(err);
-      if (attempt === 1) {
+      appliedPatches = attemptPatches;
+      if (attempt === SITE_CHAT_APPLY_ATTEMPTS - 1) {
         return Response.json({
           message: `${assistantMessage}\n\n(Could not apply patches: ${lastErr})`,
           applied: false,
