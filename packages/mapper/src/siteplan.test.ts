@@ -294,6 +294,10 @@ describe("adaptive siteplan", () => {
     expect(noteTopicFromTitle("Group — 31 December 2025 Tower sale and leaseback")).toBe(
       "Tower sale and leaseback",
     );
+    expect(noteTopicFromTitle("Group — 31 December 2025 Tower sale and leaseback Rm")).toBe(
+      "Tower sale and leaseback",
+    );
+    expect(noteTopicFromTitle("ACCOUNTING POLICIES")).toBe("Accounting policies");
 
     const ids = Array.from({ length: 12 }, (_, i) => `doc:tbl_n${i + 1}`);
     const titleBy = new Map(

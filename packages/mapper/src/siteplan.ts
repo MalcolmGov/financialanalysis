@@ -173,11 +173,13 @@ export function noteTopicFromTitle(raw: string): string | null {
     .replace(/^notes?\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .replace(/^note\s+\d+(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
     .replace(/^\d{1,2}(?:\.\d+)?\s*[.:\-–—]?\s*/i, "")
+    .replace(/\s+(?:R['’]?m(?:illion)?|R['’]?000|Rm)\s*$/i, "")
     .trim();
   if (stripped.length < 4 || /^notes?\s+\d/i.test(stripped)) return null;
   if (isGenericNoteShellTitle(stripped)) return null;
   if (PERIOD_DATE_ONLY.test(stripped)) return null;
-  return stripped.length > 42 ? `${stripped.slice(0, 40)}…` : stripped;
+  const topic = sentenceCaseAllCaps(stripped);
+  return topic.length > 42 ? `${topic.slice(0, 40)}…` : topic;
 }
 
 const MONTH =
@@ -191,6 +193,14 @@ const RUNNING_HEADER = new RegExp(
 
 function stripPeriodRunningHeader(title: string): string {
   return title.replace(RUNNING_HEADER, "").trim();
+}
+
+/** PDF running heads are often ALL CAPS; keep mixed-case source titles as-is. */
+function sentenceCaseAllCaps(title: string): string {
+  const letters = title.replace(/[^A-Za-z]/g, "");
+  if (letters.length < 8 || letters !== letters.toUpperCase()) return title;
+  const lower = title.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 function topicByNoteNumber(

@@ -19,4 +19,10 @@ jobs:
       - name: Deploy portal
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service portal --ci
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN GitHub secret is not set; skip auto-deploy."
+            echo "Until it is, run: railway up --service portal --ci"
+            exit 0
+          fi
+          railway up --service portal --ci
